@@ -2,7 +2,7 @@ import asyncio
 import os
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Mapping
 from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from typing import Annotated, Any, NamedTuple
@@ -28,6 +28,13 @@ from gateway.models.entities import APIKey, UsageLog
 from gateway.models.mcp import McpServerConfig
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
+from gateway.services.chat_tool_config import (
+    build_web_search_backend,
+    extract_code_execution_tool,
+    extract_web_search_tool,
+    resolve_sandbox_purpose_hint,
+    strip_gateway_fields,
+)
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import (
@@ -62,7 +69,7 @@ from gateway.services.routing_policy_service import (
     resolve_routing_plan,
 )
 from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachableError
-from gateway.services.web_search_backend import WebSearchBackend, WebSearchNotReachableError
+from gateway.services.web_search_backend import WebSearchNotReachableError
 from gateway.streaming import (
     OPENAI_STREAM_FORMAT,
     StreamingAttemptFailure,
@@ -89,207 +96,6 @@ def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
         "X-RateLimit-Remaining": str(info.remaining),
         "X-RateLimit-Reset": str(int(info.reset)),
     }
-
-
-def _is_web_search_tool_type(type_value: Any) -> bool:
-    """Recognise the tool-array shapes that map to the web_search backend.
-
-    Accepts:
-      * ``"web_search"`` — gateway-native short form (matches OpenAI's
-        ``{"type": "web_search"}`` server-managed tool).
-      * ``"web_search_*"`` — Anthropic versioned types (e.g.
-        ``"web_search_20250305"``, future ``"web_search_20260209"``).
-
-    Matching Anthropic by prefix means new versions keep working without a
-    code change; the backend's search semantics are version-agnostic.
-    """
-    if not isinstance(type_value, str):
-        return False
-    return type_value == "web_search" or type_value.startswith("web_search_")
-
-
-def _is_code_execution_tool_type(type_value: Any) -> bool:
-    """Recognise the tool-array shapes Anthropic and OpenAI use for code execution.
-
-    Accepts:
-      * ``"code_execution"`` — gateway-native short form
-      * ``"code_interpreter"`` — OpenAI Responses/Assistants API
-      * ``"code_execution_*"`` — Anthropic versioned types
-        (e.g. ``"code_execution_20250825"``)
-
-    Matching Anthropic by prefix means new versions (``code_execution_20260101``,
-    etc.) keep working without a code change. Our sandbox is a generic Python
-    REPL, so we don't need to track per-version semantics.
-    """
-    if not isinstance(type_value, str):
-        return False
-    return (
-        type_value == "code_execution" or type_value == "code_interpreter" or type_value.startswith("code_execution_")
-    )
-
-
-# Gateway-internal fields the provider SDKs (any-llm, anthropic, openai, …)
-# don't accept as ``acompletion`` kwargs. Strip these from the model_dump
-# before forwarding to upstream — Anthropic in particular rejects unknown
-# kwargs with a hard error.
-_GATEWAY_INTERNAL_FIELDS = (
-    "mcp_servers",
-    "mcp_server_ids",
-    "tools_header",
-    "max_tool_iterations",
-    "user",
-    "project_id",
-    "tags",
-)
-
-
-def _strip_gateway_fields(
-    fields: dict[str, Any],
-    *,
-    tools_extracted: bool = False,
-    remaining_user_tools: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Strip gateway-internal fields from a ``request.model_dump(...)`` payload.
-
-    Mutates ``fields`` in place and returns it for chaining. When the caller
-    extracted any gateway-managed tool entry from ``tools`` (sandbox /
-    web_search / future), pass ``tools_extracted=True`` and the remaining
-    user-supplied tools; the original ``tools`` list is replaced (or popped
-    entirely if none remain).
-    """
-    for k in _GATEWAY_INTERNAL_FIELDS:
-        fields.pop(k, None)
-    if tools_extracted:
-        if remaining_user_tools:
-            fields["tools"] = remaining_user_tools
-        else:
-            fields.pop("tools", None)
-    return fields
-
-
-def _resolve_sandbox_purpose_hint(sandbox_tool_entry: dict[str, Any] | None) -> str | None:
-    """Resolve the per-tool ``purpose_hint`` for the sandbox.
-
-    Priority: tool entry's ``purpose_hint`` → ``GATEWAY_SANDBOX_PURPOSE_HINT``
-    env → ``None`` (SandboxBackend falls back to its built-in default).
-    """
-    return (
-        (sandbox_tool_entry.get("purpose_hint") if sandbox_tool_entry else None)
-        or os.environ.get("GATEWAY_SANDBOX_PURPOSE_HINT")
-        or None
-    )
-
-
-def _extract_first_matching_tool(
-    tools: list[dict[str, Any]] | None,
-    predicate: Callable[[Any], bool],
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-    """Pull the first tool entry whose ``type`` matches ``predicate``.
-
-    Returns ``(entry_or_None, remaining_tools_or_None)``. The extracted entry
-    is thin (no function schema); the gateway-managed backend's
-    ``openai_tools`` provides the full definition during tool-use-loop
-    injection. Remaining user-supplied tools pass through unchanged.
-    """
-    if not tools:
-        return None, tools
-    entry: dict[str, Any] | None = None
-    remaining: list[dict[str, Any]] = []
-    for t in tools:
-        if entry is None and isinstance(t, dict) and predicate(t.get("type")):
-            entry = t
-        else:
-            remaining.append(t)
-    return entry, (remaining or None)
-
-
-def _extract_code_execution_tool(
-    tools: list[dict[str, Any]] | None,
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-    """Pull the first code-execution-style entry out of ``tools``.
-
-    Detects the gateway-native ``{"type": "code_execution"}`` shape plus the
-    provider-native equivalents from OpenAI (``code_interpreter``) and Anthropic
-    (``code_execution_20250825`` and future versions). All three map to the same
-    sandbox backend so swapping ``base_url`` to the gateway keeps existing
-    SDK code working unchanged.
-    """
-    return _extract_first_matching_tool(tools, _is_code_execution_tool_type)
-
-
-def _extract_web_search_tool(
-    tools: list[dict[str, Any]] | None,
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-    """Pull the first web-search-style entry out of ``tools``.
-
-    Accepts both the gateway-native ``{"type": "web_search"}`` shape (matching
-    OpenAI's server-managed tool) and Anthropic's dated variants
-    (``web_search_20250305`` etc.). All map to the same backend.
-    """
-    return _extract_first_matching_tool(tools, _is_web_search_tool_type)
-
-
-def _resolve_web_search_purpose_hint(tool_entry: dict[str, Any] | None) -> str | None:
-    """Per-tool entry → ``GATEWAY_WEB_SEARCH_PURPOSE_HINT`` → ``None`` (backend default)."""
-    return (
-        (tool_entry.get("purpose_hint") if tool_entry else None)
-        or os.environ.get("GATEWAY_WEB_SEARCH_PURPOSE_HINT")
-        or None
-    )
-
-
-def _build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> WebSearchBackend:
-    """Construct a WebSearchBackend honouring env-level + per-tool config.
-
-    Per-tool entry fields (``max_results``, ``allowed_domains``,
-    ``blocked_domains``, ``purpose_hint``) override env-level defaults.
-    Operator-level env knobs:
-
-      * ``GATEWAY_WEB_SEARCH_ENGINES`` — comma-separated SearXNG engine list
-      * ``GATEWAY_WEB_SEARCH_MAX_RESULTS`` — default cap on returned hits
-      * ``GATEWAY_WEB_SEARCH_EXTRACT`` — "0"/"false" to disable in-process
-        content extraction (snippet-only mode).
-      * ``GATEWAY_WEB_SEARCH_PURPOSE_HINT`` — per-deployment hint override.
-    """
-    kwargs: dict[str, Any] = {"base_url": base_url}
-
-    engines_str = os.environ.get("GATEWAY_WEB_SEARCH_ENGINES")
-    if engines_str:
-        engines = tuple(e.strip() for e in engines_str.split(",") if e.strip())
-        if engines:
-            kwargs["engines"] = engines
-
-    max_env = os.environ.get("GATEWAY_WEB_SEARCH_MAX_RESULTS")
-    if max_env:
-        try:
-            parsed_max = int(max_env)
-        except ValueError:
-            logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not an int; ignoring", max_env)
-        else:
-            if parsed_max >= 1:
-                kwargs["max_results"] = parsed_max
-            else:
-                logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not >= 1; ignoring", max_env)
-    req_max = tool_entry.get("max_results")
-    if isinstance(req_max, int) and req_max > 0:
-        kwargs["max_results"] = req_max
-
-    extract_env = os.environ.get("GATEWAY_WEB_SEARCH_EXTRACT")
-    if extract_env is not None:
-        kwargs["extract_content"] = extract_env.lower() not in {"0", "false", "no", "off"}
-
-    allowed = tool_entry.get("allowed_domains")
-    if isinstance(allowed, list) and allowed:
-        kwargs["allowed_domains"] = tuple(str(d) for d in allowed)
-    blocked = tool_entry.get("blocked_domains")
-    if isinstance(blocked, list) and blocked:
-        kwargs["blocked_domains"] = tuple(str(d) for d in blocked)
-
-    purpose_hint = _resolve_web_search_purpose_hint(tool_entry)
-    if purpose_hint:
-        kwargs["purpose_hint"] = purpose_hint
-
-    return WebSearchBackend(**kwargs)
 
 
 class ChatCompletionRequest(BaseModel):
@@ -459,7 +265,7 @@ async def _run_non_streaming_completion(
             )
     if use_sandbox:
         assert sandbox_url is not None
-        sandbox_hint = _resolve_sandbox_purpose_hint(sandbox_tool_entry)
+        sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
         async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
             sandbox_kwargs = {
                 **completion_kwargs,
@@ -477,7 +283,7 @@ async def _run_non_streaming_completion(
     if use_web_search:
         assert web_search_url is not None
         assert web_search_tool_entry is not None
-        async with _build_web_search_backend(
+        async with build_web_search_backend(
             base_url=web_search_url,
             tool_entry=web_search_tool_entry,
         ) as web_backend:
@@ -520,7 +326,7 @@ async def _run_standalone_routing_plan(
     trace_endpoint: str,
 ) -> ChatCompletion:
     """Execute a standalone routing plan with pre-response fallback."""
-    request_fields = _strip_gateway_fields(
+    request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
         tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
         remaining_user_tools=remaining_user_tools,
@@ -893,7 +699,7 @@ async def chat_completions(
     # Mutually exclusive with `mcp_servers` for now (multi-backend dispatch
     # is the next iteration); the multi-attempt routing-policy fallback is
     # also bypassed when sandbox is in use.
-    sandbox_tool_entry, tools_after_sandbox = _extract_code_execution_tool(request.tools)
+    sandbox_tool_entry, tools_after_sandbox = extract_code_execution_tool(request.tools)
     sandbox_url: str | None = os.environ.get("GATEWAY_SANDBOX_URL") or None
     use_sandbox = False
     if sandbox_tool_entry is not None:
@@ -918,7 +724,7 @@ async def chat_completions(
     # web_search opt-in mirrors the sandbox path; see comment above for the
     # threat-model rationale. GATEWAY_WEB_SEARCH_URL is operator-controlled —
     # see web_search_backend.py for the wire protocol the service must expose.
-    web_search_tool_entry, remaining_user_tools = _extract_web_search_tool(tools_after_sandbox)
+    web_search_tool_entry, remaining_user_tools = extract_web_search_tool(tools_after_sandbox)
     web_search_url: str | None = os.environ.get("GATEWAY_WEB_SEARCH_URL") or None
     use_web_search = False
     if web_search_tool_entry is not None:
@@ -1052,7 +858,7 @@ async def chat_completions(
             MAX_TOOL_ITERATIONS_CAP,
         )
 
-        request_fields = _strip_gateway_fields(
+        request_fields = strip_gateway_fields(
             request.model_dump(exclude_unset=True),
             tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
             remaining_user_tools=remaining_user_tools,
@@ -1095,7 +901,7 @@ async def chat_completions(
                 # the SSE channel after a 200 OK header — confusing for
                 # clients that expected a normal HTTP failure.
                 assert sandbox_url is not None
-                sandbox_hint = _resolve_sandbox_purpose_hint(sandbox_tool_entry)
+                sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
                 sandbox_backend = SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint)
                 await sandbox_backend.__aenter__()  # may raise SandboxNotReachableError
 
@@ -1123,7 +929,7 @@ async def chat_completions(
                 # Same eager-open rationale as the sandbox path above.
                 assert web_search_url is not None
                 assert web_search_tool_entry is not None
-                web_search_backend = _build_web_search_backend(
+                web_search_backend = build_web_search_backend(
                     base_url=web_search_url,
                     tool_entry=web_search_tool_entry,
                 )
@@ -1258,7 +1064,7 @@ async def chat_completions(
     last_exc: BaseException | None = None
 
     if platform_mode:
-        base_request_fields = _strip_gateway_fields(
+        base_request_fields = strip_gateway_fields(
             request.model_dump(exclude_unset=True),
             tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
             remaining_user_tools=remaining_user_tools,
@@ -1313,7 +1119,7 @@ async def chat_completions(
                         )
                 elif use_sandbox:
                     assert sandbox_url is not None
-                    sandbox_hint = _resolve_sandbox_purpose_hint(sandbox_tool_entry)
+                    sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
                     async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
                         sandbox_kwargs = {
                             **completion_kwargs,
@@ -1332,7 +1138,7 @@ async def chat_completions(
                 elif use_web_search:
                     assert web_search_url is not None
                     assert web_search_tool_entry is not None
-                    async with _build_web_search_backend(
+                    async with build_web_search_backend(
                         base_url=web_search_url,
                         tool_entry=web_search_tool_entry,
                     ) as web_backend:
@@ -1473,7 +1279,7 @@ async def chat_completions(
     # tool-use loop; if `tools` includes a web_search entry, the request
     # goes through the WebSearchBackend tool-use loop; otherwise a single
     # ``acompletion`` call.
-    request_fields = _strip_gateway_fields(
+    request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
         tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
         remaining_user_tools=remaining_user_tools,
@@ -1498,7 +1304,7 @@ async def chat_completions(
                 )
         elif use_sandbox:
             assert sandbox_url is not None
-            sandbox_hint = _resolve_sandbox_purpose_hint(sandbox_tool_entry)
+            sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
             async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
                 sandbox_kwargs = {
                     **completion_kwargs,
@@ -1516,7 +1322,7 @@ async def chat_completions(
         elif use_web_search:
             assert web_search_url is not None
             assert web_search_tool_entry is not None
-            async with _build_web_search_backend(
+            async with build_web_search_backend(
                 base_url=web_search_url,
                 tool_entry=web_search_tool_entry,
             ) as web_backend:
@@ -1762,7 +1568,7 @@ async def _run_streaming_with_fallback(
     """
     tool_mode = bool(mcp_server_configs) or use_sandbox or use_web_search
 
-    base_request_fields = _strip_gateway_fields(
+    base_request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
         tools_extracted=tools_extracted,
         remaining_user_tools=remaining_user_tools,
@@ -1807,7 +1613,7 @@ async def _run_streaming_with_fallback(
             pool_for_loop = await backend_stack.enter_async_context(MCPClientPool(mcp_server_configs))
         elif use_sandbox:
             assert sandbox_url is not None
-            sandbox_hint = _resolve_sandbox_purpose_hint(sandbox_tool_entry)
+            sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
             pool_for_loop = await backend_stack.enter_async_context(
                 SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint),
             )
@@ -1815,7 +1621,7 @@ async def _run_streaming_with_fallback(
             assert web_search_url is not None
             assert web_search_tool_entry is not None
             pool_for_loop = await backend_stack.enter_async_context(
-                _build_web_search_backend(base_url=web_search_url, tool_entry=web_search_tool_entry),
+                build_web_search_backend(base_url=web_search_url, tool_entry=web_search_tool_entry),
             )
     except BaseException:
         # Eager-open failure (e.g. SandboxNotReachableError) — propagate so
