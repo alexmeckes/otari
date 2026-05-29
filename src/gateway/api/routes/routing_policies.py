@@ -1,6 +1,4 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
 from gateway.models.entities import RoutingPolicy, RoutingPolicyRevision
-from gateway.services import routing_policy_shape
+from gateway.services import routing_policy_eval_scores, routing_policy_shape
 from gateway.services.routing_policy_service import ACTIVE_ROUTING_POLICY_STATUS, ROUTING_STRATEGIES
 
 router = APIRouter(prefix="/v1/routing-policies", tags=["routing-policies"])
@@ -164,15 +162,6 @@ class ApplyRoutingPolicyEvalScoresResponse(BaseModel):
     applied_scores: list[AppliedRoutingPolicyEvalScoreResponse]
 
 
-@dataclass(frozen=True)
-class _EvalScoreAggregate:
-    model: str
-    quality_score: float
-    sample_count: int
-    metrics: list[str]
-    metadata: dict[str, Any]
-
-
 def _validate_strategy(strategy: str) -> None:
     if strategy not in ROUTING_STRATEGIES:
         supported = ", ".join(sorted(ROUTING_STRATEGIES))
@@ -186,149 +175,17 @@ def _unprocessable(detail: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
 
-def _eval_item_score(item: RoutingPolicyEvalScoreItem) -> float:
-    for value in (item.quality_score, item.score, item.benchmark_score):
-        score = routing_policy_shape.score_value(value)
-        if score is not None:
-            return score
-    raise _unprocessable("Each eval score must include score, quality_score, or benchmark_score")
-
-
-def _aggregate_eval_scores(items: list[RoutingPolicyEvalScoreItem]) -> dict[str, _EvalScoreAggregate]:
-    totals: dict[str, float] = {}
-    sample_counts: dict[str, int] = {}
-    metrics: dict[str, set[str]] = {}
-    metadata_by_model: dict[str, dict[str, Any]] = {}
-
-    for item in items:
-        model_key = routing_policy_shape.normalized_model_selector(item.provider, item.model)
-        score = _eval_item_score(item)
-        sample_count = item.sample_count or 1
-        totals[model_key] = totals.get(model_key, 0.0) + (score * sample_count)
-        sample_counts[model_key] = sample_counts.get(model_key, 0) + sample_count
-        if item.metric is not None:
-            metrics.setdefault(model_key, set()).add(item.metric)
-        if item.metadata:
-            metadata = metadata_by_model.setdefault(model_key, {})
-            metadata.update(item.metadata)
-
-    return {
-        model_key: _EvalScoreAggregate(
-            model=model_key,
-            quality_score=totals[model_key] / sample_counts[model_key],
-            sample_count=sample_counts[model_key],
-            metrics=sorted(metrics.get(model_key, set())),
-            metadata=metadata_by_model.get(model_key, {}),
-        )
-        for model_key in totals
-    }
-
-
-def _candidate_quality_score(candidate: Any) -> float | None:
-    if not isinstance(candidate, dict):
-        return None
-    score = routing_policy_shape.score_value(candidate.get("quality_score"))
-    if score is not None:
-        return score
-    metadata = candidate.get("metadata")
-    if isinstance(metadata, dict):
-        return routing_policy_shape.score_value(metadata.get("quality_score"))
-    return None
-
-
-def _candidate_model_key(candidate: Any) -> str | None:
-    if isinstance(candidate, str):
-        return routing_policy_shape.normalized_model_selector(None, candidate)
-    if isinstance(candidate, dict):
-        model = candidate.get("model")
-        if isinstance(model, str) and model.strip():
-            return routing_policy_shape.normalized_model_selector(None, model)
-    return None
-
-
-def _apply_eval_score_to_candidate(
-    candidate: Any,
-    *,
-    scores_by_model: Mapping[str, _EvalScoreAggregate],
-    applied_scores: list[AppliedRoutingPolicyEvalScoreResponse],
-    applied_model_keys: set[str],
-    updated_at: str,
-) -> Any:
-    model_key = _candidate_model_key(candidate)
-    if model_key is None or model_key not in scores_by_model:
-        return candidate
-
-    aggregate = scores_by_model[model_key]
-    previous_quality_score = _candidate_quality_score(candidate)
-    updated_candidate = {"model": candidate} if isinstance(candidate, str) else dict(candidate)
-    metadata_value = updated_candidate.get("metadata")
-    metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
-    metadata["eval_score"] = {
-        "quality_score": aggregate.quality_score,
-        "sample_count": aggregate.sample_count,
-        "metrics": aggregate.metrics,
-        "metadata": aggregate.metadata,
-        "updated_at": updated_at,
-    }
-    updated_candidate["quality_score"] = aggregate.quality_score
-    updated_candidate["metadata"] = metadata
-    applied_model_keys.add(model_key)
-    applied_scores.append(
-        AppliedRoutingPolicyEvalScoreResponse(
-            model=model_key,
-            previous_quality_score=previous_quality_score,
-            quality_score=aggregate.quality_score,
-            sample_count=aggregate.sample_count,
-            metrics=aggregate.metrics,
-        )
+def _eval_score_input(item: RoutingPolicyEvalScoreItem) -> routing_policy_eval_scores.EvalScoreInput:
+    return routing_policy_eval_scores.EvalScoreInput(
+        model=item.model,
+        provider=item.provider,
+        score=item.score,
+        quality_score=item.quality_score,
+        benchmark_score=item.benchmark_score,
+        metric=item.metric,
+        sample_count=item.sample_count,
+        metadata=dict(item.metadata),
     )
-    return updated_candidate
-
-
-def _apply_eval_scores_to_policy_config(
-    config: Mapping[str, Any],
-    *,
-    scores_by_model: Mapping[str, _EvalScoreAggregate],
-) -> tuple[dict[str, Any], list[AppliedRoutingPolicyEvalScoreResponse], list[str]]:
-    updated_config = dict(config)
-    applied_scores: list[AppliedRoutingPolicyEvalScoreResponse] = []
-    applied_model_keys: set[str] = set()
-    updated_at = datetime.now(UTC).isoformat()
-
-    candidates = updated_config.get("candidates")
-    if isinstance(candidates, list):
-        updated_config["candidates"] = [
-            _apply_eval_score_to_candidate(
-                candidate,
-                scores_by_model=scores_by_model,
-                applied_scores=applied_scores,
-                applied_model_keys=applied_model_keys,
-                updated_at=updated_at,
-            )
-            for candidate in candidates
-        ]
-
-    tiers = updated_config.get("tiers")
-    if isinstance(tiers, dict):
-        updated_tiers: dict[str, Any] = {}
-        for tier_name, tier_candidates in tiers.items():
-            if not isinstance(tier_candidates, list):
-                updated_tiers[str(tier_name)] = tier_candidates
-                continue
-            updated_tiers[str(tier_name)] = [
-                _apply_eval_score_to_candidate(
-                    candidate,
-                    scores_by_model=scores_by_model,
-                    applied_scores=applied_scores,
-                    applied_model_keys=applied_model_keys,
-                    updated_at=updated_at,
-                )
-                for candidate in tier_candidates
-            ]
-        updated_config["tiers"] = updated_tiers
-
-    unmatched_models = sorted(set(scores_by_model) - applied_model_keys)
-    return updated_config, applied_scores, unmatched_models
 
 
 def _create_policy_shape(request: CreateRoutingPolicyRequest) -> tuple[str, dict[str, Any]]:
@@ -605,18 +462,20 @@ async def apply_routing_policy_eval_scores(
             detail="Eval score ingestion requires a weighted_score routing policy",
         )
 
-    scores_by_model = _aggregate_eval_scores(request.scores)
-    updated_config, applied_scores, unmatched_models = _apply_eval_scores_to_policy_config(
-        policy.config_ or {},
-        scores_by_model=scores_by_model,
-    )
-    if not applied_scores:
+    try:
+        score_application = routing_policy_eval_scores.apply_eval_scores_to_policy_config(
+            policy.config_ or {},
+            [_eval_score_input(item) for item in request.scores],
+        )
+    except routing_policy_eval_scores.RoutingPolicyEvalScoreError as exc:
+        raise _unprocessable(str(exc)) from exc
+    if not score_application.applied_scores:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No eval scores matched routing policy candidates",
         )
 
-    policy.config_ = updated_config
+    policy.config_ = score_application.config
     _bump_policy_revision(policy)
     _record_policy_revision(
         db,
@@ -635,9 +494,18 @@ async def apply_routing_policy_eval_scores(
     await db.refresh(policy)
     return ApplyRoutingPolicyEvalScoresResponse(
         policy=RoutingPolicyResponse.from_model(policy),
-        applied_count=len(applied_scores),
-        unmatched_models=unmatched_models,
-        applied_scores=applied_scores,
+        applied_count=len(score_application.applied_scores),
+        unmatched_models=score_application.unmatched_models,
+        applied_scores=[
+            AppliedRoutingPolicyEvalScoreResponse(
+                model=score.model,
+                previous_quality_score=score.previous_quality_score,
+                quality_score=score.quality_score,
+                sample_count=score.sample_count,
+                metrics=score.metrics,
+            )
+            for score in score_application.applied_scores
+        ],
     )
 
 
