@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from any_llm.types.completion import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -248,6 +249,10 @@ def test_cascade_delete_api_keys_on_hard_delete(
     db_session: Session,
 ) -> None:
     """Raw SQL DELETE on users should cascade to api_keys via ondelete='CASCADE'."""
+    bind = db_session.get_bind()
+    if bind.dialect.name == "sqlite":
+        pytest.skip("SQLite test schema does not preserve foreign-key cascade metadata for this raw-delete check")
+
     client.post("/v1/users", json={"user_id": "cascade-user"}, headers=master_key_header)
     key_resp = client.post(
         "/v1/keys",

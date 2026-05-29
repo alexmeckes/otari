@@ -5,13 +5,12 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import UsageLog, User
 
-from .conftest import MODEL_NAME
+from .conftest import MODEL_NAME, _create_sync_engine
 
 _HAS_GEMINI_KEY = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
 
@@ -27,7 +26,7 @@ async def test_completion_accuracy(
     test_messages: list[dict[str, str]],
     model_pricing: dict[str, Any],
 ) -> None:
-    engine = create_engine(test_config.database_url)
+    engine = _create_sync_engine(test_config.database_url)
     session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Capture initial user spend
@@ -125,7 +124,7 @@ async def test_streaming_completion_accuracy(
     model_pricing: dict[str, Any],
 ) -> None:
     """Test that streaming requests correctly aggregate usage, calculate costs, and update user spend."""
-    engine = create_engine(test_config.database_url)
+    engine = _create_sync_engine(test_config.database_url)
     session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Capture initial user spend
@@ -272,7 +271,7 @@ async def test_failed_request_logs_error(
 
     assert response.status_code == 502
 
-    engine = create_engine(test_config.database_url)
+    engine = _create_sync_engine(test_config.database_url)
     session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = session_local()
 

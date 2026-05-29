@@ -1,15 +1,23 @@
 """Unit tests for `gateway.services.url_safety`."""
 
+import ipaddress
+
 import pytest
 
 from gateway.services.url_safety import UnsafeURLError, validate_mcp_url
 
 
-def test_public_https_accepted() -> None:
+def test_public_https_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gateway.services import url_safety
+
+    monkeypatch.setattr(url_safety, "_resolve_all", lambda _host: [ipaddress.ip_address("93.184.216.34")])
     validate_mcp_url("https://example.com/mcp", has_authorization_token=True)
 
 
-def test_public_http_accepted_without_token() -> None:
+def test_public_http_accepted_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gateway.services import url_safety
+
+    monkeypatch.setattr(url_safety, "_resolve_all", lambda _host: [ipaddress.ip_address("93.184.216.34")])
     validate_mcp_url("http://example.com/mcp", has_authorization_token=False)
 
 

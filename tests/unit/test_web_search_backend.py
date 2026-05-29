@@ -6,6 +6,7 @@ network access for trafilatura's per-URL fetches.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 from unittest.mock import patch
 
@@ -113,6 +114,12 @@ async def test_call_tool_returns_formatted_results_without_extraction(monkeypatc
 
 @pytest.mark.asyncio
 async def test_call_tool_extracts_content_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gateway.services import url_safety
+
+    async def resolve_public_host(_host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        return [ipaddress.ip_address("93.184.216.34")]
+
+    monkeypatch.setattr(url_safety, "_resolve_all_async", resolve_public_host)
     _patched_async_client(
         {
             ("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY),
@@ -442,8 +449,13 @@ async def test_fetch_capped_buffer_never_exceeds_max_bytes(monkeypatch: pytest.M
     at ~2x while ``b"".join(...)`` materialised the final bytestring.
     Now the overshooting chunk is truncated to the remaining budget.
     """
+    from gateway.services import url_safety
     from gateway.services import web_search_backend as wsb_module
 
+    async def resolve_public_host(_host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        return [ipaddress.ip_address("93.184.216.34")]
+
+    monkeypatch.setattr(url_safety, "_resolve_all_async", resolve_public_host)
     monkeypatch.setattr(wsb_module, "_FETCH_MAX_BYTES", 1024)
     payload = b"<html>" + b"A" * 4096 + b"</html>"
     _patched_async_client(

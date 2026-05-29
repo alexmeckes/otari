@@ -37,6 +37,12 @@ def calculate_next_reset(start: datetime, duration_sec: int) -> datetime:
     return start + timedelta(seconds=duration_sec)
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
 async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: datetime) -> None:
     """Reset user's budget spend and schedule next reset."""
 
@@ -473,7 +479,8 @@ async def validate_tag_budgets(
                 detail=f"Budget group '{budget.budget_id}' is blocked",
             )
 
-        if budget.next_budget_reset_at and now >= budget.next_budget_reset_at:
+        next_budget_reset_at = _as_utc(budget.next_budget_reset_at)
+        if next_budget_reset_at and now >= next_budget_reset_at:
             if normalized_strategy == "cas":
                 budget = await _cas_reset_tag_budget(db, budget, now)
             else:
@@ -578,7 +585,8 @@ async def validate_user_budget(
         return user
 
     now = datetime.now(UTC)
-    if user.next_budget_reset_at and now >= user.next_budget_reset_at:
+    next_budget_reset_at = _as_utc(user.next_budget_reset_at)
+    if next_budget_reset_at and now >= next_budget_reset_at:
         if normalized_strategy == "cas":
             user = await _cas_reset_user_budget(db, user, budget, now)
         else:
@@ -639,7 +647,8 @@ async def validate_project_budget(
         return project
 
     now = datetime.now(UTC)
-    if project.next_budget_reset_at and now >= project.next_budget_reset_at:
+    next_budget_reset_at = _as_utc(project.next_budget_reset_at)
+    if next_budget_reset_at and now >= next_budget_reset_at:
         if normalized_strategy == "cas":
             project = await _cas_reset_project_budget(db, project, budget, now)
         else:

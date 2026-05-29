@@ -42,7 +42,7 @@ class PricingResponse(BaseModel):
         """Create a PricingResponse from a ModelPricing ORM model."""
         return cls(
             model_key=pricing.model_key,
-            effective_at=pricing.effective_at.isoformat(),
+            effective_at=normalize_effective_at(pricing.effective_at).isoformat(),
             input_price_per_million=pricing.input_price_per_million,
             output_price_per_million=pricing.output_price_per_million,
             created_at=pricing.created_at.isoformat(),

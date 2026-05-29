@@ -14,7 +14,7 @@ from gateway.db import Base, get_db
 from gateway.main import create_app
 from gateway.services.model_discovery_service import get_model_cache
 
-from .conftest import _run_alembic_migrations, _to_async_url
+from .conftest import _create_sync_engine, _drop_alembic_version_table, _run_alembic_migrations, _to_async_url
 
 
 def _make_openai_model(model_id: str, owned_by: str = "openai", created: int = 1700000000) -> dict[str, Any]:
@@ -54,9 +54,7 @@ def no_discovery_config(postgres_url: str) -> GatewayConfig:
 def _make_client(config: GatewayConfig) -> Generator[TestClient]:
     _run_alembic_migrations(config.database_url)
 
-    from sqlalchemy import create_engine, text
-
-    engine = create_engine(config.database_url, pool_pre_ping=True)
+    engine = _create_sync_engine(config.database_url)
     async_engine = create_async_engine(_to_async_url(config.database_url), pool_pre_ping=True)
     async_session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
     app = create_app(config)
@@ -74,9 +72,7 @@ def _make_client(config: GatewayConfig) -> Generator[TestClient]:
         # Dispose the async engine to avoid leaking connections/tasks.
         asyncio.run(async_engine.dispose())
         Base.metadata.drop_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
-            conn.commit()
+        _drop_alembic_version_table(engine)
         engine.dispose()
 
 
