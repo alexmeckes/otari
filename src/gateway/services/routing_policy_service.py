@@ -17,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
 from gateway.models.entities import Project, RouteTrace, RoutingPolicy
+from gateway.services import routing_request_analysis as _routing_request_analysis
 from gateway.services.pricing_service import find_model_pricing
+from gateway.services.routing_context_policy import apply_context_policy as apply_context_policy
 
 DEFAULT_ROUTING_MODEL = "default_routing"
 DEFAULT_ROUTE_TRACE_ENDPOINT = "/v1/chat/completions"
@@ -32,7 +34,6 @@ ROUTING_STRATEGIES = {
 }
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
-_DEFAULT_OUTPUT_TOKENS = 700
 _TIER_ORDER = ("simple", "medium", "complex", "reasoning")
 _INFERRED_TIER_BY_OUTPUT_PRICE = (
     (0.10, "simple"),
@@ -42,37 +43,7 @@ _INFERRED_TIER_BY_OUTPUT_PRICE = (
 )
 _HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
 _HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
-_REASONING_HINTS = (
-    "prove",
-    "proof",
-    "derive",
-    "theorem",
-    "formal",
-    "optimization",
-    "multi-step",
-    "step by step",
-)
-_COMPLEX_HINTS = (
-    "architecture",
-    "design doc",
-    "debug",
-    "refactor",
-    "implement",
-    "migration",
-    "security",
-    "compliance",
-    "analyze",
-)
-_MEDIUM_HINTS = (
-    "summarize",
-    "compare",
-    "rewrite",
-    "extract",
-    "classify",
-    "explain",
-)
 _GUARDRAIL_ACTIONS = {"block", "observe"}
-_CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
     "ignore all previous instructions",
@@ -123,6 +94,13 @@ _GUARDRAIL_PRESET_ALIASES = {
     "prompt_shield": "prompt_injection",
     "prompt_injection_detection": "prompt_injection",
 }
+
+_bool_config = _routing_request_analysis.bool_config
+_int_config = _routing_request_analysis.int_config
+_jsonable_text = _routing_request_analysis.jsonable_text
+classify_request_tier = _routing_request_analysis.classify_request_tier
+estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
+estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
 
 
 def normalize_routing_model_selector(model: Any) -> str:
@@ -261,82 +239,6 @@ class _PolicyMatch:
     rollout: dict[str, Any] | None
 
 
-def _jsonable_text(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list):
-        return " ".join(_jsonable_text(item) for item in value)
-    if isinstance(value, dict):
-        return " ".join(_jsonable_text(item) for item in value.values())
-    if value is None:
-        return ""
-    return str(value)
-
-
-def estimate_prompt_tokens(request_body: Mapping[str, Any]) -> int:
-    """Estimate prompt tokens without pulling in a tokenizer dependency."""
-    text_parts: list[str] = []
-    messages = request_body.get("messages")
-    if isinstance(messages, list):
-        for message in messages:
-            if isinstance(message, dict):
-                text_parts.append(_jsonable_text(message.get("content")))
-
-    tools = request_body.get("tools")
-    if tools:
-        try:
-            text_parts.append(json.dumps(tools, sort_keys=True))
-        except TypeError:
-            text_parts.append(_jsonable_text(tools))
-
-    joined = " ".join(part for part in text_parts if part)
-    return max(1, len(joined) // 4)
-
-
-def estimate_output_tokens(request_body: Mapping[str, Any]) -> int:
-    """Estimate expected output tokens from request limits."""
-    for key in ("max_completion_tokens", "max_tokens"):
-        value = request_body.get(key)
-        if isinstance(value, int) and value > 0:
-            return value
-    return _DEFAULT_OUTPUT_TOKENS
-
-
-def classify_request_tier(
-    request_body: Mapping[str, Any],
-    *,
-    prompt_tokens: int,
-    config: Mapping[str, Any],
-) -> str:
-    """Classify a request into a ClawSwitch-style complexity tier."""
-    thresholds = config.get("tier_thresholds")
-    threshold_map = thresholds if isinstance(thresholds, dict) else {}
-    medium_threshold = _int_config(threshold_map.get("medium"), 800)
-    complex_threshold = _int_config(threshold_map.get("complex"), 3000)
-    reasoning_threshold = _int_config(threshold_map.get("reasoning"), 9000)
-
-    request_text = _jsonable_text(request_body.get("messages")).lower()
-    if prompt_tokens >= reasoning_threshold or any(hint in request_text for hint in _REASONING_HINTS):
-        return "reasoning"
-    if prompt_tokens >= complex_threshold or any(hint in request_text for hint in _COMPLEX_HINTS):
-        return "complex"
-    if prompt_tokens >= medium_threshold or any(hint in request_text for hint in _MEDIUM_HINTS):
-        return "medium"
-    return "simple"
-
-
-def _int_config(value: Any, default: int) -> int:
-    if isinstance(value, int) and value > 0:
-        return value
-    return default
-
-
-def _non_negative_int_config(value: Any, default: int) -> int:
-    if isinstance(value, int) and value >= 0:
-        return value
-    return default
-
-
 def _float_or_none(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -361,12 +263,6 @@ def _score_or_none(value: Any) -> float | None:
     if parsed <= 100.0:
         return parsed / 100.0
     return None
-
-
-def _bool_config(value: Any, default: bool) -> bool:
-    if isinstance(value, bool):
-        return value
-    return default
 
 
 def _normalize_tier(value: Any) -> str | None:
@@ -1378,283 +1274,6 @@ def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
 def _redactions_enabled(config: Mapping[str, Any]) -> bool:
     redactions = _redactions_config(config)
     return _bool_config(redactions.get("enabled"), bool(redactions))
-
-
-def _context_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    context = config.get("context")
-    if not isinstance(context, dict):
-        context = config.get("context_policy")
-    return context if isinstance(context, dict) else {}
-
-
-def _context_enabled(config: Mapping[str, Any]) -> bool:
-    context = _context_config(config)
-    return _bool_config(context.get("enabled"), bool(context))
-
-
-def _message_role(message: Any) -> str:
-    if not isinstance(message, dict):
-        return ""
-    role = message.get("role")
-    return role.strip().lower() if isinstance(role, str) else ""
-
-
-def _message_token_estimate(message: Any) -> int:
-    if not isinstance(message, dict):
-        return max(1, len(_jsonable_text(message)) // 4)
-    text = _jsonable_text(message.get("content"))
-    return max(1, len(text) // 4)
-
-
-def _non_message_prompt_tokens(request_body: Mapping[str, Any]) -> int:
-    tools = request_body.get("tools")
-    if not tools:
-        return 0
-    try:
-        text = json.dumps(tools, sort_keys=True)
-    except TypeError:
-        text = _jsonable_text(tools)
-    return max(1, len(text) // 4)
-
-
-def _context_kept_message_indexes(
-    messages: Sequence[Any],
-    *,
-    preserve_system_messages: bool,
-    preserve_last_messages: int,
-) -> set[int]:
-    kept_indexes: set[int] = set()
-    if preserve_system_messages:
-        for index, message in enumerate(messages):
-            if _message_role(message) in {"system", "developer"}:
-                kept_indexes.add(index)
-
-    if preserve_last_messages:
-        for index in range(max(0, len(messages) - preserve_last_messages), len(messages)):
-            kept_indexes.add(index)
-    return kept_indexes
-
-
-def _context_summary_role(value: Any) -> str:
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"system", "developer", "user"}:
-            return normalized
-    return "system"
-
-
-def _summary_line_for_message(message: Any, *, max_chars: int) -> str:
-    role = _message_role(message) or "message"
-    text = _jsonable_text(message.get("content") if isinstance(message, dict) else message)
-    text = " ".join(text.split())
-    if len(text) > max_chars:
-        text = f"{text[: max(0, max_chars - 3)].rstrip()}..."
-    return f"- {role}: {text}" if text else f"- {role}: [empty]"
-
-
-def _trim_summary_to_chars(text: str, max_chars: int) -> str:
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= 3:
-        return ""
-    return f"{text[: max_chars - 3].rstrip()}..."
-
-
-def _build_context_summary(
-    messages: Sequence[Any],
-    summarized_indexes: Sequence[int],
-    *,
-    max_chars: int,
-    prefix: str,
-    max_message_chars: int,
-) -> str:
-    if max_chars <= 0:
-        return ""
-    lines = [prefix.strip() or "Earlier conversation summary:"]
-    for index in summarized_indexes:
-        lines.append(_summary_line_for_message(messages[index], max_chars=max_message_chars))
-    return _trim_summary_to_chars("\n".join(lines), max_chars)
-
-
-def _messages_with_summary(
-    messages: Sequence[Any],
-    kept_indexes: set[int],
-    *,
-    summary_message: dict[str, Any] | None,
-) -> list[Any]:
-    result: list[Any] = []
-    summary_inserted = summary_message is None
-    for index, message in enumerate(messages):
-        if index not in kept_indexes:
-            continue
-        if not summary_inserted and _message_role(message) not in {"system", "developer"}:
-            result.append(summary_message)
-            summary_inserted = True
-        result.append(message)
-    if not summary_inserted and summary_message is not None:
-        result.append(summary_message)
-    return result
-
-
-def apply_context_policy(
-    config: Mapping[str, Any],
-    request_body: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Apply deterministic prompt compression from policy config and return trace metadata."""
-    body = copy.deepcopy(dict(request_body))
-    if not _context_enabled(config):
-        return body, None
-
-    context_config = _context_config(config)
-    strategy = context_config.get("strategy", "trim_messages")
-    if not isinstance(strategy, str) or strategy.strip().lower() not in _CONTEXT_STRATEGIES:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "unsupported_strategy",
-            "strategy": str(strategy),
-        }
-    strategy = strategy.strip().lower()
-
-    max_prompt_tokens = _int_config(context_config.get("max_prompt_tokens"), 0)
-    if max_prompt_tokens <= 0:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "missing_max_prompt_tokens",
-            "strategy": strategy,
-        }
-
-    messages = body.get("messages")
-    if not isinstance(messages, list) or not messages:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "missing_messages",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-        }
-
-    original_prompt_tokens = estimate_prompt_tokens(body)
-    original_message_count = len(messages)
-    preserve_system_messages = _bool_config(context_config.get("preserve_system_messages"), True)
-    preserve_last_messages = _non_negative_int_config(context_config.get("preserve_last_messages"), 4)
-    if original_prompt_tokens <= max_prompt_tokens:
-        return body, {
-            "enabled": True,
-            "status": "unchanged",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-            "original_prompt_tokens": original_prompt_tokens,
-            "final_prompt_tokens": original_prompt_tokens,
-            "original_message_count": original_message_count,
-            "final_message_count": original_message_count,
-            "trimmed_message_count": 0,
-            "preserve_system_messages": preserve_system_messages,
-            "preserve_last_messages": preserve_last_messages,
-        }
-
-    kept_indexes = _context_kept_message_indexes(
-        messages,
-        preserve_system_messages=preserve_system_messages,
-        preserve_last_messages=preserve_last_messages,
-    )
-
-    if strategy == "summarize_messages":
-        summarized_indexes = [index for index in range(len(messages)) if index not in kept_indexes]
-        if not summarized_indexes:
-            body["messages"] = [messages[index] for index in sorted(kept_indexes)]
-            final_prompt_tokens = estimate_prompt_tokens(body)
-            return body, {
-                "enabled": True,
-                "status": "unchanged",
-                "strategy": strategy,
-                "max_prompt_tokens": max_prompt_tokens,
-                "original_prompt_tokens": original_prompt_tokens,
-                "final_prompt_tokens": final_prompt_tokens,
-                "original_message_count": original_message_count,
-                "final_message_count": len(body["messages"]),
-                "summarized_message_count": 0,
-                "preserve_system_messages": preserve_system_messages,
-                "preserve_last_messages": preserve_last_messages,
-            }
-
-        kept_tokens = _non_message_prompt_tokens(body) + sum(
-            _message_token_estimate(messages[index]) for index in kept_indexes
-        )
-        summary_token_budget = max_prompt_tokens - kept_tokens
-        configured_summary_tokens = _int_config(
-            context_config.get("summary_max_tokens"),
-            min(512, max(1, max_prompt_tokens // 4)),
-        )
-        summary_token_budget = min(configured_summary_tokens, summary_token_budget)
-        summary_text = _build_context_summary(
-            messages,
-            summarized_indexes,
-            max_chars=max(0, summary_token_budget * 4),
-            prefix=str(context_config.get("summary_prefix") or "Earlier conversation summary:"),
-            max_message_chars=_int_config(context_config.get("summary_message_max_chars"), 240),
-        )
-        summary_role = _context_summary_role(context_config.get("summary_role"))
-        summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
-        body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
-        final_prompt_tokens = estimate_prompt_tokens(body)
-        if summary_message is not None and final_prompt_tokens > max_prompt_tokens:
-            overflow_chars = ((final_prompt_tokens - max_prompt_tokens) * 4) + 16
-            summary_message["content"] = _trim_summary_to_chars(
-                str(summary_message["content"]),
-                max(0, len(str(summary_message["content"])) - overflow_chars),
-            )
-            if not summary_message["content"]:
-                summary_message = None
-            body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
-            final_prompt_tokens = estimate_prompt_tokens(body)
-
-        return body, {
-            "enabled": True,
-            "status": "summarized" if summary_message is not None else "trimmed",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-            "original_prompt_tokens": original_prompt_tokens,
-            "final_prompt_tokens": final_prompt_tokens,
-            "original_message_count": original_message_count,
-            "final_message_count": len(body["messages"]),
-            "trimmed_message_count": original_message_count - len(body["messages"]),
-            "summarized_message_count": len(summarized_indexes),
-            "summary_message_role": summary_role,
-            "summary_chars": len(str(summary_message["content"])) if summary_message is not None else 0,
-            "preserve_system_messages": preserve_system_messages,
-            "preserve_last_messages": preserve_last_messages,
-            "over_budget_after_summarization": final_prompt_tokens > max_prompt_tokens,
-        }
-
-    message_budget = max(max_prompt_tokens - _non_message_prompt_tokens(body), 1)
-    current_message_tokens = sum(_message_token_estimate(messages[index]) for index in kept_indexes)
-    for index in range(len(messages) - 1, -1, -1):
-        if index in kept_indexes:
-            continue
-        token_estimate = _message_token_estimate(messages[index])
-        if current_message_tokens + token_estimate <= message_budget:
-            kept_indexes.add(index)
-            current_message_tokens += token_estimate
-
-    body["messages"] = [messages[index] for index in sorted(kept_indexes)]
-    final_prompt_tokens = estimate_prompt_tokens(body)
-    trimmed_message_count = original_message_count - len(body["messages"])
-    return body, {
-        "enabled": True,
-        "status": "trimmed" if trimmed_message_count else "unchanged",
-        "strategy": strategy,
-        "max_prompt_tokens": max_prompt_tokens,
-        "original_prompt_tokens": original_prompt_tokens,
-        "final_prompt_tokens": final_prompt_tokens,
-        "original_message_count": original_message_count,
-        "final_message_count": len(body["messages"]),
-        "trimmed_message_count": trimmed_message_count,
-        "preserve_system_messages": preserve_system_messages,
-        "preserve_last_messages": preserve_last_messages,
-        "over_budget_after_trimming": final_prompt_tokens > max_prompt_tokens,
-    }
 
 
 def _guardrails_enabled(config: Mapping[str, Any]) -> bool:
