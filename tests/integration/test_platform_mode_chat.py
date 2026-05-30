@@ -470,7 +470,7 @@ def test_platform_mode_streaming_falls_through_on_first_attempt_failure(
         return _success_stream()
 
     monkeypatch.setattr("gateway.services.platform_gateway._post_platform", fake_post_platform)
-    monkeypatch.setattr("gateway.api.routes.chat.acompletion", fake_acompletion)
+    monkeypatch.setattr("gateway.api.routes._chat_streaming_fallback.acompletion", fake_acompletion)
 
     response = platform_client.post(
         "/v1/chat/completions",
@@ -551,7 +551,7 @@ def test_platform_mode_streaming_returns_502_when_all_attempts_fail(
         raise RuntimeError("simulated upstream failure")
 
     monkeypatch.setattr("gateway.services.platform_gateway._post_platform", fake_post_platform)
-    monkeypatch.setattr("gateway.api.routes.chat.acompletion", fake_acompletion)
+    monkeypatch.setattr("gateway.api.routes._chat_streaming_fallback.acompletion", fake_acompletion)
 
     response = platform_client.post(
         "/v1/chat/completions",
@@ -834,7 +834,7 @@ def test_platform_mode_tool_loop_streaming_falls_through_pre_lock_in(
         return _stream()
 
     monkeypatch.setattr("gateway.services.platform_gateway._post_platform", fake_post_platform)
-    monkeypatch.setattr("gateway.api.routes.chat.MCPClientPool", _FakeMcpPool)
+    monkeypatch.setattr("gateway.api.routes._chat_streaming_fallback.MCPClientPool", _FakeMcpPool)
     monkeypatch.setattr("gateway.services.mcp_loop.acompletion", fake_loop_acompletion)
 
     response = platform_client.post(
