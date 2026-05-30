@@ -1,7 +1,7 @@
 import asyncio
 import os
 import time
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
 from typing import Annotated, Any, NamedTuple
 
@@ -10,7 +10,6 @@ from any_llm import AnyLLM, LLMProvider, acompletion
 from any_llm.types.completion import (
     ChatCompletion,
     ChatCompletionChunk,
-    CompletionUsage,
 )
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -18,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -66,10 +66,8 @@ from gateway.services.routing_policy_service import (
 from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 from gateway.streaming import (
-    OPENAI_STREAM_FORMAT,
     StreamingAttemptFailure,
     iterate_streaming_attempts,
-    streaming_generator,
 )
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
@@ -855,7 +853,7 @@ async def chat_completions(
                 detail="LLM provider error",
             ) from exc
 
-        return _build_streaming_response(
+        return build_chat_streaming_response(
             stream=stream,
             provider=provider,
             model=model,
@@ -1194,113 +1192,6 @@ async def chat_completions(
     return completion
 
 
-def _build_streaming_response(
-    *,
-    stream: AsyncIterator[ChatCompletionChunk],
-    provider: LLMProvider,
-    model: str,
-    platform_mode: bool,
-    correlation_id: str | None,
-    request_id: str | None,
-    config: GatewayConfig,
-    db: AsyncSession | None,
-    log_writer: LogWriter | None,
-    api_key_id: str | None,
-    user_id: str | None,
-    project_id: str | None,
-    tags: Mapping[str, Any] | None,
-    rate_limit_info: RateLimitInfo | None,
-) -> StreamingResponse:
-    """Wrap an already-opened upstream stream in an SSE response."""
-
-    def _format_chunk(chunk: ChatCompletionChunk) -> str:
-        return f"data: {chunk.model_dump_json()}\n\n"
-
-    def _extract_usage(chunk: ChatCompletionChunk) -> CompletionUsage | None:
-        if not chunk.usage:
-            return None
-        return CompletionUsage(
-            prompt_tokens=chunk.usage.prompt_tokens or 0,
-            completion_tokens=chunk.usage.completion_tokens or 0,
-            total_tokens=chunk.usage.total_tokens or 0,
-        )
-
-    async def _on_complete(usage_data: CompletionUsage) -> None:
-        if platform_mode and correlation_id:
-            asyncio.create_task(
-                report_platform_usage(
-                    config=config,
-                    correlation_id=correlation_id,
-                    outcome="success",
-                    usage=usage_data,
-                )
-            )
-            return
-        if db is None or log_writer is None:
-            return
-        await log_usage(
-            db=db,
-            log_writer=log_writer,
-            api_key_id=api_key_id,
-            model=model,
-            provider=provider,
-            endpoint="/v1/chat/completions",
-            user_id=user_id,
-            project_id=project_id,
-            tags=tags,
-            usage_override=usage_data,
-        )
-
-    async def _on_error(error: str) -> None:
-        if platform_mode and correlation_id:
-            asyncio.create_task(
-                report_platform_usage(
-                    config=config,
-                    correlation_id=correlation_id,
-                    outcome="error",
-                    usage=None,
-                )
-            )
-            return
-        if db is None or log_writer is None:
-            return
-        await log_usage(
-            db=db,
-            log_writer=log_writer,
-            api_key_id=api_key_id,
-            model=model,
-            provider=provider,
-            endpoint="/v1/chat/completions",
-            user_id=user_id,
-            project_id=project_id,
-            tags=tags,
-            error=error,
-        )
-
-    rl_headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
-    # StreamingResponse builds its own response object, so headers we want on
-    # the wire have to be passed in here — assigning to the dependency-injected
-    # `Response` object doesn't propagate to streaming responses.
-    headers = dict(rl_headers)
-    if platform_mode and correlation_id:
-        headers["X-Correlation-ID"] = correlation_id
-    if platform_mode and request_id:
-        headers["X-Otari-Request-ID"] = request_id
-    return StreamingResponse(
-        streaming_generator(
-            stream=stream,
-            format_chunk=_format_chunk,
-            extract_usage=_extract_usage,
-            fmt=OPENAI_STREAM_FORMAT,
-            on_complete=_on_complete,
-            on_error=_on_error,
-            label=f"{provider}:{model}",
-        ),
-        media_type="text/event-stream",
-        headers=headers,
-    )
-
-
 async def _run_streaming_with_fallback(
     *,
     route: ResolvedRoute,
@@ -1482,7 +1373,7 @@ async def _run_streaming_with_fallback(
     else:
         stream_to_return = stream
 
-    return _build_streaming_response(
+    return build_chat_streaming_response(
         stream=stream_to_return,
         provider=LLMProvider(chosen.provider),
         model=chosen.model,
