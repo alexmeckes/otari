@@ -1,7 +1,6 @@
 import asyncio
 import os
 import time
-import uuid
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack
 from typing import Annotated, Any, NamedTuple
@@ -15,10 +14,10 @@ from any_llm.types.completion import (
 )
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -55,14 +54,12 @@ from gateway.services.platform_gateway import (
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import (
-    DEFAULT_ROUTE_TRACE_ENDPOINT,
     DEFAULT_ROUTING_MODEL,
     RoutingCandidate,
     RoutingPlan,
     RoutingPolicyError,
     apply_context_policy,
     apply_guardrail_redactions,
-    normalize_routing_model_selector,
     record_route_trace,
     resolve_routing_plan,
 )
@@ -86,68 +83,6 @@ _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS = 2000
 _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP = 30000
 _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY = "streaming_first_chunk_timeout_ms"
 _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms_tool_loop"
-
-
-class ChatCompletionRequest(BaseModel):
-    """OpenAI-compatible chat completion request."""
-
-    _route_trace_endpoint: str = PrivateAttr(default=DEFAULT_ROUTE_TRACE_ENDPOINT)
-
-    model: str = DEFAULT_ROUTING_MODEL
-    messages: list[dict[str, Any]] = Field(min_length=1)
-
-    @field_validator("model", mode="before")
-    @classmethod
-    def normalize_model(cls, v: Any) -> str:
-        """Accept omitted/null/case-insensitive default_routing sentinels."""
-        normalized = normalize_routing_model_selector(v)
-        if not normalized:
-            raise ValueError("model must not be blank")
-        return normalized
-
-    @field_validator("messages")
-    @classmethod
-    def validate_message_structure(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        for i, message in enumerate(v):
-            if "role" not in message:
-                msg = f"messages[{i}]: 'role' is required"
-                raise ValueError(msg)
-        return v
-
-    user: str | None = None
-    project_id: str | None = Field(default=None, description="Optional gateway project id for routing policy lookup")
-    tags: dict[str, str] | None = Field(default=None, description="Optional trace tags for routing observability")
-    temperature: float | None = None
-    max_tokens: int | None = None
-    max_completion_tokens: int | None = None
-    top_p: float | None = None
-    stream: bool = False
-    stream_options: dict[str, Any] | None = None
-    tools: list[dict[str, Any]] | None = None
-    tool_choice: str | dict[str, Any] | None = None
-    response_format: dict[str, Any] | None = None
-    mcp_servers: list[McpServerConfig] | None = None
-    mcp_server_ids: list[uuid.UUID] | None = None
-    tools_header: str | None = Field(
-        default=None,
-        max_length=4000,
-        description=(
-            "Optional override for the lead-in that the gateway prepends before the "
-            "per-tool hint block in the system message. Useful for expressing "
-            "global tool-selection policy (e.g. 'prefer MCP tools over code_execution'). "
-            "Falls back to GATEWAY_TOOLS_HEADER env, then to the built-in default."
-        ),
-    )
-    max_tool_iterations: int | None = Field(default=None, ge=1, le=MAX_TOOL_ITERATIONS_CAP)
-
-    @property
-    def route_trace_endpoint(self) -> str:
-        """Return the endpoint label used for standalone routing traces."""
-        return self._route_trace_endpoint
-
-    def set_route_trace_endpoint(self, endpoint: str) -> None:
-        """Set the endpoint label used for standalone routing traces."""
-        self._route_trace_endpoint = endpoint
 
 
 async def _run_non_streaming_completion(

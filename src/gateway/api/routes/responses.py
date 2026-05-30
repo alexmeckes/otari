@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.api.routes.chat import (
-    ChatCompletionRequest,
     chat_completions,
 )
 from gateway.core.config import GatewayConfig

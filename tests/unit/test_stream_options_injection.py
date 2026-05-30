@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from gateway.api.routes.chat import ChatCompletionRequest
+from gateway.api.routes._chat_request import ChatCompletionRequest
 
 
 def test_stream_options_accepted_by_request_model() -> None:
