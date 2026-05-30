@@ -2,7 +2,7 @@ import asyncio
 import os
 import time
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from typing import Annotated, Any, NamedTuple
@@ -246,6 +246,7 @@ async def _run_non_streaming_completion(
     use_web_search: bool,
     web_search_url: str | None,
     web_search_tool_entry: dict[str, Any] | None,
+    on_first_response: Callable[[], None] | None = None,
 ) -> ChatCompletion:
     """Run one non-streaming completion attempt with gateway tool backends."""
     if mcp_server_configs:
@@ -262,6 +263,7 @@ async def _run_non_streaming_completion(
                 completion_kwargs=mcp_kwargs,
                 pool=pool,
                 max_iterations=max_tool_iterations,
+                on_first_response=on_first_response,
             )
     if use_sandbox:
         assert sandbox_url is not None
@@ -279,6 +281,7 @@ async def _run_non_streaming_completion(
                 completion_kwargs=sandbox_kwargs,
                 pool=backend,  # type: ignore[arg-type]
                 max_iterations=max_tool_iterations,
+                on_first_response=on_first_response,
             )
     if use_web_search:
         assert web_search_url is not None
@@ -299,6 +302,7 @@ async def _run_non_streaming_completion(
                 completion_kwargs=web_kwargs,
                 pool=web_backend,  # type: ignore[arg-type]
                 max_iterations=max_tool_iterations,
+                on_first_response=on_first_response,
             )
     return await acompletion(**completion_kwargs)  # type: ignore[return-value]
 
@@ -1101,63 +1105,19 @@ async def chat_completions(
                 )
 
             try:
-                if mcp_server_configs:
-                    async with MCPClientPool(mcp_server_configs) as pool:
-                        mcp_kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                pool.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        completion: ChatCompletion = await mcp_tool_loop(
-                            completion_kwargs=mcp_kwargs,
-                            pool=pool,
-                            max_iterations=max_tool_iterations,
-                            on_first_response=_mark_locked_in,
-                        )
-                elif use_sandbox:
-                    assert sandbox_url is not None
-                    sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
-                    async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
-                        sandbox_kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                backend.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        completion = await mcp_tool_loop(
-                            completion_kwargs=sandbox_kwargs,
-                            pool=backend,  # type: ignore[arg-type]
-                            max_iterations=max_tool_iterations,
-                            on_first_response=_mark_locked_in,
-                        )
-                elif use_web_search:
-                    assert web_search_url is not None
-                    assert web_search_tool_entry is not None
-                    async with build_web_search_backend(
-                        base_url=web_search_url,
-                        tool_entry=web_search_tool_entry,
-                    ) as web_backend:
-                        web_kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                web_backend.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        completion = await mcp_tool_loop(
-                            completion_kwargs=web_kwargs,
-                            pool=web_backend,  # type: ignore[arg-type]
-                            max_iterations=max_tool_iterations,
-                            on_first_response=_mark_locked_in,
-                        )
-                else:
-                    completion = await acompletion(**completion_kwargs)  # type: ignore[assignment]
+                completion = await _run_non_streaming_completion(
+                    completion_kwargs=completion_kwargs,
+                    mcp_server_configs=mcp_server_configs,
+                    max_tool_iterations=max_tool_iterations,
+                    tools_header=request.tools_header,
+                    use_sandbox=use_sandbox,
+                    sandbox_url=sandbox_url,
+                    sandbox_tool_entry=sandbox_tool_entry,
+                    use_web_search=use_web_search,
+                    web_search_url=web_search_url,
+                    web_search_tool_entry=web_search_tool_entry,
+                    on_first_response=_mark_locked_in,
+                )
             except HTTPException:
                 raise
             except MaxToolIterationsExceeded as exc:
@@ -1287,60 +1247,18 @@ async def chat_completions(
     completion_kwargs = {**provider_kwargs, **request_fields}
 
     try:
-        if mcp_server_configs:
-            async with MCPClientPool(mcp_server_configs) as pool:
-                mcp_kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        pool.purpose_hints(),
-                        header=request.tools_header,
-                    ),
-                }
-                completion = await mcp_tool_loop(
-                    completion_kwargs=mcp_kwargs,
-                    pool=pool,
-                    max_iterations=max_tool_iterations,
-                )
-        elif use_sandbox:
-            assert sandbox_url is not None
-            sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
-            async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
-                sandbox_kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        backend.purpose_hints(),
-                        header=request.tools_header,
-                    ),
-                }
-                completion = await mcp_tool_loop(
-                    completion_kwargs=sandbox_kwargs,
-                    pool=backend,  # type: ignore[arg-type]
-                    max_iterations=max_tool_iterations,
-                )
-        elif use_web_search:
-            assert web_search_url is not None
-            assert web_search_tool_entry is not None
-            async with build_web_search_backend(
-                base_url=web_search_url,
-                tool_entry=web_search_tool_entry,
-            ) as web_backend:
-                web_kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        web_backend.purpose_hints(),
-                        header=request.tools_header,
-                    ),
-                }
-                completion = await mcp_tool_loop(
-                    completion_kwargs=web_kwargs,
-                    pool=web_backend,  # type: ignore[arg-type]
-                    max_iterations=max_tool_iterations,
-                )
-        else:
-            completion = await acompletion(**completion_kwargs)  # type: ignore[assignment]
+        completion = await _run_non_streaming_completion(
+            completion_kwargs=completion_kwargs,
+            mcp_server_configs=mcp_server_configs,
+            max_tool_iterations=max_tool_iterations,
+            tools_header=request.tools_header,
+            use_sandbox=use_sandbox,
+            sandbox_url=sandbox_url,
+            sandbox_tool_entry=sandbox_tool_entry,
+            use_web_search=use_web_search,
+            web_search_url=web_search_url,
+            web_search_tool_entry=web_search_tool_entry,
+        )
         if db is not None:
             await log_usage(
                 db=db,
