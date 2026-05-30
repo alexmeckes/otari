@@ -4,7 +4,6 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack
-from datetime import UTC, datetime
 from typing import Annotated, Any, NamedTuple
 
 import httpx
@@ -21,10 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.metrics import record_cost, record_tokens
-from gateway.models.entities import APIKey, UsageLog
+from gateway.models.entities import APIKey
 from gateway.models.mcp import McpServerConfig
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
@@ -54,8 +53,7 @@ from gateway.services.platform_gateway import (
     resolve_platform_credentials,
     resolve_platform_mcp_servers,
 )
-from gateway.services.pricing_service import find_model_pricing
-from gateway.services.provider_kwargs import get_provider_kwargs as get_provider_kwargs  # noqa: F401
+from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import (
     DEFAULT_ROUTE_TRACE_ENDPOINT,
     DEFAULT_ROUTING_MODEL,
@@ -88,14 +86,6 @@ _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS = 2000
 _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP = 30000
 _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY = "streaming_first_chunk_timeout_ms"
 _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms_tool_loop"
-
-
-def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
-    return {
-        "X-RateLimit-Limit": str(info.limit),
-        "X-RateLimit-Remaining": str(info.remaining),
-        "X-RateLimit-Reset": str(int(info.reset)),
-    }
 
 
 class ChatCompletionRequest(BaseModel):
@@ -158,80 +148,6 @@ class ChatCompletionRequest(BaseModel):
     def set_route_trace_endpoint(self, endpoint: str) -> None:
         """Set the endpoint label used for standalone routing traces."""
         self._route_trace_endpoint = endpoint
-
-
-async def log_usage(
-    db: AsyncSession,
-    log_writer: LogWriter,
-    api_key_id: str | None,
-    model: str,
-    provider: str | None,
-    endpoint: str,
-    user_id: str | None = None,
-    project_id: str | None = None,
-    tags: Mapping[str, Any] | None = None,
-    response: ChatCompletion | AsyncIterator[ChatCompletionChunk] | None = None,
-    usage_override: CompletionUsage | None = None,
-    error: str | None = None,
-) -> None:
-    """Log API usage to database and update user spend.
-
-    Args:
-        db: Database session
-        api_key_id: API key identifier (None if using master key)
-        model: Model name
-        provider: Provider name
-        endpoint: Endpoint path
-        user_id: User identifier for tracking
-        project_id: Gateway project identifier for attribution
-        tags: Usage tags for attribution and filtering
-        response: Response object (if successful)
-        usage_override: Usage data for streaming requests
-        error: Error message (if failed)
-
-    """
-    usage_log = UsageLog(
-        id=str(uuid.uuid4()),
-        api_key_id=api_key_id,
-        user_id=user_id,
-        project_id=project_id,
-        timestamp=datetime.now(UTC),
-        model=model,
-        provider=provider,
-        endpoint=endpoint,
-        status="success" if error is None else "error",
-        error_message=error,
-        tags=dict(tags) if tags is not None else {},
-    )
-
-    usage_data = usage_override
-    if not usage_data and response and isinstance(response, ChatCompletion) and response.usage:
-        usage_data = response.usage
-
-    if usage_data:
-        usage_log.prompt_tokens = usage_data.prompt_tokens
-        usage_log.completion_tokens = usage_data.completion_tokens
-        usage_log.total_tokens = usage_data.total_tokens
-
-        record_tokens(
-            str(provider or ""),
-            model,
-            usage_data.prompt_tokens,
-            usage_data.completion_tokens,
-        )
-
-        pricing = await find_model_pricing(db, provider, model, as_of=usage_log.timestamp)
-        if pricing:
-            cost = (usage_data.prompt_tokens / 1_000_000) * pricing.input_price_per_million + (
-                usage_data.completion_tokens / 1_000_000
-            ) * pricing.output_price_per_million
-            usage_log.cost = cost
-            record_cost(str(provider or ""), model, cost)
-        else:
-            model_ref = f"{provider}:{model}" if provider else model
-            logger.warning(f"No pricing configured for '{model_ref}'. Usage will be tracked without cost.")
-
-    await log_writer.put(usage_log)
 
 
 async def _run_non_streaming_completion(

@@ -7,7 +7,7 @@ import pytest
 from any_llm.types.completion import CompletionUsage
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes.chat import log_usage
+from gateway.api.routes._usage import log_usage
 from gateway.models.entities import ModelPricing, User
 from gateway.services.log_writer import SingleLogWriter
 

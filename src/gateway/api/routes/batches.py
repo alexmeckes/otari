@@ -15,11 +15,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, Field
 
 from gateway.api.deps import get_config, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes.chat import get_provider_kwargs
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
 from gateway.services.log_writer import LogWriter
+from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1/batches", tags=["batches"])
 

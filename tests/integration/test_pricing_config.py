@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from gateway.api.routes.chat import log_usage
+from gateway.api.routes._usage import log_usage
 from gateway.core.config import GatewayConfig, PricingConfig
 from gateway.db import ModelPricing, get_db
 from gateway.main import create_app

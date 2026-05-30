@@ -16,12 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.api.routes.chat import (
     ChatCompletionRequest,
     chat_completions,
-    get_provider_kwargs,
-    log_usage,
-    rate_limit_headers,
 )
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -29,6 +27,7 @@ from gateway.models.entities import APIKey
 from gateway.rate_limit import check_rate_limit
 from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
 from gateway.services.log_writer import LogWriter
+from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, normalize_routing_model_selector
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
 
