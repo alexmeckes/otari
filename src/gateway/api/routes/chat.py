@@ -1,5 +1,4 @@
 import asyncio
-import os
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
@@ -18,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
+from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -28,8 +28,6 @@ from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
 from gateway.services.chat_tool_config import (
     build_web_search_backend,
-    extract_code_execution_tool,
-    extract_web_search_tool,
     resolve_sandbox_purpose_hint,
     strip_gateway_fields,
 )
@@ -540,64 +538,18 @@ async def chat_completions(
         )
         request.mcp_servers = (request.mcp_servers or []) + resolved_mcp_servers
 
-    # Per-request opt-in for sandboxed code execution. Matches Anthropic /
-    # OpenAI's wire shape: caller adds {"type": "code_execution"} to their
-    # `tools` array. The sandbox endpoint is operator-controlled — set
-    # GATEWAY_SANDBOX_URL in the gateway's environment. We deliberately do
-    # NOT honour a per-request URL override (e.g. `sandbox_url` on the tool
-    # entry) because that would let an untrusted caller use the gateway as
-    # an open HTTP client (SSRF / arbitrary-POST surface). Operators that
-    # want per-tenant sandbox isolation should stand up multiple gateway
-    # instances or proxy at a layer they control.
-    # Mutually exclusive with `mcp_servers` for now (multi-backend dispatch
-    # is the next iteration); the multi-attempt routing-policy fallback is
-    # also bypassed when sandbox is in use.
-    sandbox_tool_entry, tools_after_sandbox = extract_code_execution_tool(request.tools)
-    sandbox_url: str | None = os.environ.get("GATEWAY_SANDBOX_URL") or None
-    use_sandbox = False
-    if sandbox_tool_entry is not None:
-        if sandbox_url is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "code_execution tool requested but no sandbox is configured on this gateway. "
-                    "Set GATEWAY_SANDBOX_URL on the gateway, or remove code_execution from `tools`."
-                ),
-            )
-        if request.mcp_servers:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "code_execution and mcp_servers cannot be combined in the same request yet; "
-                    "pick one. Multi-backend dispatch is a planned refinement."
-                ),
-            )
-        use_sandbox = True
-
-    # web_search opt-in mirrors the sandbox path; see comment above for the
-    # threat-model rationale. GATEWAY_WEB_SEARCH_URL is operator-controlled —
-    # see web_search_backend.py for the wire protocol the service must expose.
-    web_search_tool_entry, remaining_user_tools = extract_web_search_tool(tools_after_sandbox)
-    web_search_url: str | None = os.environ.get("GATEWAY_WEB_SEARCH_URL") or None
-    use_web_search = False
-    if web_search_tool_entry is not None:
-        if web_search_url is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "web_search tool requested but no search backend is configured on this gateway. "
-                    "Set GATEWAY_WEB_SEARCH_URL on the gateway, or remove web_search from `tools`."
-                ),
-            )
-        if use_sandbox or request.mcp_servers:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "web_search cannot be combined with code_execution or mcp_servers in the same "
-                    "request yet; pick one."
-                ),
-            )
-        use_web_search = True
+    tool_selection = resolve_chat_tool_selection(
+        tools=request.tools,
+        mcp_servers=request.mcp_servers,
+    )
+    sandbox_tool_entry = tool_selection.sandbox_tool_entry
+    sandbox_url = tool_selection.sandbox_url
+    use_sandbox = tool_selection.use_sandbox
+    web_search_tool_entry = tool_selection.web_search_tool_entry
+    web_search_url = tool_selection.web_search_url
+    use_web_search = tool_selection.use_web_search
+    remaining_user_tools = tool_selection.remaining_user_tools
+    tools_extracted = tool_selection.tools_extracted
 
     if not platform_mode and request.model == DEFAULT_ROUTING_MODEL:
         if request.stream:
@@ -662,7 +614,7 @@ async def chat_completions(
                     web_search_url=web_search_url,
                     web_search_tool_entry=web_search_tool_entry,
                     remaining_user_tools=remaining_user_tools,
-                    tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
+                    tools_extracted=tools_extracted,
                     max_tool_iterations=stream_max_tool_iterations,
                 )
             except HTTPException:
@@ -713,7 +665,7 @@ async def chat_completions(
 
         request_fields = strip_gateway_fields(
             request.model_dump(exclude_unset=True),
-            tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
+            tools_extracted=tools_extracted,
             remaining_user_tools=remaining_user_tools,
         )
         completion_kwargs = {**provider_kwargs, **request_fields}
@@ -919,7 +871,7 @@ async def chat_completions(
     if platform_mode:
         base_request_fields = strip_gateway_fields(
             request.model_dump(exclude_unset=True),
-            tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
+            tools_extracted=tools_extracted,
             remaining_user_tools=remaining_user_tools,
         )
         for attempt in attempts_to_try:
@@ -1090,7 +1042,7 @@ async def chat_completions(
     # ``acompletion`` call.
     request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
-        tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
+        tools_extracted=tools_extracted,
         remaining_user_tools=remaining_user_tools,
     )
     completion_kwargs = {**provider_kwargs, **request_fields}

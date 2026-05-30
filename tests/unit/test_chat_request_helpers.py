@@ -8,6 +8,11 @@ provider-native shapes (OpenAI `code_interpreter`, Anthropic versioned
 
 from __future__ import annotations
 
+import pytest
+from fastapi import HTTPException
+
+from gateway.api.routes._chat_tools import resolve_chat_tool_selection
+from gateway.models.mcp import McpServerConfig
 from gateway.services.chat_tool_config import extract_code_execution_tool, extract_web_search_tool
 
 
@@ -113,3 +118,90 @@ def test_web_search_carries_per_tool_config_through() -> None:
     assert entry is not None
     assert entry["max_results"] == 3
     assert entry["allowed_domains"] == ["docs.python.org"]
+
+
+# --- route-level tool selection ----------------------------------------------
+
+
+def test_resolve_chat_tool_selection_without_gateway_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GATEWAY_SANDBOX_URL", raising=False)
+    monkeypatch.delenv("GATEWAY_WEB_SEARCH_URL", raising=False)
+
+    selection = resolve_chat_tool_selection(
+        tools=[{"type": "function", "function": {"name": "user_tool"}}],
+        mcp_servers=None,
+    )
+
+    assert selection.use_sandbox is False
+    assert selection.use_web_search is False
+    assert selection.tools_extracted is False
+    assert selection.remaining_user_tools == [{"type": "function", "function": {"name": "user_tool"}}]
+
+
+def test_resolve_chat_tool_selection_requires_sandbox_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GATEWAY_SANDBOX_URL", raising=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_chat_tool_selection(tools=[{"type": "code_execution"}], mcp_servers=None)
+
+    assert exc_info.value.status_code == 400
+    assert "no sandbox is configured" in str(exc_info.value.detail)
+
+
+def test_resolve_chat_tool_selection_rejects_sandbox_with_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_SANDBOX_URL", "http://sandbox.local")
+    mcp_server = McpServerConfig.model_construct(name="tools", url="https://example.com/mcp")
+
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_chat_tool_selection(tools=[{"type": "code_execution"}], mcp_servers=[mcp_server])
+
+    assert exc_info.value.status_code == 400
+    assert "code_execution and mcp_servers cannot be combined" in str(exc_info.value.detail)
+
+
+def test_resolve_chat_tool_selection_allows_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_SANDBOX_URL", "http://sandbox.local")
+
+    selection = resolve_chat_tool_selection(tools=[{"type": "code_execution"}], mcp_servers=None)
+
+    assert selection.use_sandbox is True
+    assert selection.sandbox_url == "http://sandbox.local"
+    assert selection.tools_extracted is True
+
+
+def test_resolve_chat_tool_selection_requires_web_search_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GATEWAY_WEB_SEARCH_URL", raising=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_chat_tool_selection(tools=[{"type": "web_search"}], mcp_servers=None)
+
+    assert exc_info.value.status_code == 400
+    assert "no search backend is configured" in str(exc_info.value.detail)
+
+
+def test_resolve_chat_tool_selection_rejects_web_search_with_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_SANDBOX_URL", "http://sandbox.local")
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_URL", "http://search.local")
+
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_chat_tool_selection(
+            tools=[{"type": "code_execution"}, {"type": "web_search"}],
+            mcp_servers=None,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "web_search cannot be combined with code_execution" in str(exc_info.value.detail)
+
+
+def test_resolve_chat_tool_selection_allows_web_search_and_preserves_user_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_URL", "http://search.local")
+    user_tool = {"type": "function", "function": {"name": "user_tool"}}
+
+    selection = resolve_chat_tool_selection(tools=[user_tool, {"type": "web_search"}], mcp_servers=None)
+
+    assert selection.use_web_search is True
+    assert selection.web_search_url == "http://search.local"
+    assert selection.remaining_user_tools == [user_tool]
+    assert selection.tools_extracted is True
