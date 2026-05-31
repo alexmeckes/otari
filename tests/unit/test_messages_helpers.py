@@ -58,10 +58,11 @@ def _provider_call_context() -> messages.MessageProviderCallContext:
 
 def _execution_context(
     *,
+    message_context: messages.MessageRequestContext | None = None,
     provider_call_context: messages.MessageProviderCallContext | None = None,
 ) -> messages.MessageExecutionContext:
     return messages.MessageExecutionContext(
-        message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+        message_context=message_context or messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
         rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
         provider_call_context=provider_call_context or _provider_call_context(),
     )
@@ -352,8 +353,7 @@ async def test_log_message_usage_forwards_success_fields(monkeypatch: pytest.Mon
     await messages._log_message_usage(
         db=db,
         log_writer=log_writer,
-        message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
-        provider_call_context=_provider_call_context(),
+        execution_context=_execution_context(),
         usage_data=usage,
     )
 
@@ -435,8 +435,9 @@ async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.Monke
     await messages._log_message_usage(
         db=db,
         log_writer=log_writer,
-        message_context=messages.MessageRequestContext(api_key_id=None, user_id="user-1"),
-        provider_call_context=_provider_call_context(),
+        execution_context=_execution_context(
+            message_context=messages.MessageRequestContext(api_key_id=None, user_id="user-1"),
+        ),
         error="provider down",
     )
 

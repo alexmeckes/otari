@@ -156,11 +156,13 @@ async def _log_message_usage(
     *,
     db: AsyncSession,
     log_writer: LogWriter,
-    message_context: MessageRequestContext,
-    provider_call_context: MessageProviderCallContext,
+    execution_context: MessageExecutionContext,
     usage_data: CompletionUsage | None = None,
     error: str | None = None,
 ) -> None:
+    message_context = execution_context.message_context
+    provider_call_context = execution_context.provider_call_context
+
     await log_usage(
         db=db,
         log_writer=log_writer,
@@ -195,15 +197,13 @@ def _message_streaming_response(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> StreamingResponse:
-    message_context = execution_context.message_context
     provider_call_context = execution_context.provider_call_context
 
     async def _on_complete(usage_data: CompletionUsage) -> None:
         await _log_message_usage(
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
+            execution_context=execution_context,
             usage_data=usage_data,
         )
 
@@ -211,8 +211,7 @@ def _message_streaming_response(
         await _log_message_usage(
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
+            execution_context=execution_context,
             error=error,
         )
 
@@ -239,16 +238,12 @@ async def _message_response_payload(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> dict[str, Any]:
-    message_context = execution_context.message_context
-    provider_call_context = execution_context.provider_call_context
-
     usage_data = _message_response_usage(result)
     if usage_data:
         await _log_message_usage(
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
+            execution_context=execution_context,
             usage_data=usage_data,
         )
 
@@ -263,14 +258,12 @@ async def _log_and_raise_message_provider_error(
     execution_context: MessageExecutionContext,
     error: BaseException,
 ) -> NoReturn:
-    message_context = execution_context.message_context
     provider_call_context = execution_context.provider_call_context
 
     await _log_message_usage(
         db=db,
         log_writer=log_writer,
-        message_context=message_context,
-        provider_call_context=provider_call_context,
+        execution_context=execution_context,
         error=str(error),
     )
     logger.error(
