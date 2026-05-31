@@ -35,6 +35,7 @@ reset_tag_budget = _budget_tags.reset_tag_budget
 _tag_scope_id = _budget_tags.tag_scope_id
 _matching_tag_budgets = _budget_tags.matching_tag_budgets
 _cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
+_normalize_budget_strategy = _budget_tags.normalize_budget_strategy
 calculate_next_reset = _budget_periods.calculate_next_reset
 _as_utc = _budget_periods.as_utc
 _budget_reset_due = _budget_periods.budget_reset_due
@@ -182,14 +183,6 @@ async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: 
 
     await db.rollback()
     return project
-
-
-def _normalize_budget_strategy(strategy: str) -> str:
-    normalized_strategy = strategy or "for_update"
-    normalized_strategy = normalized_strategy.strip().lower()
-    if normalized_strategy not in {"for_update", "cas", "disabled"}:
-        return "for_update"
-    return normalized_strategy
 
 
 async def validate_tag_budgets(
