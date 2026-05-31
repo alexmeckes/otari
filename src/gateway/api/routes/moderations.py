@@ -81,7 +81,7 @@ async def create_moderation(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             ) from e
-        logger.error("Provider implementation gap for %s:%s: %s", context.provider, context.model, e)
+        logger.error("Provider implementation gap for %s: %s", context.provider_label, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="The request could not be completed by the provider",

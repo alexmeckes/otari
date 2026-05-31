@@ -193,18 +193,24 @@ def test_moderations_generic_not_implemented_returns_500(
     api_key_header: dict[str, str],
 ) -> None:
     """Generic NotImplementedError (without locked phrasing) returns 500."""
-    with patch(
-        "gateway.api.routes.moderations.amoderation",
-        new_callable=AsyncMock,
-        side_effect=NotImplementedError("some internal implementation gap"),
-    ):
-        resp = client.post(
-            "/v1/moderations",
-            json={"model": "openai:omni-moderation-latest", "input": "hello"},
-            headers=api_key_header,
-        )
+    with patch("gateway.api.routes.moderations.logger.error") as log_error:
+        with patch(
+            "gateway.api.routes.moderations.amoderation",
+            new_callable=AsyncMock,
+            side_effect=NotImplementedError("some internal implementation gap"),
+        ):
+            resp = client.post(
+                "/v1/moderations",
+                json={"model": "openai:omni-moderation-latest", "input": "hello"},
+                headers=api_key_header,
+            )
     assert resp.status_code == 500
     assert "could not be completed" in resp.json()["detail"].lower()
+    log_error.assert_called_once()
+    args = log_error.call_args.args
+    assert args[0] == "Provider implementation gap for %s: %s"
+    assert args[1] == "openai:omni-moderation-latest"
+    assert str(args[2]) == "some internal implementation gap"
 
 
 def test_moderations_logs_usage(
