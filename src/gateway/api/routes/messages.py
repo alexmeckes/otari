@@ -52,6 +52,13 @@ class MessageRequestContext:
     user_id: str
 
 
+@dataclass(frozen=True)
+class MessageProviderCallContext:
+    provider: Any
+    model: str
+    call_kwargs: dict[str, Any]
+
+
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
     prompt_tokens = input_tokens or 0
     completion_tokens = output_tokens or 0
@@ -97,6 +104,17 @@ def _resolve_message_request_context(
     return MessageRequestContext(
         api_key_id=api_key.id if api_key else None,
         user_id=user_id,
+    )
+
+
+def _message_provider_call_context(request: MessagesRequest, config: GatewayConfig) -> MessageProviderCallContext:
+    provider, model = AnyLLM.split_model_provider(request.model)
+    provider_kwargs = get_provider_kwargs(config, provider)
+    request_fields = request.model_dump(exclude_unset=True)
+    return MessageProviderCallContext(
+        provider=provider,
+        model=model,
+        call_kwargs={**provider_kwargs, **request_fields},
     )
 
 
@@ -225,13 +243,8 @@ async def create_message(
 
     await validate_user_request_budget(db, message_context.user_id, request.model, strategy=config.budget_strategy)
 
-    provider, model = AnyLLM.split_model_provider(request.model)
-
-    provider_kwargs = get_provider_kwargs(config, provider)
-
-    # Request fields take precedence over provider config defaults
-    request_fields = request.model_dump(exclude_unset=True)
-    call_kwargs: dict[str, Any] = {**provider_kwargs, **request_fields}
+    provider_call_context = _message_provider_call_context(request, config)
+    call_kwargs = provider_call_context.call_kwargs
 
     try:
         if request.stream:
@@ -242,8 +255,8 @@ async def create_message(
                 db=db,
                 log_writer=log_writer,
                 message_context=message_context,
-                model=model,
-                provider=provider,
+                model=provider_call_context.model,
+                provider=provider_call_context.provider,
                 rate_limit_info=rate_limit_info,
             )
 
@@ -254,8 +267,8 @@ async def create_message(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=model,
-            provider=provider,
+            model=provider_call_context.model,
+            provider=provider_call_context.provider,
             rate_limit_info=rate_limit_info,
         )
 
@@ -266,11 +279,16 @@ async def create_message(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=model,
-            provider=provider,
+            model=provider_call_context.model,
+            provider=provider_call_context.provider,
             error=str(e),
         )
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
+        logger.error(
+            "Provider call failed for %s:%s: %s",
+            provider_call_context.provider,
+            provider_call_context.model,
+            e,
+        )
         raise _anthropic_error(
             _ERR_API,
             _PROVIDER_ERROR,

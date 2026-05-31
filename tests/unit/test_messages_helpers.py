@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
 from gateway.api.routes._message_models import MessagesRequest
+from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
@@ -88,6 +89,37 @@ def test_resolve_message_request_context_preserves_master_key_error_shape() -> N
             "message": "When using master key, 'metadata.user_id' is required in request body",
         },
     }
+
+
+def test_message_provider_call_context_preserves_request_field_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[GatewayConfig, Any]] = []
+    config = cast(GatewayConfig, object())
+    request = _messages_request()
+    request.temperature = 0.2
+
+    def fake_get_provider_kwargs(config_arg: GatewayConfig, provider: Any) -> dict[str, Any]:
+        calls.append((config_arg, provider))
+        return {
+            "api_key": "sk-test",
+            "model": "provider-default",
+            "temperature": 0.9,
+            "top_p": 0.4,
+        }
+
+    monkeypatch.setattr(messages, "get_provider_kwargs", fake_get_provider_kwargs)
+
+    context = messages._message_provider_call_context(request, config)
+
+    assert calls == [(config, context.provider)]
+    assert context.model == "claude-3-5-sonnet"
+    assert context.call_kwargs["api_key"] == "sk-test"
+    assert context.call_kwargs["model"] == "anthropic:claude-3-5-sonnet"
+    assert context.call_kwargs["temperature"] == 0.2
+    assert context.call_kwargs["top_p"] == 0.4
+    assert context.call_kwargs["messages"] == [{"role": "user", "content": "Hello"}]
+    assert context.call_kwargs["max_tokens"] == 1024
 
 
 @pytest.mark.asyncio
