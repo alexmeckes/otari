@@ -15,9 +15,10 @@ from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog, Project, User
 from gateway.repositories.users_repository import get_active_user
 from gateway.services import budget_alerts as _budget_alerts
+from gateway.services import budget_tags as _budget_tags
 from gateway.services.pricing_service import find_model_pricing
 
-TAG_BUDGET_SCOPE = "tag"
+TAG_BUDGET_SCOPE = _budget_tags.TAG_BUDGET_SCOPE
 BUDGET_ALERT_SCOPE_PROJECT = _budget_alerts.BUDGET_ALERT_SCOPE_PROJECT
 BUDGET_ALERT_SCOPE_USER = _budget_alerts.BUDGET_ALERT_SCOPE_USER
 normalize_alert_thresholds = _budget_alerts.normalize_alert_thresholds
@@ -25,6 +26,11 @@ normalize_alert_webhook_url = _budget_alerts.normalize_alert_webhook_url
 record_budget_alerts = _budget_alerts.record_budget_alerts
 record_project_budget_alerts_after_spend = _budget_alerts.record_project_budget_alerts_after_spend
 record_user_budget_alerts_after_spend = _budget_alerts.record_user_budget_alerts_after_spend
+budget_matches_tags = _budget_tags.budget_matches_tags
+reset_tag_budget = _budget_tags.reset_tag_budget
+_tag_scope_id = _budget_tags.tag_scope_id
+_matching_tag_budgets = _budget_tags.matching_tag_budgets
+_cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
 
 
 def calculate_next_reset(start: datetime, duration_sec: int) -> datetime:
@@ -207,107 +213,6 @@ def _normalize_budget_strategy(strategy: str) -> str:
     return normalized_strategy
 
 
-def _tag_scope_id(budget: Budget) -> str | None:
-    match_tags = budget.match_tags if isinstance(budget.match_tags, dict) else {}
-    if not match_tags:
-        return None
-    return ",".join(f"{key}={match_tags[key]}" for key in sorted(match_tags))
-
-
-def budget_matches_tags(budget: Budget, tags: dict[str, Any] | None) -> bool:
-    """Return whether a tag-scoped budget applies to a request's tags."""
-    if budget.scope_type != TAG_BUDGET_SCOPE or not budget.is_active:
-        return False
-    match_tags = budget.match_tags if isinstance(budget.match_tags, dict) else {}
-    if not match_tags:
-        return False
-    request_tags = tags if isinstance(tags, dict) else {}
-    return all(str(request_tags.get(key)) == str(value) for key, value in match_tags.items())
-
-
-async def _matching_tag_budgets(
-    db: AsyncSession,
-    tags: dict[str, Any] | None,
-    *,
-    for_update: bool = False,
-) -> list[Budget]:
-    request_tags = tags if isinstance(tags, dict) else {}
-    if not request_tags:
-        return []
-    stmt = select(Budget).where(Budget.scope_type == TAG_BUDGET_SCOPE, Budget.is_active.is_(True))
-    if for_update:
-        stmt = stmt.with_for_update()
-    result = await db.execute(stmt)
-    return [budget for budget in result.scalars().all() if budget_matches_tags(budget, request_tags)]
-
-
-async def reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> None:
-    """Reset a tag-scoped budget group's spend and schedule next reset."""
-    previous_spend = float(budget.spend)
-    budget.spend = 0.0
-    budget.budget_started_at = now
-    budget.next_budget_reset_at = (
-        calculate_next_reset(now, budget.budget_duration_sec)
-        if budget.budget_duration_sec
-        else None
-    )
-    db.add(
-        BudgetResetLog(
-            budget_id=budget.budget_id,
-            previous_spend=previous_spend,
-            reset_at=now,
-            next_reset_at=budget.next_budget_reset_at,
-        )
-    )
-    try:
-        await db.commit()
-        await db.refresh(budget)
-    except SQLAlchemyError as e:
-        await db.rollback()
-        logger.error("Failed to commit budget reset for tag budget '%s': %s", budget.budget_id, e)
-        raise
-
-
-async def _cas_reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> Budget:
-    next_reset_at = calculate_next_reset(now, budget.budget_duration_sec) if budget.budget_duration_sec else None
-    result = await db.execute(
-        update(Budget)
-        .where(
-            Budget.budget_id == budget.budget_id,
-            Budget.scope_type == TAG_BUDGET_SCOPE,
-            Budget.next_budget_reset_at.is_not(None),
-            Budget.next_budget_reset_at <= now,
-        )
-        .values(
-            spend=0.0,
-            budget_started_at=now,
-            next_budget_reset_at=next_reset_at,
-        )
-        .execution_options(synchronize_session=False)
-    )
-    rowcount = getattr(result, "rowcount", 0)
-    if rowcount and rowcount > 0:
-        db.add(
-            BudgetResetLog(
-                budget_id=budget.budget_id,
-                previous_spend=float(budget.spend),
-                reset_at=now,
-                next_reset_at=next_reset_at,
-            )
-        )
-        try:
-            await db.commit()
-        except SQLAlchemyError as e:
-            await db.rollback()
-            logger.error("Failed to commit CAS budget reset for tag budget '%s': %s", budget.budget_id, e)
-            raise
-        refreshed = await _get_budget(db, budget.budget_id)
-        return refreshed or budget
-
-    await db.rollback()
-    return budget
-
-
 async def validate_tag_budgets(
     db: AsyncSession,
     tags: dict[str, Any] | None,
@@ -315,46 +220,13 @@ async def validate_tag_budgets(
     *,
     strategy: str = "for_update",
 ) -> list[Budget]:
-    """Validate matching tag-scoped budgets have available spend."""
-    normalized_strategy = _normalize_budget_strategy(strategy)
-    if normalized_strategy == "disabled":
-        return []
-
-    matching_budgets = await _matching_tag_budgets(
+    return await _budget_tags.validate_tag_budgets(
         db,
         tags,
-        for_update=normalized_strategy == "for_update",
+        model,
+        strategy=strategy,
+        is_model_free=_is_model_free,
     )
-    if not matching_budgets:
-        return []
-
-    now = datetime.now(UTC)
-    validated: list[Budget] = []
-    for budget in matching_budgets:
-        if budget.blocked:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Budget group '{budget.budget_id}' is blocked",
-            )
-
-        next_budget_reset_at = _as_utc(budget.next_budget_reset_at)
-        if next_budget_reset_at and now >= next_budget_reset_at:
-            if normalized_strategy == "cas":
-                budget = await _cas_reset_tag_budget(db, budget, now)
-            else:
-                await reset_tag_budget(db, budget, now)
-
-        if budget.max_budget is not None and budget.spend >= budget.max_budget:
-            if model and await _is_model_free(db, model):
-                validated.append(budget)
-                continue
-            record_budget_exceeded()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Budget group '{budget.budget_id}' has exceeded budget limit",
-            )
-        validated.append(budget)
-    return validated
 
 
 async def increment_matching_tag_budget_spend(
@@ -364,37 +236,12 @@ async def increment_matching_tag_budget_spend(
     cost: float | None,
     metadata: dict[str, Any] | None = None,
 ) -> list[BudgetAlert]:
-    """Increment spend for active tag-scoped budgets matching usage tags."""
-    if not cost or cost <= 0:
-        return []
-    matching_budgets = await _matching_tag_budgets(db, tags)
-    if not matching_budgets:
-        return []
-    budget_ids = [budget.budget_id for budget in matching_budgets]
-    await db.execute(
-        update(Budget)
-        .where(Budget.budget_id.in_(budget_ids))
-        .values(spend=Budget.spend + cost)
-        .execution_options(synchronize_session=False)
+    return await _budget_tags.increment_matching_tag_budget_spend(
+        db,
+        tags=tags,
+        cost=cost,
+        metadata=metadata,
     )
-    updated_result = await db.execute(
-        select(Budget)
-        .where(Budget.budget_id.in_(budget_ids))
-        .execution_options(populate_existing=True)
-    )
-    created_alerts: list[BudgetAlert] = []
-    for budget in updated_result.scalars().all():
-        alerts = await record_budget_alerts(
-            db,
-            budget=budget,
-            scope_type=TAG_BUDGET_SCOPE,
-            scope_id=_tag_scope_id(budget),
-            spend=float(budget.spend),
-            period_start=budget.budget_started_at,
-            metadata=metadata,
-        )
-        created_alerts.extend(alerts)
-    return created_alerts
 
 
 async def validate_user_budget(
