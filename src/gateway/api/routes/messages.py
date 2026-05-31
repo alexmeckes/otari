@@ -17,7 +17,12 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._message_models import MessagesRequest
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, optional_rate_limit_headers
+from gateway.api.routes._usage import (
+    apply_rate_limit_headers,
+    log_usage,
+    optional_rate_limit_headers,
+    provider_model_label,
+)
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
@@ -73,7 +78,7 @@ class MessageExecutionContext:
 
     @property
     def provider_label(self) -> str:
-        return f"{self.provider_call_context.provider}:{self.provider_call_context.model}"
+        return provider_model_label(self.provider_call_context.provider, self.provider_call_context.model)
 
     def rate_limit_headers(self) -> dict[str, str]:
         return optional_rate_limit_headers(self.rate_limit_info)

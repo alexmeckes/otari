@@ -16,6 +16,7 @@ from gateway.api.routes._usage import (
     log_usage_error,
     make_usage_log,
     optional_rate_limit_headers,
+    provider_model_label,
 )
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
@@ -36,7 +37,7 @@ class OpenAIProviderRequestContext:
 
     @property
     def provider_label(self) -> str:
-        return f"{self.provider}:{self.model}"
+        return provider_model_label(self.provider, self.model)
 
     def call_kwargs(self, *, optional: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         call_kwargs = {

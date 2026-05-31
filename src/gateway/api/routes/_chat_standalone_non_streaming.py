@@ -14,7 +14,7 @@ from gateway.api.routes._chat_tool_backend_errors import (
     chat_tool_iteration_cap_exception,
 )
 from gateway.api.routes._chat_tools import ChatToolSelection
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, provider_model_label
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
@@ -75,6 +75,7 @@ async def run_standalone_non_streaming_chat(
 ) -> ChatCompletion:
     """Execute a standalone non-streaming chat request against one provider."""
     provider, model = AnyLLM.split_model_provider(request.model)
+    provider_label = provider_model_label(provider, model)
     provider_kwargs = get_provider_kwargs(config, provider)
     request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
@@ -114,10 +115,10 @@ async def run_standalone_non_streaming_chat(
         # Sandbox is gateway-side infra, not an LLM provider. Clearer detail
         # so operators don't chase a provider outage that's really the
         # sandbox container being down.
-        logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
+        logger.error("Sandbox unreachable for %s: %s", provider_label, exc)
         raise chat_tool_backend_failure_exception(exc) from exc
     except WebSearchNotReachableError as exc:
-        logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
+        logger.error("Web search backend unreachable for %s: %s", provider_label, exc)
         raise chat_tool_backend_failure_exception(exc) from exc
     except MaxToolIterationsExceeded as exc:
         # Gateway-owned cap, not an upstream provider failure. 422 lets
@@ -146,7 +147,7 @@ async def run_standalone_non_streaming_chat(
             error=str(exc),
         )
 
-        logger.error("Provider call failed for %s:%s: %s", provider, model, exc)
+        logger.error("Provider call failed for %s: %s", provider_label, exc)
         raise standalone_provider_failure_exception(exc) from exc
 
     apply_rate_limit_headers(response, rate_limit_info)

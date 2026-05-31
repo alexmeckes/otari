@@ -3,7 +3,12 @@ from dataclasses import dataclass, field
 import pytest
 from fastapi import HTTPException
 
-from gateway.api.routes._usage import log_and_raise_provider_error, log_usage_error, make_usage_log
+from gateway.api.routes._usage import (
+    log_and_raise_provider_error,
+    log_usage_error,
+    make_usage_log,
+    provider_model_label,
+)
 from gateway.models.entities import UsageLog
 
 
@@ -13,6 +18,10 @@ class StubLogWriter:
 
     async def put(self, log: UsageLog) -> None:
         self.logs.append(log)
+
+
+def test_provider_model_label_formats_provider_and_model() -> None:
+    assert provider_model_label("openai", "gpt-4o") == "openai:gpt-4o"
 
 
 @pytest.mark.asyncio

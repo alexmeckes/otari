@@ -34,6 +34,10 @@ def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> 
         response.headers[key] = value
 
 
+def provider_model_label(provider: Any, model: str) -> str:
+    return f"{provider}:{model}"
+
+
 def make_usage_log(
     *,
     api_key_id: str | None,
@@ -167,7 +171,7 @@ async def log_and_raise_provider_error(
         endpoint=endpoint,
         error=error,
     )
-    logger.error("Provider call failed for %s:%s: %s", provider, model, error)
+    logger.error("Provider call failed for %s: %s", provider_model_label(provider, model), error)
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="The request could not be completed by the provider",
