@@ -1,8 +1,8 @@
 import asyncio
-from typing import Annotated, Any, NamedTuple
+from typing import Annotated
 
 import httpx
-from any_llm import AnyLLM, LLMProvider, acompletion
+from any_llm import AnyLLM, acompletion
 from any_llm.types.completion import (
     ChatCompletion,
 )
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer
 from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolve_chat_request_context
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
+from gateway.api.routes._chat_platform_non_streaming import run_platform_non_streaming_chat
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
 from gateway.api.routes._chat_standalone_streaming import run_standalone_streaming_chat
@@ -28,10 +29,6 @@ from gateway.services.mcp_loop import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     MAX_TOOL_ITERATIONS_CAP,
     MaxToolIterationsExceeded,
-)
-from gateway.services.platform_gateway import (
-    classify_upstream_error,
-    report_platform_usage,
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.sandbox_backend import SandboxNotReachableError
@@ -209,179 +206,22 @@ async def chat_completions(
     )
 
     if platform_mode:
-        if route is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Internal error: missing route context",
-            )
-        platform_route = route
-        attempts_to_try = platform_route.attempts
-        if not attempts_to_try:
-            logger.error(
-                "Platform returned empty attempts list request_id=%s",
-                platform_route.request_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Authorization service returned no resolvable provider",
-            )
-    else:
-        if routing_plan is None:
-            provider, model = AnyLLM.split_model_provider(request.model)
-            provider_kwargs = get_provider_kwargs(config, provider)
-        attempts_to_try = []  # standalone path doesn't use the attempts list
-
-    class _AttemptFailure(NamedTuple):
-        position: int
-        provider: str
-        model: str
-        error_class: str
-
-    failures: list[_AttemptFailure] = []
-    last_exc: BaseException | None = None
-
-    if platform_mode:
-        base_request_fields = strip_gateway_fields(
-            request.model_dump(exclude_unset=True),
-            tools_extracted=tools_extracted,
-            remaining_user_tools=remaining_user_tools,
+        return await run_platform_non_streaming_chat(
+            request=request,
+            response=response,
+            background_tasks=background_tasks,
+            route=route,
+            config=config,
+            rate_limit_info=rate_limit_info,
+            tool_selection=tool_selection,
+            max_tool_iterations=max_tool_iterations,
+            completion_fn=acompletion,
+            mcp_client_pool_factory=MCPClientPool,
         )
-        for attempt in attempts_to_try:
-            attempt_provider = LLMProvider(attempt.provider)
-            attempt_model = attempt.model
-            attempt_kwargs: dict[str, Any] = {"api_key": attempt.api_key}
-            if attempt.api_base:
-                attempt_kwargs["api_base"] = attempt.api_base
 
-            completion_kwargs = {
-                **attempt_kwargs,
-                **base_request_fields,
-                "model": f"{attempt_provider.value}:{attempt_model}",
-            }
-
-            # Per-attempt lock-in flag. Flipped the moment the upstream
-            # returns its first assistant message. After that, any failure
-            # terminates the request — fallback would replay a provider-
-            # specific transcript on a different provider, which has
-            # undefined semantics.
-            locked_in = False
-
-            def _mark_locked_in(_pos: int = attempt.position) -> None:
-                nonlocal locked_in
-                locked_in = True
-                logger.info(
-                    "Tool-loop lock-in request_id=%s position=%d provider=%s model=%s",
-                    platform_route.request_id,
-                    _pos,
-                    attempt.provider,
-                    attempt.model,
-                )
-
-            try:
-                completion = await run_non_streaming_completion(
-                    completion_kwargs=completion_kwargs,
-                    completion_fn=acompletion,
-                    mcp_client_pool_factory=MCPClientPool,
-                    mcp_server_configs=mcp_server_configs,
-                    max_tool_iterations=max_tool_iterations,
-                    tools_header=request.tools_header,
-                    use_sandbox=use_sandbox,
-                    sandbox_url=sandbox_url,
-                    sandbox_tool_entry=sandbox_tool_entry,
-                    use_web_search=use_web_search,
-                    web_search_url=web_search_url,
-                    web_search_tool_entry=web_search_tool_entry,
-                    on_first_response=_mark_locked_in,
-                )
-            except HTTPException:
-                raise
-            except MaxToolIterationsExceeded as exc:
-                # The gateway's own iteration cap was hit, not an upstream
-                # failure. Surface a distinct 422 so callers can tell a
-                # runaway tool loop apart from a provider outage.
-                logger.warning(
-                    "Tool loop iteration cap hit request_id=%s position=%d cap=%d",
-                    platform_route.request_id,
-                    attempt.position,
-                    max_tool_iterations,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=str(exc),
-                ) from exc
-            except BaseException as exc:
-                retryable, error_class = classify_upstream_error(exc)
-                background_tasks.add_task(
-                    report_platform_usage,
-                    config,
-                    attempt.attempt_id,
-                    "error",
-                    None,
-                    error_class,
-                )
-                logger.warning(
-                    "Provider call failed request_id=%s position=%d provider=%s model=%s "
-                    "error=%s retryable=%s locked_in=%s",
-                    platform_route.request_id,
-                    attempt.position,
-                    attempt.provider,
-                    attempt.model,
-                    error_class,
-                    retryable,
-                    locked_in,
-                )
-                last_exc = exc
-                # Locked-in: at least one tool-loop round produced an
-                # assistant message on this attempt. Subsequent failures
-                # cannot be transparently retried on another provider — the
-                # conversation now contains provider-specific tool_call ids
-                # and reasoning blocks. Surface immediately.
-                if locked_in:
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail="LLM provider error",
-                    ) from exc
-                if not retryable:
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail="LLM provider error",
-                    ) from exc
-                failures.append(_AttemptFailure(attempt.position, attempt.provider, attempt.model, error_class))
-                continue
-
-            # Success on this attempt.
-            background_tasks.add_task(
-                report_platform_usage,
-                config,
-                attempt.attempt_id,
-                "success",
-                completion.usage,
-                None,
-            )
-            response.headers["X-Correlation-ID"] = attempt.attempt_id
-            if rate_limit_info:
-                for key, value in rate_limit_headers(rate_limit_info).items():
-                    response.headers[key] = value
-            return completion
-
-        # All attempts exhausted with retryable errors.
-        logger.error(
-            "All upstream attempts failed request_id=%s failures=%s",
-            platform_route.request_id,
-            failures,
-        )
-        is_single_attempt = len(attempts_to_try) <= 1
-        if last_exc is not None and isinstance(last_exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-            detail = "LLM provider timeout" if is_single_attempt else "All upstream providers timed out"
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail=detail,
-            ) from last_exc
-        detail = "LLM provider error" if is_single_attempt else "All upstream providers failed"
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=detail,
-        ) from last_exc
+    if routing_plan is None:
+        provider, model = AnyLLM.split_model_provider(request.model)
+        provider_kwargs = get_provider_kwargs(config, provider)
 
     if routing_plan is not None:
         assert db is not None
