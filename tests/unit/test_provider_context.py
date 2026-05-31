@@ -139,6 +139,65 @@ async def test_provider_context_log_zero_token_usage_writes_log() -> None:
 
 
 @pytest.mark.asyncio
+async def test_provider_context_log_input_metered_usage_applies_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = StubLogWriter()
+
+    class Pricing:
+        input_price_per_million = 2.0
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
+        return Pricing()
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+
+    usage_log = await _context().log_input_metered_usage(
+        object(),  # type: ignore[arg-type]
+        writer,
+        endpoint="/v1/test",
+        prompt_tokens=250_000,
+        total_tokens=250_000,
+        cost_units=250_000,
+        apply_cost=True,
+    )
+
+    assert writer.logs == [usage_log]
+    assert usage_log.prompt_tokens == 250_000
+    assert usage_log.completion_tokens == 0
+    assert usage_log.total_tokens == 250_000
+    assert usage_log.cost == 0.5
+
+
+@pytest.mark.asyncio
+async def test_provider_context_log_input_metered_usage_skips_cost_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = StubLogWriter()
+
+    async def fail_find_model_pricing(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("pricing lookup should be skipped")
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fail_find_model_pricing)
+
+    usage_log = await _context().log_input_metered_usage(
+        object(),  # type: ignore[arg-type]
+        writer,
+        endpoint="/v1/test",
+        prompt_tokens=None,
+        total_tokens=None,
+        cost_units=None,
+        apply_cost=False,
+    )
+
+    assert writer.logs == [usage_log]
+    assert usage_log.prompt_tokens is None
+    assert usage_log.completion_tokens == 0
+    assert usage_log.total_tokens is None
+    assert usage_log.cost is None
+
+
+@pytest.mark.asyncio
 async def test_provider_context_log_usage_error_writes_identity_fields() -> None:
     writer = StubLogWriter()
 

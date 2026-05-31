@@ -93,6 +93,34 @@ class OpenAIProviderRequestContext:
         await log_writer.put(usage_log)
         return usage_log
 
+    async def log_input_metered_usage(
+        self,
+        db: AsyncSession,
+        log_writer: LogWriter,
+        *,
+        endpoint: str,
+        prompt_tokens: int | None,
+        total_tokens: int | None,
+        cost_units: float | None,
+        apply_cost: bool,
+        require_positive_units: bool = False,
+    ) -> UsageLog:
+        usage_log = self.usage_log(
+            endpoint=endpoint,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=0,
+            total_tokens=total_tokens,
+        )
+        if apply_cost:
+            await self.apply_input_metered_cost(
+                db,
+                usage_log,
+                units=cost_units,
+                require_positive_units=require_positive_units,
+            )
+        await log_writer.put(usage_log)
+        return usage_log
+
     async def log_usage_error(self, log_writer: LogWriter, *, endpoint: str, error: BaseException) -> None:
         await log_usage_error(
             log_writer,

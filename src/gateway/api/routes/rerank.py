@@ -56,24 +56,18 @@ async def create_rerank(
     try:
         result = await arerank(**rerank_kwargs)
 
-        total_tokens = result.usage.total_tokens if result.usage else None
-
-        usage_log = context.usage_log(
+        usage = result.usage
+        total_tokens = usage.total_tokens if usage else None
+        await context.log_input_metered_usage(
+            db,
+            log_writer,
             endpoint=_RERANK_ENDPOINT,
             prompt_tokens=total_tokens,
-            completion_tokens=0,
             total_tokens=total_tokens,
+            cost_units=total_tokens,
+            apply_cost=usage is not None,
+            require_positive_units=True,
         )
-
-        if result.usage:
-            await context.apply_input_metered_cost(
-                db,
-                usage_log,
-                units=total_tokens,
-                require_positive_units=True,
-            )
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise

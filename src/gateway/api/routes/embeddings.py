@@ -55,22 +55,17 @@ async def create_embedding(
 
     try:
         result = await aembedding(**embedding_kwargs)
+        usage = result.usage
 
-        usage_log = context.usage_log(
+        await context.log_input_metered_usage(
+            db,
+            log_writer,
             endpoint=_EMBEDDINGS_ENDPOINT,
-            prompt_tokens=result.usage.prompt_tokens if result.usage else None,
-            completion_tokens=0,
-            total_tokens=result.usage.total_tokens if result.usage else None,
+            prompt_tokens=usage.prompt_tokens if usage else None,
+            total_tokens=usage.total_tokens if usage else None,
+            cost_units=usage.prompt_tokens if usage else None,
+            apply_cost=usage is not None,
         )
-
-        if result.usage:
-            await context.apply_input_metered_cost(
-                db,
-                usage_log,
-                units=result.usage.prompt_tokens,
-            )
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise
