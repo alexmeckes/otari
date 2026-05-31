@@ -10,7 +10,12 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._moderation_models import ModerationRequest
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage_error, make_usage_log
+from gateway.api.routes._usage import (
+    apply_rate_limit_headers,
+    log_and_raise_provider_error,
+    log_usage_error,
+    make_usage_log,
+)
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
@@ -117,7 +122,7 @@ async def create_moderation(
             detail="The request could not be completed by the provider",
         ) from e
     except Exception as e:
-        await log_usage_error(
+        await log_and_raise_provider_error(
             log_writer,
             api_key_id=api_key_id,
             user_id=user_id,
@@ -126,12 +131,6 @@ async def create_moderation(
             endpoint="/v1/moderations",
             error=e,
         )
-
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="The request could not be completed by the provider",
-        ) from e
 
     apply_rate_limit_headers(response, rate_limit_info)
 

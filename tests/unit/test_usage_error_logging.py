@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 
 import pytest
+from fastapi import HTTPException
 
-from gateway.api.routes._usage import log_usage_error, make_usage_log
+from gateway.api.routes._usage import log_and_raise_provider_error, log_usage_error, make_usage_log
 from gateway.models.entities import UsageLog
 
 
@@ -64,3 +65,26 @@ def test_make_usage_log_sets_common_fields() -> None:
     assert log.completion_tokens == 4
     assert log.total_tokens == 7
     assert log.tags == {"team": "platform"}
+
+
+@pytest.mark.asyncio
+async def test_log_and_raise_provider_error_logs_then_raises() -> None:
+    writer = StubLogWriter()
+    error = RuntimeError("provider down")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await log_and_raise_provider_error(
+            writer,
+            api_key_id="key-1",
+            user_id="user-1",
+            model="gpt-4o",
+            provider="openai",
+            endpoint="/v1/test",
+            error=error,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "The request could not be completed by the provider"
+    assert len(writer.logs) == 1
+    assert writer.logs[0].status == "error"
+    assert writer.logs[0].error_message == "provider down"

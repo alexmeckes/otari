@@ -1,12 +1,13 @@
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NoReturn
 
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk, CompletionUsage
-from fastapi import Response
+from fastapi import HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gateway.log_config import logger
 from gateway.metrics import record_cost, record_tokens
 from gateway.models.entities import UsageLog
 from gateway.rate_limit import RateLimitInfo
@@ -139,3 +140,29 @@ async def log_usage_error(
             error_message=str(error),
         )
     )
+
+
+async def log_and_raise_provider_error(
+    log_writer: LogWriter,
+    *,
+    api_key_id: str | None,
+    user_id: str | None,
+    model: str,
+    provider: Any,
+    endpoint: str,
+    error: BaseException,
+) -> NoReturn:
+    await log_usage_error(
+        log_writer,
+        api_key_id=api_key_id,
+        user_id=user_id,
+        model=model,
+        provider=provider,
+        endpoint=endpoint,
+        error=error,
+    )
+    logger.error("Provider call failed for %s:%s: %s", provider, model, error)
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="The request could not be completed by the provider",
+    ) from error
