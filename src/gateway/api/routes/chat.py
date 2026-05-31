@@ -16,14 +16,11 @@ from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
 from gateway.api.routes._chat_standalone_non_streaming import run_standalone_non_streaming_chat
 from gateway.api.routes._chat_standalone_streaming import run_standalone_streaming_chat
+from gateway.api.routes._chat_tool_iterations import resolve_max_tool_iterations
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.core.config import GatewayConfig
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_client import MCPClientPool
-from gateway.services.mcp_loop import (
-    DEFAULT_MAX_TOOL_ITERATIONS,
-    MAX_TOOL_ITERATIONS_CAP,
-)
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
 
@@ -125,10 +122,7 @@ async def chat_completions(
     # subsequent failures terminate the request — we never swap providers
     # between tool-use rounds.
     # ------------------------------------------------------------------
-    max_tool_iterations = min(
-        request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
-        MAX_TOOL_ITERATIONS_CAP,
-    )
+    max_tool_iterations = resolve_max_tool_iterations(request.max_tool_iterations)
 
     if platform_mode:
         return await run_platform_non_streaming_chat(

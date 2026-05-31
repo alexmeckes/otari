@@ -11,6 +11,7 @@ from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
+from gateway.api.routes._chat_tool_iterations import resolve_max_tool_iterations
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import log_usage
 from gateway.core.config import GatewayConfig
@@ -24,8 +25,6 @@ from gateway.services.chat_tool_config import (
 )
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import (
-    DEFAULT_MAX_TOOL_ITERATIONS,
-    MAX_TOOL_ITERATIONS_CAP,
     inject_purpose_hints,
     mcp_tool_loop_stream,
 )
@@ -50,10 +49,7 @@ async def run_standalone_streaming_chat(
     """Create a standalone streaming chat response for one provider attempt."""
     provider, model = AnyLLM.split_model_provider(request.model)
     provider_kwargs = get_provider_kwargs(config, provider)
-    max_tool_iterations = min(
-        request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
-        MAX_TOOL_ITERATIONS_CAP,
-    )
+    max_tool_iterations = resolve_max_tool_iterations(request.max_tool_iterations)
 
     request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),

@@ -5,11 +5,11 @@ from gateway.api.routes._chat_platform_errors import platform_attempt_failure_ex
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
+from gateway.api.routes._chat_tool_iterations import resolve_max_tool_iterations
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.rate_limit import RateLimitInfo
-from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, MAX_TOOL_ITERATIONS_CAP
 from gateway.services.platform_gateway import ResolvedRoute
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
@@ -36,10 +36,7 @@ async def run_platform_streaming_chat(
             detail="Authorization service returned no resolvable provider",
         )
 
-    max_tool_iterations = min(
-        request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
-        MAX_TOOL_ITERATIONS_CAP,
-    )
+    max_tool_iterations = resolve_max_tool_iterations(request.max_tool_iterations)
     try:
         return await run_streaming_with_fallback(
             route=route,
