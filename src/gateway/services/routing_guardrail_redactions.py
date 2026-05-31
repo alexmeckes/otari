@@ -5,8 +5,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty
-from gateway.services.routing_guardrail_helpers import PII_PATTERNS, guardrails_config, named_patterns, string_list
+from gateway.services.routing_config_values import dict_or_empty, string_list
+from gateway.services.routing_guardrail_helpers import PII_PATTERNS, guardrails_config, named_patterns
 from gateway.services.routing_request_analysis import bool_config
 
 

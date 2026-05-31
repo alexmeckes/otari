@@ -11,6 +11,14 @@ def dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     return value
 
 
+def string_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def float_or_none(value: Any) -> float | None:
     if isinstance(value, bool):
         return None

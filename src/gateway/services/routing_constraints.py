@@ -3,7 +3,7 @@ from typing import Any
 
 from any_llm import AnyLLM
 
-from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none
+from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none, string_list
 
 
 def _bool_config(value: Any, default: bool) -> bool:
@@ -19,11 +19,7 @@ def _bool_config(value: Any, default: bool) -> bool:
 
 
 def _string_set(value: Any) -> set[str]:
-    if isinstance(value, str) and value.strip():
-        return {value.strip()}
-    if not isinstance(value, list):
-        return set()
-    return {str(item).strip() for item in value if str(item).strip()}
+    return set(string_list(value))
 
 
 def _constraint_config(config: Mapping[str, Any]) -> Mapping[str, Any]:

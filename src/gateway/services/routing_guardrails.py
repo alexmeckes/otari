@@ -7,12 +7,12 @@ from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
+from gateway.services.routing_config_values import string_list
 from gateway.services.routing_guardrail_helpers import (
     PII_PATTERNS,
     guardrail_violation,
     guardrails_config,
     named_patterns,
-    string_list,
 )
 from gateway.services.routing_request_analysis import bool_config, jsonable_text
 

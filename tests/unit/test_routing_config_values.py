@@ -5,6 +5,7 @@ from gateway.services.routing_config_values import (
     float_or_none,
     non_negative_float_or_none,
     score_or_none,
+    string_list,
 )
 
 
@@ -25,6 +26,20 @@ def test_dict_or_empty_can_copy_dict() -> None:
 @pytest.mark.parametrize("value", [None, [], "enabled"])
 def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
     assert dict_or_empty(value) == {}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" team ", ["team"]),
+        (" ", []),
+        ([" team ", 42, None, ""], ["team", "42", "None"]),
+        (("team",), []),
+        (None, []),
+    ],
+)
+def test_string_list(value: object, expected: list[str]) -> None:
+    assert string_list(value) == expected
 
 
 @pytest.mark.parametrize(

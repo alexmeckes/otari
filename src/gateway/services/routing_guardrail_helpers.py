@@ -5,21 +5,21 @@ from collections.abc import Mapping
 from typing import Any
 
 from gateway.log_config import logger
-from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_config_values import dict_or_empty, string_list
+
+__all__ = [
+    "PII_PATTERNS",
+    "guardrail_violation",
+    "guardrails_config",
+    "named_patterns",
+    "string_list",
+]
 
 PII_PATTERNS = {
     "email": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
     "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
     "credit_card": re.compile(r"\b(?:\d[ -]*?){13,16}\b"),
 }
-
-
-def string_list(value: Any) -> list[str]:
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def guardrails_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
