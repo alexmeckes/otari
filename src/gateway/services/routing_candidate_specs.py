@@ -4,6 +4,7 @@ from typing import Any
 
 from any_llm import AnyLLM
 
+from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
@@ -91,7 +92,7 @@ def split_model_selector(model_selector: str) -> tuple[str, str, str]:
     """Split and normalize a provider:model selector."""
     provider, model_name = AnyLLM.split_model_provider(model_selector)
     provider_name = provider.value
-    return provider_name, model_name, f"{provider_name}:{model_name}"
+    return provider_name, model_name, pricing_model_ref(provider_name, model_name)
 
 
 def configured_candidate_specs(config: Mapping[str, Any]) -> list[CandidateSpec]:
