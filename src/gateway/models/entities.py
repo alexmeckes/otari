@@ -205,13 +205,18 @@ class RoutingPolicy(Base):
     projects = relationship("Project", back_populates="routing_policy")
     route_traces = relationship("RouteTrace", back_populates="routing_policy", passive_deletes=True)
 
+    def config_dict(self) -> dict[str, Any]:
+        if isinstance(self.config_, dict):
+            return dict(self.config_)
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
             "policy_id": self.policy_id,
             "name": self.name,
             "strategy": self.strategy,
-            "config": self.config_,
+            "config": self.config_dict(),
             "is_default": self.is_default,
             "revision": self.revision,
             "status": self.status,
@@ -241,6 +246,11 @@ class RoutingPolicyRevision(Base):
     change_note: Mapped[str | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
+    def config_dict(self) -> dict[str, Any]:
+        if isinstance(self.config_, dict):
+            return dict(self.config_)
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -250,7 +260,7 @@ class RoutingPolicyRevision(Base):
             "action": self.action,
             "name": self.name,
             "strategy": self.strategy,
-            "config": self.config_,
+            "config": self.config_dict(),
             "is_default": self.is_default,
             "status": self.status,
             "change_note": self.change_note,

@@ -45,7 +45,7 @@ def update_policy_shape(
 ) -> tuple[str | None, dict[str, Any] | None]:
     try:
         return routing_policy_shape.update_policy_shape(
-            current_config=policy.config_ or {},
+            current_config=policy.config_dict(),
             payload=payload,
         )
     except routing_policy_shape.RoutingPolicyShapeError as exc:
@@ -83,7 +83,7 @@ def record_policy_revision(
             action=action,
             name=policy.name,
             strategy=policy.strategy,
-            config_=dict(policy.config_) if policy.config_ else {},
+            config_=policy.config_dict(),
             is_default=bool(policy.is_default),
             status=policy.status,
             change_note=change_note,

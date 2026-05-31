@@ -153,7 +153,7 @@ async def apply_routing_policy_revision(
 
     policy.name = policy_revision.name
     policy.strategy = policy_revision.strategy
-    policy.config_ = dict(policy_revision.config_) if policy_revision.config_ else {}
+    policy.config_ = policy_revision.config_dict()
     policy.is_default = bool(policy_revision.is_default)
     policy.status = policy_revision.status
     bump_policy_revision(policy)
@@ -182,7 +182,7 @@ async def apply_routing_policy_eval_scores(
 
     try:
         score_application = routing_policy_eval_scores.apply_eval_scores_to_policy_config(
-            policy.config_ or {},
+            policy.config_dict(),
             [eval_score_input(item) for item in request.scores],
         )
     except routing_policy_eval_scores.RoutingPolicyEvalScoreError as exc:
@@ -241,7 +241,7 @@ async def clone_routing_policy(
     clone = RoutingPolicy(
         name=request.name or f"{source.name} draft",
         strategy=source.strategy,
-        config_=dict(source.config_) if source.config_ else {},
+        config_=source.config_dict(),
         is_default=False,
         revision=1,
         status="draft",

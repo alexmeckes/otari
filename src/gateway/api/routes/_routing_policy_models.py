@@ -81,12 +81,13 @@ class RoutingPolicyResponse(BaseModel):
     @classmethod
     def from_model(cls, policy: RoutingPolicy) -> "RoutingPolicyResponse":
         """Create a response from an ORM model."""
+        config = policy.config_dict()
         return cls(
             policy_id=policy.policy_id,
             name=policy.name,
             strategy=policy.strategy,
-            config=dict(policy.config_) if policy.config_ else {},
-            default_strategy=routing_policy_shape.default_strategy_from_internal(policy.strategy, policy.config_ or {}),
+            config=config,
+            default_strategy=routing_policy_shape.default_strategy_from_internal(policy.strategy, config),
             is_default=bool(policy.is_default),
             revision=int(policy.revision or 0),
             status=policy.status,
@@ -114,6 +115,7 @@ class RoutingPolicyRevisionResponse(BaseModel):
     @classmethod
     def from_model(cls, revision: RoutingPolicyRevision) -> "RoutingPolicyRevisionResponse":
         """Create a response from an ORM model."""
+        config = revision.config_dict()
         return cls(
             revision_id=revision.revision_id,
             policy_id=revision.policy_id,
@@ -121,11 +123,8 @@ class RoutingPolicyRevisionResponse(BaseModel):
             action=revision.action,
             name=revision.name,
             strategy=revision.strategy,
-            config=dict(revision.config_) if revision.config_ else {},
-            default_strategy=routing_policy_shape.default_strategy_from_internal(
-                revision.strategy,
-                revision.config_ or {},
-            ),
+            config=config,
+            default_strategy=routing_policy_shape.default_strategy_from_internal(revision.strategy, config),
             is_default=bool(revision.is_default),
             status=revision.status,
             change_note=revision.change_note,
