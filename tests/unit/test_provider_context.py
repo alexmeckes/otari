@@ -17,6 +17,15 @@ class StubLogWriter:
         self.logs.append(log)
 
 
+@dataclass(frozen=True)
+class StubPricing:
+    input_price_per_million: float = 2.0
+
+
+_FIND_MODEL_PRICING = "gateway.api.routes._provider_context.find_model_pricing"
+_LOG_MISSING_PRICING = "gateway.api.routes._provider_context.log_missing_pricing"
+
+
 def _context(rate_limit_info: RateLimitInfo | None = None) -> OpenAIProviderRequestContext:
     return OpenAIProviderRequestContext(
         api_key_id="key-1",
@@ -26,6 +35,30 @@ def _context(rate_limit_info: RateLimitInfo | None = None) -> OpenAIProviderRequ
         model="gpt-4o-mini",
         provider_kwargs={"api_key": "sk-test"},
     )
+
+
+def _patch_model_pricing(monkeypatch: pytest.MonkeyPatch, pricing: StubPricing | None = None) -> None:
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> StubPricing | None:
+        return pricing
+
+    monkeypatch.setattr(_FIND_MODEL_PRICING, fake_find_model_pricing)
+
+
+def _patch_model_pricing_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fail_find_model_pricing(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("pricing lookup should be skipped")
+
+    monkeypatch.setattr(_FIND_MODEL_PRICING, fail_find_model_pricing)
+
+
+def _patch_missing_pricing_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    calls: list[tuple[str, str]] = []
+
+    def fake_log_missing_pricing(provider: str, model: str) -> None:
+        calls.append((provider, model))
+
+    monkeypatch.setattr(_LOG_MISSING_PRICING, fake_log_missing_pricing)
+    return calls
 
 
 def test_provider_context_call_kwargs_includes_provider_defaults() -> None:
@@ -136,13 +169,7 @@ async def test_provider_context_log_input_metered_usage_applies_cost(
 ) -> None:
     writer = StubLogWriter()
 
-    class Pricing:
-        input_price_per_million = 2.0
-
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
-        return Pricing()
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    _patch_model_pricing(monkeypatch, StubPricing())
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
@@ -167,10 +194,7 @@ async def test_provider_context_log_input_metered_usage_skips_cost_when_disabled
 ) -> None:
     writer = StubLogWriter()
 
-    async def fail_find_model_pricing(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError("pricing lookup should be skipped")
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fail_find_model_pricing)
+    _patch_model_pricing_failure(monkeypatch)
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
@@ -194,16 +218,9 @@ async def test_provider_context_log_input_metered_usage_uses_missing_default_wit
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     writer = StubLogWriter()
-    calls: list[tuple[str, str]] = []
+    calls = _patch_missing_pricing_calls(monkeypatch)
 
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> None:
-        return None
-
-    def fake_log_missing_pricing(provider: str, model: str) -> None:
-        calls.append((provider, model))
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
-    monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
+    _patch_model_pricing(monkeypatch)
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
@@ -228,13 +245,7 @@ async def test_provider_context_log_input_metered_usage_keeps_zero_absent_when_r
 ) -> None:
     writer = StubLogWriter()
 
-    class Pricing:
-        input_price_per_million = 2.0
-
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
-        return Pricing()
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    _patch_model_pricing(monkeypatch, StubPricing())
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
@@ -256,16 +267,9 @@ async def test_provider_context_log_input_metered_usage_logs_missing_pricing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     writer = StubLogWriter()
-    calls: list[tuple[str, str]] = []
+    calls = _patch_missing_pricing_calls(monkeypatch)
 
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> None:
-        return None
-
-    def fake_log_missing_pricing(provider: str, model: str) -> None:
-        calls.append((provider, model))
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
-    monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
+    _patch_model_pricing(monkeypatch)
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
@@ -288,13 +292,7 @@ async def test_provider_context_log_input_metered_usage_sets_scaled_cost(
 ) -> None:
     writer = StubLogWriter()
 
-    class Pricing:
-        input_price_per_million = 2.0
-
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
-        return Pricing()
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    _patch_model_pricing(monkeypatch, StubPricing())
 
     usage_log = await _context().log_input_metered_usage(
         object(),  # type: ignore[arg-type]
