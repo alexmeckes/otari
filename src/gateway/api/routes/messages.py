@@ -10,11 +10,11 @@ from any_llm.types.messages import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._message_models import MessagesRequest
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -26,25 +26,6 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.streaming import ANTHROPIC_STREAM_FORMAT, streaming_generator
 
 router = APIRouter(prefix="/v1", tags=["messages"])
-
-
-class MessagesRequest(BaseModel):
-    """Anthropic Messages API-compatible request."""
-
-    model: str
-    messages: list[dict[str, Any]] = Field(min_length=1)
-    max_tokens: int
-    system: str | list[dict[str, Any]] | None = None
-    temperature: float | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    stream: bool = False
-    stop_sequences: list[str] | None = None
-    tools: list[dict[str, Any]] | None = None
-    tool_choice: dict[str, Any] | None = None
-    metadata: dict[str, Any] | None = None
-    thinking: dict[str, Any] | None = None
-    cache_control: dict[str, Any] | None = None
 
 
 def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPException:
