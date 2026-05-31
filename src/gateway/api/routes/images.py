@@ -1,7 +1,5 @@
 """OpenAI-compatible image generation endpoint."""
 
-import uuid
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from any_llm import AnyLLM, aimage_generation
@@ -13,10 +11,10 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._image_models import ImageGenerationRequest
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage_error
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage_error, make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.models.entities import APIKey, UsageLog
+from gateway.models.entities import APIKey
 from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
@@ -81,15 +79,12 @@ async def create_image(
 
         n_images = len(result.data) if result.data else (request.n or 1)
 
-        usage_log = UsageLog(
-            id=str(uuid.uuid4()),
+        usage_log = make_usage_log(
             api_key_id=api_key_id,
             user_id=user_id,
-            timestamp=datetime.now(UTC),
             model=model,
             provider=provider,
             endpoint="/v1/images/generations",
-            status="success",
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,

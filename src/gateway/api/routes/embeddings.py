@@ -1,7 +1,5 @@
 """OpenAI-compatible embeddings endpoint."""
 
-import uuid
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from any_llm import AnyLLM, aembedding
@@ -13,10 +11,10 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._embedding_models import EmbeddingRequest
 from gateway.api.routes._helpers import resolve_openai_user_id
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage_error
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage_error, make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.models.entities import APIKey, UsageLog
+from gateway.models.entities import APIKey
 from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
@@ -73,15 +71,12 @@ async def create_embedding(
     try:
         result = await aembedding(**embedding_kwargs)
 
-        usage_log = UsageLog(
-            id=str(uuid.uuid4()),
+        usage_log = make_usage_log(
             api_key_id=api_key_id,
             user_id=user_id,
-            timestamp=datetime.now(UTC),
             model=model,
             provider=provider,
             endpoint="/v1/embeddings",
-            status="success",
             prompt_tokens=result.usage.prompt_tokens if result.usage else None,
             completion_tokens=0,
             total_tokens=result.usage.total_tokens if result.usage else None,

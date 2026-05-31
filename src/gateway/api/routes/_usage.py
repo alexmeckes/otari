@@ -29,6 +29,39 @@ def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> 
         response.headers[key] = value
 
 
+def make_usage_log(
+    *,
+    api_key_id: str | None,
+    user_id: str | None,
+    model: str,
+    provider: Any,
+    endpoint: str,
+    project_id: str | None = None,
+    status: str = "success",
+    error_message: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    total_tokens: int | None = None,
+    tags: Mapping[str, Any] | None = None,
+) -> UsageLog:
+    return UsageLog(
+        id=str(uuid.uuid4()),
+        api_key_id=api_key_id,
+        user_id=user_id,
+        project_id=project_id,
+        timestamp=datetime.now(UTC),
+        model=model,
+        provider=provider,
+        endpoint=endpoint,
+        status=status,
+        error_message=error_message,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        tags=dict(tags) if tags is not None else {},
+    )
+
+
 async def log_usage(
     db: AsyncSession,
     log_writer: LogWriter,
@@ -44,12 +77,10 @@ async def log_usage(
     error: str | None = None,
 ) -> None:
     """Log API usage to database and update user spend."""
-    usage_log = UsageLog(
-        id=str(uuid.uuid4()),
+    usage_log = make_usage_log(
         api_key_id=api_key_id,
         user_id=user_id,
         project_id=project_id,
-        timestamp=datetime.now(UTC),
         model=model,
         provider=provider,
         endpoint=endpoint,
@@ -98,11 +129,9 @@ async def log_usage_error(
     error: BaseException,
 ) -> None:
     await log_writer.put(
-        UsageLog(
-            id=str(uuid.uuid4()),
+        make_usage_log(
             api_key_id=api_key_id,
             user_id=user_id,
-            timestamp=datetime.now(UTC),
             model=model,
             provider=provider,
             endpoint=endpoint,

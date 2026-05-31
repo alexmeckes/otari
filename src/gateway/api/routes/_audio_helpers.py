@@ -1,6 +1,4 @@
-import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, NoReturn
 
 from any_llm import AnyLLM
@@ -9,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._usage import make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.models.entities import APIKey, UsageLog
+from gateway.models.entities import APIKey
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
@@ -54,23 +53,18 @@ async def log_audio_usage(
     endpoint: str,
     error: str | None = None,
 ) -> None:
-    usage_log = UsageLog(
-        id=str(uuid.uuid4()),
+    usage_log = make_usage_log(
         api_key_id=context.api_key_id,
         user_id=context.user_id,
-        timestamp=datetime.now(UTC),
         model=model,
         provider=provider,
         endpoint=endpoint,
         status="success" if error is None else "error",
         error_message=error,
+        prompt_tokens=0 if error is None else None,
+        completion_tokens=0 if error is None else None,
+        total_tokens=0 if error is None else None,
     )
-    if error is None:
-        # Audio endpoints do not expose measurable usage units yet, so cost is
-        # left unset until a dedicated pricing metric is available.
-        usage_log.prompt_tokens = 0
-        usage_log.completion_tokens = 0
-        usage_log.total_tokens = 0
     await log_writer.put(usage_log)
 
 
