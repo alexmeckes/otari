@@ -44,6 +44,36 @@ _API_KEY_NO_USER = "API key has no associated user"
 _PROVIDER_ERROR = "The request could not be completed by the provider"
 
 
+def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
+    prompt_tokens = input_tokens or 0
+    completion_tokens = output_tokens or 0
+    return CompletionUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+    )
+
+
+def _message_response_usage(result: MessageResponse) -> CompletionUsage | None:
+    if not result.usage:
+        return None
+    return _message_completion_usage(result.usage.input_tokens, result.usage.output_tokens)
+
+
+def _format_message_stream_chunk(event: MessageStreamEvent) -> str:
+    return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
+
+
+def _message_stream_event_usage(event: MessageStreamEvent) -> CompletionUsage | None:
+    if isinstance(event, MessageDeltaEvent):
+        return _message_completion_usage(event.usage.input_tokens, event.usage.output_tokens)
+    if isinstance(event, MessageStartEvent):
+        input_tokens = event.message.usage.input_tokens or 0
+        if input_tokens:
+            return _message_completion_usage(input_tokens, 0)
+    return None
+
+
 @router.post("/messages", response_model=None)
 async def create_message(
     raw_request: Request,
@@ -97,28 +127,6 @@ async def create_message(
         if request.stream:
             call_kwargs["stream"] = True
 
-            def _format_chunk(event: MessageStreamEvent) -> str:
-                return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
-
-            def _extract_usage(event: MessageStreamEvent) -> CompletionUsage | None:
-                if isinstance(event, MessageDeltaEvent):
-                    input_tokens = event.usage.input_tokens or 0
-                    output_tokens = event.usage.output_tokens or 0
-                    return CompletionUsage(
-                        prompt_tokens=input_tokens,
-                        completion_tokens=output_tokens,
-                        total_tokens=input_tokens + output_tokens,
-                    )
-                if isinstance(event, MessageStartEvent):
-                    input_tokens = event.message.usage.input_tokens or 0
-                    if input_tokens:
-                        return CompletionUsage(
-                            prompt_tokens=input_tokens,
-                            completion_tokens=0,
-                            total_tokens=input_tokens,
-                        )
-                return None
-
             async def _on_complete(usage_data: CompletionUsage) -> None:
                 await log_usage(
                     db=db,
@@ -148,8 +156,8 @@ async def create_message(
             return StreamingResponse(
                 streaming_generator(
                     stream=msg_stream,  # type: ignore[arg-type]
-                    format_chunk=_format_chunk,
-                    extract_usage=_extract_usage,
+                    format_chunk=_format_message_stream_chunk,
+                    extract_usage=_message_stream_event_usage,
                     fmt=ANTHROPIC_STREAM_FORMAT,
                     on_complete=_on_complete,
                     on_error=_on_error,
@@ -161,12 +169,8 @@ async def create_message(
 
         result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
 
-        if result.usage:
-            usage_data = CompletionUsage(
-                prompt_tokens=result.usage.input_tokens,
-                completion_tokens=result.usage.output_tokens,
-                total_tokens=result.usage.input_tokens + result.usage.output_tokens,
-            )
+        usage_data = _message_response_usage(result)
+        if usage_data:
             await log_usage(
                 db=db,
                 log_writer=log_writer,
