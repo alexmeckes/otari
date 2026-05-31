@@ -10,7 +10,7 @@ from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._user_models import CreateUserRequest, UpdateUserRequest, UsageLogResponse, UserResponse
 from gateway.models.entities import APIKey, Budget, UsageLog, User
 from gateway.repositories.users_repository import get_active_user
-from gateway.services.budget_service import calculate_next_reset
+from gateway.services.budget_service import start_budget_period
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
@@ -60,12 +60,7 @@ async def create_user(
         db.add(user)
 
     if budget is not None:
-        now = datetime.now(UTC)
-        user.budget_started_at = now
-        if budget.budget_duration_sec:
-            user.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-        else:
-            user.next_budget_reset_at = None
+        start_budget_period(user, budget, datetime.now(UTC))
 
     await commit_or_database_error(db)
     await db.refresh(user)
@@ -130,12 +125,7 @@ async def update_user(
             )
 
         user.budget_id = request.budget_id
-        now = datetime.now(UTC)
-        user.budget_started_at = now
-        if budget.budget_duration_sec:
-            user.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-        else:
-            user.next_budget_reset_at = None
+        start_budget_period(user, budget, datetime.now(UTC))
     if request.blocked is not None:
         user.blocked = request.blocked
     if request.metadata is not None:

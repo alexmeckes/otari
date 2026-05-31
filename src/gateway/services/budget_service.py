@@ -47,6 +47,14 @@ def calculate_next_reset(start: datetime, duration_sec: int) -> datetime:
     return start + timedelta(seconds=duration_sec)
 
 
+def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
+    started_at = start or datetime.now(UTC)
+    subject.budget_started_at = started_at
+    subject.next_budget_reset_at = (
+        calculate_next_reset(started_at, budget.budget_duration_sec) if budget.budget_duration_sec else None
+    )
+
+
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None or value.tzinfo is not None:
         return value
@@ -60,12 +68,7 @@ async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: d
     user_id_str = user.user_id
 
     user.spend = 0.0
-    user.budget_started_at = now
-
-    if budget.budget_duration_sec:
-        user.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-    else:
-        user.next_budget_reset_at = None
+    start_budget_period(user, budget, now)
 
     reset_log = BudgetResetLog(
         user_id=user.user_id,
@@ -134,12 +137,7 @@ async def reset_project_budget(db: AsyncSession, project: Project, budget: Budge
     project_id_str = project.project_id
 
     project.spend = 0.0
-    project.budget_started_at = now
-
-    if budget.budget_duration_sec:
-        project.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-    else:
-        project.next_budget_reset_at = None
+    start_budget_period(project, budget, now)
 
     reset_log = BudgetResetLog(
         project_id=project.project_id,

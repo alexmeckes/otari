@@ -9,7 +9,7 @@ from gateway.api.deps import get_db, verify_master_key
 from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._project_models import CreateProjectRequest, ProjectResponse, UpdateProjectRequest
 from gateway.models.entities import Budget, Project, RoutingPolicy
-from gateway.services.budget_service import calculate_next_reset
+from gateway.services.budget_service import start_budget_period
 from gateway.services.routing_policy_service import ACTIVE_ROUTING_POLICY_STATUS
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
@@ -70,12 +70,7 @@ async def create_project(
         project_kwargs["project_id"] = request.project_id
     project = Project(**project_kwargs)
     if budget is not None:
-        now = datetime.now(UTC)
-        project.budget_started_at = now
-        if budget.budget_duration_sec:
-            project.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-        else:
-            project.next_budget_reset_at = None
+        start_budget_period(project, budget, datetime.now(UTC))
     db.add(project)
     await commit_or_database_error(db)
     await db.refresh(project)
@@ -132,12 +127,7 @@ async def update_project(
     if "budget_id" in payload and payload["budget_id"] is not None:
         budget = await _get_budget_or_404(db, str(payload["budget_id"]))
         project.budget_id = str(payload["budget_id"])
-        now = datetime.now(UTC)
-        project.budget_started_at = now
-        if budget.budget_duration_sec:
-            project.next_budget_reset_at = calculate_next_reset(now, budget.budget_duration_sec)
-        else:
-            project.next_budget_reset_at = None
+        start_budget_period(project, budget, datetime.now(UTC))
     elif "budget_id" in payload:
         project.budget_id = None
         project.budget_started_at = None
