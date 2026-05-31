@@ -31,6 +31,7 @@ from gateway.services.mcp_loop import (
     inject_purpose_hints,
     mcp_tool_loop,
     mcp_tool_loop_stream,
+    tool_loop_completion_kwargs,
 )
 
 _FinishReason = Literal["stop", "length", "tool_calls", "content_filter", "function_call"]
@@ -154,6 +155,19 @@ def test_inject_purpose_hints_extends_existing_system() -> None:
     assert out[0]["role"] == "system"
     assert "be helpful" in out[0]["content"]
     assert "cal" in out[0]["content"]
+
+
+def test_tool_loop_completion_kwargs_injects_purpose_hints_without_mutating_original() -> None:
+    original = {"model": "fake", "messages": [{"role": "user", "content": "hi"}]}
+    pool = _FakePool(tool_names=["calendar"], purpose_hints=[("calendar", "for scheduling")])
+
+    out = tool_loop_completion_kwargs(original, pool, header="Use tools carefully:")
+
+    assert out["model"] == "fake"
+    assert out["messages"][0]["role"] == "system"
+    assert "Use tools carefully:" in out["messages"][0]["content"]
+    assert "calendar" in out["messages"][0]["content"]
+    assert original["messages"] == [{"role": "user", "content": "hi"}]
 
 
 def test_finalize_tool_calls_orders_by_index() -> None:

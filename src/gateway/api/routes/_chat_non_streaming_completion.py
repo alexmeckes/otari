@@ -5,7 +5,7 @@ from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
 
 from gateway.models.mcp import McpServerConfig
 from gateway.services.chat_tool_config import build_web_search_backend, resolve_sandbox_purpose_hint
-from gateway.services.mcp_loop import inject_purpose_hints, mcp_tool_loop
+from gateway.services.mcp_loop import mcp_tool_loop, tool_loop_completion_kwargs
 from gateway.services.sandbox_backend import SandboxBackend
 
 
@@ -28,16 +28,8 @@ async def run_non_streaming_completion(
     """Run one non-streaming completion attempt with gateway tool backends."""
     if mcp_server_configs:
         async with mcp_client_pool_factory(mcp_server_configs) as pool:
-            mcp_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    pool.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
             return await mcp_tool_loop(
-                completion_kwargs=mcp_kwargs,
+                completion_kwargs=tool_loop_completion_kwargs(completion_kwargs, pool, header=tools_header),
                 pool=pool,
                 max_iterations=max_tool_iterations,
                 on_first_response=on_first_response,
@@ -46,16 +38,8 @@ async def run_non_streaming_completion(
         assert sandbox_url is not None
         sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
         async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
-            sandbox_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    backend.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
             return await mcp_tool_loop(
-                completion_kwargs=sandbox_kwargs,
+                completion_kwargs=tool_loop_completion_kwargs(completion_kwargs, backend, header=tools_header),
                 pool=backend,  # type: ignore[arg-type]
                 max_iterations=max_tool_iterations,
                 on_first_response=on_first_response,
@@ -67,16 +51,8 @@ async def run_non_streaming_completion(
             base_url=web_search_url,
             tool_entry=web_search_tool_entry,
         ) as web_backend:
-            web_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    web_backend.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
             return await mcp_tool_loop(
-                completion_kwargs=web_kwargs,
+                completion_kwargs=tool_loop_completion_kwargs(completion_kwargs, web_backend, header=tools_header),
                 pool=web_backend,  # type: ignore[arg-type]
                 max_iterations=max_tool_iterations,
                 on_first_response=on_first_response,

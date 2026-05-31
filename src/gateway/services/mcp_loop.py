@@ -73,6 +73,22 @@ def inject_purpose_hints(
     return out
 
 
+def tool_loop_completion_kwargs(
+    completion_kwargs: dict[str, Any],
+    pool: Any,
+    *,
+    header: str | None = None,
+) -> dict[str, Any]:
+    return {
+        **completion_kwargs,
+        "messages": inject_purpose_hints(
+            completion_kwargs["messages"],
+            pool.purpose_hints(),
+            header=header,
+        ),
+    }
+
+
 def _accumulate_tool_call_deltas(slots: dict[int, dict[str, Any]], deltas: list[Any]) -> None:
     """Accumulate incremental streaming tool_call deltas into per-index slots."""
     for delta in deltas:

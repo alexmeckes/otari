@@ -26,8 +26,8 @@ from gateway.services.chat_tool_config import (
 )
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import (
-    inject_purpose_hints,
     mcp_tool_loop_stream,
+    tool_loop_completion_kwargs,
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachableError
@@ -127,16 +127,8 @@ async def _open_standalone_stream(
 
         async def _mcp_stream() -> AsyncIterator[ChatCompletionChunk]:
             async with mcp_client_pool_factory(pool_configs) as pool:
-                kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        pool.purpose_hints(),
-                        header=request.tools_header,
-                    ),
-                }
                 async for chunk in mcp_tool_loop_stream(
-                    completion_kwargs=kwargs,
+                    completion_kwargs=tool_loop_completion_kwargs(completion_kwargs, pool, header=request.tools_header),
                     pool=pool,
                     max_iterations=max_tool_iterations,
                 ):
@@ -152,16 +144,12 @@ async def _open_standalone_stream(
 
         async def _sandbox_stream() -> AsyncIterator[ChatCompletionChunk]:
             try:
-                kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        sandbox_backend.purpose_hints(),
+                async for chunk in mcp_tool_loop_stream(
+                    completion_kwargs=tool_loop_completion_kwargs(
+                        completion_kwargs,
+                        sandbox_backend,
                         header=request.tools_header,
                     ),
-                }
-                async for chunk in mcp_tool_loop_stream(
-                    completion_kwargs=kwargs,
                     pool=sandbox_backend,  # type: ignore[arg-type]
                     max_iterations=max_tool_iterations,
                 ):
@@ -182,16 +170,12 @@ async def _open_standalone_stream(
 
         async def _web_search_stream() -> AsyncIterator[ChatCompletionChunk]:
             try:
-                kwargs = {
-                    **completion_kwargs,
-                    "messages": inject_purpose_hints(
-                        completion_kwargs["messages"],
-                        web_search_backend.purpose_hints(),
+                async for chunk in mcp_tool_loop_stream(
+                    completion_kwargs=tool_loop_completion_kwargs(
+                        completion_kwargs,
+                        web_search_backend,
                         header=request.tools_header,
                     ),
-                }
-                async for chunk in mcp_tool_loop_stream(
-                    completion_kwargs=kwargs,
                     pool=web_search_backend,  # type: ignore[arg-type]
                     max_iterations=max_tool_iterations,
                 ):

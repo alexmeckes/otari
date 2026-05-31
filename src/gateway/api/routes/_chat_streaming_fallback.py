@@ -20,7 +20,7 @@ from gateway.services.chat_tool_config import (
     strip_gateway_fields,
 )
 from gateway.services.mcp_client import MCPClientPool
-from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, inject_purpose_hints, mcp_tool_loop_stream
+from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, mcp_tool_loop_stream, tool_loop_completion_kwargs
 from gateway.services.platform_gateway import (
     ResolvedAttempt,
     ResolvedRoute,
@@ -120,16 +120,12 @@ async def run_streaming_with_fallback(
         ensure_stream_usage_options(completion_kwargs)
         if pool_for_loop is None:
             return await acompletion(**completion_kwargs)  # type: ignore[return-value]
-        kwargs = {
-            **completion_kwargs,
-            "messages": inject_purpose_hints(
-                completion_kwargs["messages"],
-                pool_for_loop.purpose_hints(),
+        return mcp_tool_loop_stream(
+            completion_kwargs=tool_loop_completion_kwargs(
+                completion_kwargs,
+                pool_for_loop,
                 header=request.tools_header,
             ),
-        }
-        return mcp_tool_loop_stream(
-            completion_kwargs=kwargs,
             pool=pool_for_loop,
             max_iterations=max_tool_iterations,
         )
