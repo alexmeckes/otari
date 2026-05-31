@@ -96,6 +96,16 @@ def bump_policy_revision(policy: RoutingPolicy) -> None:
     policy.revision = int(policy.revision or 0) + 1
 
 
+async def get_policy_or_404(db: AsyncSession, policy_id: str) -> RoutingPolicy:
+    policy = await db.get(RoutingPolicy, policy_id)
+    if policy is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Routing policy '{policy_id}' not found",
+        )
+    return policy
+
+
 async def get_policy_revision(
     db: AsyncSession,
     *,

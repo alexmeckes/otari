@@ -10,6 +10,7 @@ from gateway.api.routes._routing_policy_admin import (
     commit_or_database_error,
     create_policy_shape,
     ensure_default_policy_is_active,
+    get_policy_or_404,
     get_policy_revision,
     record_policy_revision,
     unprocessable,
@@ -129,12 +130,7 @@ async def apply_routing_policy_revision(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RoutingPolicyResponse:
     """Apply a previous policy revision as a new audited revision."""
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    policy = await get_policy_or_404(db, policy_id)
     policy_revision = await get_policy_revision(db, policy_id=policy_id, revision=revision)
     validate_strategy(policy_revision.strategy)
     validate_status(policy_revision.status)
@@ -175,12 +171,7 @@ async def apply_routing_policy_eval_scores(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApplyRoutingPolicyEvalScoresResponse:
     """Apply uploaded eval or benchmark scores to weighted routing candidates."""
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    policy = await get_policy_or_404(db, policy_id)
     if policy.strategy != "weighted_score":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -233,12 +224,7 @@ async def get_routing_policy(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RoutingPolicyResponse:
     """Get a routing policy."""
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    policy = await get_policy_or_404(db, policy_id)
     return RoutingPolicyResponse.from_model(policy)
 
 
@@ -249,12 +235,7 @@ async def clone_routing_policy(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RoutingPolicyResponse:
     """Clone a routing policy into an inactive draft for safe editing."""
-    source = await db.get(RoutingPolicy, policy_id)
-    if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    source = await get_policy_or_404(db, policy_id)
 
     clone = RoutingPolicy(
         name=request.name or f"{source.name} draft",
@@ -284,12 +265,7 @@ async def update_routing_policy(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RoutingPolicyResponse:
     """Update a routing policy."""
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    policy = await get_policy_or_404(db, policy_id)
 
     payload = request.model_dump(exclude_unset=True)
     change_note = request.change_note
@@ -343,12 +319,7 @@ async def delete_routing_policy(
     change_note: str | None = None,
 ) -> None:
     """Delete a routing policy."""
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
+    policy = await get_policy_or_404(db, policy_id)
 
     bump_policy_revision(policy)
     record_policy_revision(
