@@ -10,29 +10,12 @@ from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._pricing_models import PricingResponse, SetPricingRequest
 from gateway.models.entities import ModelPricing
 from gateway.services.pricing_service import (
-    legacy_pricing_model_ref,
+    candidate_pricing_model_refs,
     normalize_effective_at,
     normalized_pricing_model_ref,
-    pricing_model_ref,
-    split_pricing_model_ref,
 )
 
 router = APIRouter(prefix="/v1/pricing", tags=["pricing"])
-
-
-def _candidate_model_keys(raw_key: str) -> list[str]:
-    """Return possible stored keys for a provided selector."""
-
-    candidates = [raw_key]
-    try:
-        provider, model_name = split_pricing_model_ref(raw_key)
-    except ValueError:
-        return candidates
-
-    for key in (pricing_model_ref(provider, model_name), legacy_pricing_model_ref(provider, model_name)):
-        if key not in candidates:
-            candidates.append(key)
-    return candidates
 
 
 async def _pricing_rows(
@@ -69,7 +52,7 @@ async def _pricing_rows_or_404(
     effective_at: datetime | None = None,
     limit: int | None = None,
 ) -> list[ModelPricing]:
-    rows = await _pricing_rows(db, _candidate_model_keys(model_key), *criteria, limit=limit)
+    rows = await _pricing_rows(db, candidate_pricing_model_refs(model_key), *criteria, limit=limit)
     if not rows:
         raise _pricing_not_found(model_key, effective_at)
     return rows

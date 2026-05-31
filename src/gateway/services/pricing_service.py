@@ -30,6 +30,21 @@ def normalized_pricing_model_ref(model_ref: str) -> str:
     return pricing_model_ref(provider, model)
 
 
+def candidate_pricing_model_refs(model_ref: str) -> list[str]:
+    """Return possible stored pricing keys for a provided model reference."""
+
+    candidates = [model_ref]
+    try:
+        provider, model = split_pricing_model_ref(model_ref)
+    except ValueError:
+        return candidates
+
+    for key in (pricing_model_ref(provider, model), legacy_pricing_model_ref(provider, model)):
+        if key not in candidates:
+            candidates.append(key)
+    return candidates
+
+
 def input_metered_cost(
     pricing: ModelPricing,
     *,

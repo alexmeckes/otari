@@ -1,9 +1,11 @@
+from contextlib import AbstractContextManager, nullcontext
 from unittest.mock import patch
 
 import pytest
 
 from gateway.models.entities import ModelPricing
 from gateway.services.pricing_service import (
+    candidate_pricing_model_refs,
     input_metered_cost,
     legacy_pricing_model_ref,
     log_missing_pricing,
@@ -42,6 +44,25 @@ def test_split_pricing_model_ref_returns_provider_value_and_model() -> None:
 def test_normalized_pricing_model_ref_uses_colon_separator() -> None:
     with pytest.warns(DeprecationWarning, match="provider/model"):
         assert normalized_pricing_model_ref("openai/gpt-4o") == "openai:gpt-4o"
+
+
+@pytest.mark.parametrize(
+    ("model_ref", "expected", "warning_context"),
+    [
+        ("openai:gpt-4o", ["openai:gpt-4o", "openai/gpt-4o"], nullcontext()),
+        ("openai/gpt-4o", ["openai/gpt-4o", "openai:gpt-4o"], pytest.warns(DeprecationWarning, match="provider/model")),
+        ("gpt-4o", ["gpt-4o"], nullcontext()),
+    ],
+)
+def test_candidate_pricing_model_refs(
+    model_ref: str,
+    expected: list[str],
+    warning_context: AbstractContextManager[object],
+) -> None:
+    with warning_context:
+        candidates = candidate_pricing_model_refs(model_ref)
+
+    assert candidates == expected
 
 
 def test_log_missing_pricing_uses_standard_warning() -> None:
