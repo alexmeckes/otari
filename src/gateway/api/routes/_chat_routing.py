@@ -186,27 +186,21 @@ async def run_standalone_routing_plan(
         except BaseException as exc:
             _retryable, error_class = classify_upstream_error(exc)
             last_exc = exc
-            await log_usage(
+            await _record_routing_attempt_error(
                 db=db,
                 log_writer=log_writer,
+                plan=plan,
                 api_key_id=api_key_id,
-                model=candidate.provider_model,
-                provider=candidate.provider,
-                endpoint=trace_endpoint,
                 user_id=user_id,
-                project_id=plan.project_id,
-                tags=plan.tags,
-                error=str(exc),
+                candidate=candidate,
+                attempts=attempts,
+                attempt_record=attempt_record,
+                started_at=started_at,
+                exc=exc,
+                error_class=error_class,
+                final=False,
+                trace_endpoint=trace_endpoint,
             )
-            attempt_record.update(
-                {
-                    "status": "error",
-                    "error_class": error_class,
-                    "error_message": str(exc),
-                    "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
-                }
-            )
-            attempts.append(attempt_record)
             logger.warning(
                 "Routed provider call failed policy_id=%s provider=%s model=%s error_class=%s error=%s",
                 plan.policy.policy_id,
@@ -247,13 +241,7 @@ async def run_standalone_routing_plan(
             selected_candidate=candidate,
             endpoint=trace_endpoint,
         )
-        response.headers["X-Route-Trace-ID"] = trace_id
-        response.headers["X-Routing-Policy-ID"] = plan.policy.policy_id
-        response.headers["X-Routed-Model"] = candidate.model
-        response.headers["X-Routing-Strategy"] = plan.strategy
-        response.headers["X-Routing-Tier"] = plan.target_tier
-        response.headers["X-Routing-Fallback-Enabled"] = str(plan.fallback_enabled).lower()
-        response.headers["X-Routing-Policy-Source"] = plan.policy_source
+        _set_routing_response_headers(response=response, plan=plan, trace_id=trace_id, routed_model=candidate.model)
         if rate_limit_info:
             for key, value in rate_limit_headers(rate_limit_info).items():
                 response.headers[key] = value
@@ -270,12 +258,7 @@ async def run_standalone_routing_plan(
         selected_candidate=None,
         endpoint=trace_endpoint,
     )
-    response.headers["X-Route-Trace-ID"] = trace_id
-    response.headers["X-Routing-Policy-ID"] = plan.policy.policy_id
-    response.headers["X-Routing-Strategy"] = plan.strategy
-    response.headers["X-Routing-Tier"] = plan.target_tier
-    response.headers["X-Routing-Fallback-Enabled"] = str(plan.fallback_enabled).lower()
-    response.headers["X-Routing-Policy-Source"] = plan.policy_source
+    _set_routing_response_headers(response=response, plan=plan, trace_id=trace_id)
 
     if last_exc is not None and isinstance(last_exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
         raise HTTPException(
@@ -286,6 +269,23 @@ async def run_standalone_routing_plan(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail="All routed upstream providers failed",
     ) from last_exc
+
+
+def _set_routing_response_headers(
+    *,
+    response: Response,
+    plan: RoutingPlan,
+    trace_id: str,
+    routed_model: str | None = None,
+) -> None:
+    response.headers["X-Route-Trace-ID"] = trace_id
+    response.headers["X-Routing-Policy-ID"] = plan.policy.policy_id
+    response.headers["X-Routing-Strategy"] = plan.strategy
+    response.headers["X-Routing-Tier"] = plan.target_tier
+    response.headers["X-Routing-Fallback-Enabled"] = str(plan.fallback_enabled).lower()
+    response.headers["X-Routing-Policy-Source"] = plan.policy_source
+    if routed_model is not None:
+        response.headers["X-Routed-Model"] = routed_model
 
 
 async def _record_routing_attempt_error(
