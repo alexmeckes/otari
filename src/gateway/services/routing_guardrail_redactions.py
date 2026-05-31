@@ -5,8 +5,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.services.routing_config_values import bool_config, dict_or_empty, string_list
-from gateway.services.routing_guardrail_helpers import PII_PATTERNS, guardrails_config, named_patterns
+from gateway.services.routing_config_values import bool_config, dict_or_empty
+from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
 
 def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -22,15 +22,11 @@ def _redaction_rules(config: Mapping[str, Any]) -> list[tuple[str, str, re.Patte
     redactions = _redactions_config(config)
     rules: list[tuple[str, str, re.Pattern[str]]] = []
 
-    pii_config = redactions.get("pii")
-    pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
-    if pii_enabled:
-        type_config = pii_config.get("types") if isinstance(pii_config, dict) else redactions.get("pii_types")
-        pii_types = string_list(type_config) or sorted(PII_PATTERNS)
-        for pii_type in pii_types:
-            pattern = PII_PATTERNS.get(pii_type)
-            if pattern is not None:
-                rules.append(("pii", pii_type, pattern))
+    for pii_type, pattern in pii_patterns_from_config(
+        redactions.get("pii"),
+        fallback_types=redactions.get("pii_types"),
+    ):
+        rules.append(("pii", pii_type, pattern))
 
     for name, pattern in named_patterns(redactions.get("patterns")):
         rules.append(("pattern", name, pattern))

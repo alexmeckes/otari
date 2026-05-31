@@ -9,10 +9,10 @@ from gateway.services import routing_guardrail_external as _routing_guardrail_ex
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
 from gateway.services.routing_config_values import bool_config, string_list
 from gateway.services.routing_guardrail_helpers import (
-    PII_PATTERNS,
     guardrail_violation,
     guardrails_config,
     named_patterns,
+    pii_patterns_from_config,
 )
 from gateway.services.routing_request_analysis import jsonable_text
 
@@ -209,15 +209,9 @@ async def evaluate_guardrails(
         if pattern.search(request_text):
             violations.append(guardrail_violation("blocked_pattern", name))
 
-    pii_config = guardrails.get("pii")
-    pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
-    if pii_enabled:
-        type_config = pii_config.get("types") if isinstance(pii_config, dict) else None
-        pii_types = string_list(type_config) or sorted(PII_PATTERNS)
-        for pii_type in pii_types:
-            pii_pattern = PII_PATTERNS.get(pii_type)
-            if pii_pattern is not None and pii_pattern.search(request_text):
-                violations.append(guardrail_violation("pii", pii_type))
+    for pii_type, pii_pattern in pii_patterns_from_config(guardrails.get("pii")):
+        if pii_pattern.search(request_text):
+            violations.append(guardrail_violation("pii", pii_type))
 
     injection_config = guardrails.get("prompt_injection")
     injection_enabled = bool_config(

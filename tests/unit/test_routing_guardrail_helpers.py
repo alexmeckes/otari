@@ -2,6 +2,7 @@ from gateway.services.routing_guardrail_helpers import (
     guardrail_violation,
     guardrails_config,
     named_patterns,
+    pii_patterns_from_config,
     string_list,
 )
 
@@ -40,3 +41,21 @@ def test_named_patterns_skips_invalid_regex() -> None:
 
 def test_guardrail_violation_shape() -> None:
     assert guardrail_violation("pii", "email") == {"type": "pii", "rule": "email"}
+
+
+def test_pii_patterns_from_config_returns_enabled_types() -> None:
+    patterns = pii_patterns_from_config({"enabled": True, "types": ["email", "missing"]})
+
+    assert [name for name, _ in patterns] == ["email"]
+    assert patterns[0][1].search("ada@example.com")
+
+
+def test_pii_patterns_from_config_uses_fallback_types_for_boolean_config() -> None:
+    patterns = pii_patterns_from_config(True, fallback_types=["ssn"])
+
+    assert [name for name, _ in patterns] == ["ssn"]
+    assert patterns[0][1].search("123-45-6789")
+
+
+def test_pii_patterns_from_config_returns_empty_when_disabled() -> None:
+    assert pii_patterns_from_config({"enabled": False, "types": ["email"]}) == []
