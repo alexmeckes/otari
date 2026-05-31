@@ -37,6 +37,7 @@ _matching_tag_budgets = _budget_tags.matching_tag_budgets
 _cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
 calculate_next_reset = _budget_periods.calculate_next_reset
 _as_utc = _budget_periods.as_utc
+_budget_reset_due = _budget_periods.budget_reset_due
 
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
@@ -268,8 +269,7 @@ async def validate_user_budget(
         return user
 
     now = datetime.now(UTC)
-    next_budget_reset_at = _as_utc(user.next_budget_reset_at)
-    if next_budget_reset_at and now >= next_budget_reset_at:
+    if _budget_reset_due(user.next_budget_reset_at, now):
         if normalized_strategy == "cas":
             user = await _cas_reset_user_budget(db, user, budget, now)
         else:
@@ -326,8 +326,7 @@ async def validate_project_budget(
         return project
 
     now = datetime.now(UTC)
-    next_budget_reset_at = _as_utc(project.next_budget_reset_at)
-    if next_budget_reset_at and now >= next_budget_reset_at:
+    if _budget_reset_due(project.next_budget_reset_at, now):
         if normalized_strategy == "cas":
             project = await _cas_reset_project_budget(db, project, budget, now)
         else:

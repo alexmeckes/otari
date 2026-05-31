@@ -14,7 +14,7 @@ from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.services.budget_alerts import record_budget_alerts
-from gateway.services.budget_periods import as_utc, budget_period_window
+from gateway.services.budget_periods import budget_period_window, budget_reset_due
 from gateway.services.budget_reset_logs import new_budget_reset_log
 
 TAG_BUDGET_SCOPE = "tag"
@@ -162,8 +162,7 @@ async def validate_tag_budgets(
                 detail=f"Budget group '{budget.budget_id}' is blocked",
             )
 
-        next_budget_reset_at = as_utc(budget.next_budget_reset_at)
-        if next_budget_reset_at and now >= next_budget_reset_at:
+        if budget_reset_due(budget.next_budget_reset_at, now):
             if normalized_strategy == "cas":
                 budget = await cas_reset_tag_budget(db, budget, now)
             else:

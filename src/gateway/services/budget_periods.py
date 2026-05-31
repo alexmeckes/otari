@@ -21,3 +21,8 @@ def as_utc(value: datetime | None) -> datetime | None:
     if value is None or value.tzinfo is not None:
         return value
     return value.replace(tzinfo=UTC)
+
+
+def budget_reset_due(next_reset_at: datetime | None, now: datetime) -> bool:
+    normalized_next_reset_at = as_utc(next_reset_at)
+    return normalized_next_reset_at is not None and now >= normalized_next_reset_at
