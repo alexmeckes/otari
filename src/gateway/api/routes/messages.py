@@ -150,8 +150,7 @@ async def _log_message_usage(
     db: AsyncSession,
     log_writer: LogWriter,
     message_context: MessageRequestContext,
-    model: str,
-    provider: Any,
+    provider_call_context: MessageProviderCallContext,
     usage_data: CompletionUsage | None = None,
     error: str | None = None,
 ) -> None:
@@ -159,8 +158,8 @@ async def _log_message_usage(
         db=db,
         log_writer=log_writer,
         api_key_id=message_context.api_key_id,
-        model=model,
-        provider=provider,
+        model=provider_call_context.model,
+        provider=provider_call_context.provider,
         endpoint=_MESSAGES_ENDPOINT,
         user_id=message_context.user_id,
         usage_override=usage_data,
@@ -196,8 +195,7 @@ def _message_streaming_response(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=provider_call_context.model,
-            provider=provider_call_context.provider,
+            provider_call_context=provider_call_context,
             usage_data=usage_data,
         )
 
@@ -206,8 +204,7 @@ def _message_streaming_response(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=provider_call_context.model,
-            provider=provider_call_context.provider,
+            provider_call_context=provider_call_context,
             error=error,
         )
 
@@ -242,8 +239,7 @@ async def _message_response_payload(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=provider_call_context.model,
-            provider=provider_call_context.provider,
+            provider_call_context=provider_call_context,
             usage_data=usage_data,
         )
 
@@ -263,8 +259,7 @@ async def _log_and_raise_message_provider_error(
         db=db,
         log_writer=log_writer,
         message_context=message_context,
-        model=provider_call_context.model,
-        provider=provider_call_context.provider,
+        provider_call_context=provider_call_context,
         error=str(error),
     )
     logger.error(
