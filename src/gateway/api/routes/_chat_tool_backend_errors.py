@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException, status
 
+from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
@@ -31,6 +32,22 @@ def chat_tool_backend_failure_exception(
     exc: SandboxNotReachableError | WebSearchNotReachableError,
 ) -> HTTPException:
     failure = chat_tool_backend_failure(exc)
+    return HTTPException(
+        status_code=failure.status_code,
+        detail=failure.detail,
+    )
+
+
+def chat_tool_iteration_cap_failure(exc: MaxToolIterationsExceeded) -> ChatToolBackendFailure:
+    return ChatToolBackendFailure(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=str(exc),
+        error_class="max_tool_iterations",
+    )
+
+
+def chat_tool_iteration_cap_exception(exc: MaxToolIterationsExceeded) -> HTTPException:
+    failure = chat_tool_iteration_cap_failure(exc)
     return HTTPException(
         status_code=failure.status_code,
         detail=failure.detail,

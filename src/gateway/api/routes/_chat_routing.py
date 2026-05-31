@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_provider_errors import is_provider_timeout
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure
+from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure, chat_tool_iteration_cap_failure
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
 from gateway.core.config import GatewayConfig
@@ -179,13 +179,14 @@ async def run_standalone_routing_plan(
                 log_args=(candidate.model, exc),
             )
         except MaxToolIterationsExceeded as exc:
+            failure = chat_tool_iteration_cap_failure(exc)
             await _raise_final_routing_attempt_error(
                 execution=execution,
                 attempt=attempt,
                 exc=exc,
-                error_class="max_tool_iterations",
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=str(exc),
+                error_class=failure.error_class,
+                status_code=failure.status_code,
+                detail=failure.detail,
                 log=logger.warning,
                 log_message="Tool loop iteration cap hit (routed): cap=%d",
                 log_args=(max_tool_iterations,),

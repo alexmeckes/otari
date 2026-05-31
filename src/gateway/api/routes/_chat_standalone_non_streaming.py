@@ -3,13 +3,16 @@ from typing import Any
 
 from any_llm import AnyLLM
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
-from fastapi import HTTPException, Response, status
+from fastapi import HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
-from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
+from gateway.api.routes._chat_tool_backend_errors import (
+    chat_tool_backend_failure_exception,
+    chat_tool_iteration_cap_exception,
+)
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
 from gateway.core.config import GatewayConfig
@@ -105,10 +108,7 @@ async def run_standalone_non_streaming_chat(
                 tags=request.tags,
                 error=str(exc),
             )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
+        raise chat_tool_iteration_cap_exception(exc) from exc
     except Exception as exc:
         if db is not None:
             await log_usage(
