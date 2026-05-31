@@ -2,22 +2,20 @@
 
 from typing import Annotated, Any
 
-from any_llm import AnyLLM, aimage_generation
+from any_llm import aimage_generation
 from any_llm.types.image import ImagesResponse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_openai_user_id, with_optional_kwargs
+from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._image_models import ImageGenerationRequest
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._usage import apply_rate_limit_headers, log_and_raise_provider_error, make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
-from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
-from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["images"])
 
@@ -41,29 +39,21 @@ async def create_image(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_openai_user_id(
-        user_id_from_request=request.user,
-        api_key=api_key,
-        is_master_key=is_master_key,
+    context = await resolve_openai_provider_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=request.user,
+        db=db,
+        config=config,
+        model=request.model,
     )
-
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    await validate_user_request_budget(db, user_id, request.model, strategy=config.budget_strategy)
-
-    provider, model = AnyLLM.split_model_provider(request.model)
-
-    provider_kwargs = get_provider_kwargs(config, provider)
 
     image_kwargs = with_optional_kwargs(
         {
-            "model": model,
+            "model": context.model,
             "prompt": request.prompt,
-            "provider": provider,
-            **provider_kwargs,
+            "provider": context.provider,
+            **context.provider_kwargs,
         },
         n=request.n,
         size=request.size,
@@ -78,10 +68,10 @@ async def create_image(
         n_images = len(result.data) if result.data else (request.n or 1)
 
         usage_log = make_usage_log(
-            api_key_id=api_key_id,
-            user_id=user_id,
-            model=model,
-            provider=provider,
+            api_key_id=context.api_key_id,
+            user_id=context.user_id,
+            model=context.model,
+            provider=context.provider,
             endpoint=_IMAGE_GENERATIONS_ENDPOINT,
             prompt_tokens=0,
             completion_tokens=0,
@@ -89,12 +79,12 @@ async def create_image(
         )
 
         # Image pricing: repurpose input_price_per_million as price-per-image
-        pricing = await find_model_pricing(db, provider, model, as_of=usage_log.timestamp)
+        pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
         if pricing:
             cost = n_images * pricing.input_price_per_million
             usage_log.cost = cost
         else:
-            log_missing_pricing(provider, model)
+            log_missing_pricing(context.provider, context.model)
 
         await log_writer.put(usage_log)
 
@@ -103,14 +93,14 @@ async def create_image(
     except Exception as e:
         await log_and_raise_provider_error(
             log_writer,
-            api_key_id=api_key_id,
-            user_id=user_id,
-            model=model,
-            provider=provider,
+            api_key_id=context.api_key_id,
+            user_id=context.user_id,
+            model=context.model,
+            provider=context.provider,
             endpoint=_IMAGE_GENERATIONS_ENDPOINT,
             error=e,
         )
 
-    apply_rate_limit_headers(response, rate_limit_info)
+    apply_rate_limit_headers(response, context.rate_limit_info)
 
     return result.model_dump()

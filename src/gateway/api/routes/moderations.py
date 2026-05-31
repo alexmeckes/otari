@@ -2,14 +2,13 @@
 
 from typing import Annotated, Any
 
-from any_llm import AnyLLM, amoderation
+from any_llm import amoderation
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._moderation_models import ModerationRequest
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._usage import (
     apply_rate_limit_headers,
     log_and_raise_provider_error,
@@ -19,10 +18,8 @@ from gateway.api.routes._usage import (
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
-from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.pricing_service import find_model_pricing
-from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.types.moderation import ModerationResponse
 
 # Locked phrasing — cross-SDK error contract. Do not reword.
@@ -51,46 +48,38 @@ async def create_moderation(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_openai_user_id(
-        user_id_from_request=request.user,
-        api_key=api_key,
-        is_master_key=is_master_key,
+    context = await resolve_openai_provider_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=request.user,
+        db=db,
+        config=config,
+        model=request.model,
     )
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    await validate_user_request_budget(db, user_id, request.model, strategy=config.budget_strategy)
-
-    provider, model = AnyLLM.split_model_provider(request.model)
-
-    provider_kwargs = get_provider_kwargs(config, provider)
-
     moderation_kwargs: dict[str, Any] = {
-        "model": model,
+        "model": context.model,
         "input": request.input,
-        "provider": provider,
+        "provider": context.provider,
         "include_raw": include_raw,
-        **provider_kwargs,
+        **context.provider_kwargs,
     }
 
     try:
         result = await amoderation(**moderation_kwargs)
 
         usage_log = make_usage_log(
-            api_key_id=api_key_id,
-            user_id=user_id,
-            model=model,
-            provider=provider,
+            api_key_id=context.api_key_id,
+            user_id=context.user_id,
+            model=context.model,
+            provider=context.provider,
             endpoint=_MODERATIONS_ENDPOINT,
             prompt_tokens=None,
             completion_tokens=0,
             total_tokens=None,
         )
 
-        pricing = await find_model_pricing(db, provider, model, as_of=usage_log.timestamp)
+        pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
         if pricing and pricing.input_price_per_million:
             # Flat per-request rate stored as input_price_per_million (moderation has no token usage).
             usage_log.cost = pricing.input_price_per_million / 1_000_000
@@ -106,10 +95,10 @@ async def create_moderation(
     except NotImplementedError as e:
         await log_usage_error(
             log_writer,
-            api_key_id=api_key_id,
-            user_id=user_id,
-            model=model,
-            provider=provider,
+            api_key_id=context.api_key_id,
+            user_id=context.user_id,
+            model=context.model,
+            provider=context.provider,
             endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
@@ -118,7 +107,7 @@ async def create_moderation(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             ) from e
-        logger.error("Provider implementation gap for %s:%s: %s", provider, model, e)
+        logger.error("Provider implementation gap for %s:%s: %s", context.provider, context.model, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="The request could not be completed by the provider",
@@ -126,14 +115,14 @@ async def create_moderation(
     except Exception as e:
         await log_and_raise_provider_error(
             log_writer,
-            api_key_id=api_key_id,
-            user_id=user_id,
-            model=model,
-            provider=provider,
+            api_key_id=context.api_key_id,
+            user_id=context.user_id,
+            model=context.model,
+            provider=context.provider,
             endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
 
-    apply_rate_limit_headers(response, rate_limit_info)
+    apply_rate_limit_headers(response, context.rate_limit_info)
 
     return result
