@@ -3,8 +3,15 @@ from typing import Any, cast
 
 import pytest
 from any_llm.types.completion import CompletionUsage
-from any_llm.types.messages import MessageDelta, MessageDeltaEvent, MessageDeltaUsage
-from fastapi import HTTPException
+from any_llm.types.messages import (
+    MessageDelta,
+    MessageDeltaEvent,
+    MessageDeltaUsage,
+    MessageResponse,
+    MessageUsage,
+    TextBlock,
+)
+from fastapi import HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
@@ -25,6 +32,18 @@ def _messages_request(metadata: dict[str, Any] | None = None) -> MessagesRequest
 
 def _api_key(*, user_id: str | None = "api-user") -> APIKey:
     return cast(APIKey, SimpleNamespace(id="key-1", user_id=user_id))
+
+
+def _message_response() -> MessageResponse:
+    return MessageResponse(
+        id="msg_test123",
+        type="message",
+        role="assistant",
+        content=[TextBlock(type="text", text="Hello!")],
+        model="claude-3-5-sonnet",
+        stop_reason="end_turn",
+        usage=MessageUsage(input_tokens=10, output_tokens=5),
+    )
 
 
 def test_resolve_message_request_context_uses_master_key_metadata_user() -> None:
@@ -102,6 +121,59 @@ async def test_log_message_usage_forwards_success_fields(monkeypatch: pytest.Mon
             "endpoint": "/v1/messages",
             "user_id": "user-1",
             "usage_override": usage,
+            "error": None,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_message_response_payload_logs_usage_sets_headers_and_serializes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    db = cast(AsyncSession, object())
+    log_writer = cast(LogWriter, object())
+    response = Response()
+    message_context = messages.MessageRequestContext(api_key_id="key-1", user_id="user-1")
+
+    async def fake_log_usage(**kwargs: Any) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(messages, "log_usage", fake_log_usage)
+
+    payload = await messages._message_response_payload(
+        result=_message_response(),
+        response=response,
+        db=db,
+        log_writer=log_writer,
+        message_context=message_context,
+        model="claude-3-5-sonnet",
+        provider="anthropic",
+        rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
+    )
+
+    assert response.headers["X-RateLimit-Limit"] == "10"
+    assert response.headers["X-RateLimit-Remaining"] == "8"
+    assert response.headers["X-RateLimit-Reset"] == "123"
+    assert payload == {
+        "id": "msg_test123",
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": "Hello!"}],
+        "model": "claude-3-5-sonnet",
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    }
+    assert calls == [
+        {
+            "db": db,
+            "log_writer": log_writer,
+            "api_key_id": "key-1",
+            "model": "claude-3-5-sonnet",
+            "provider": "anthropic",
+            "endpoint": "/v1/messages",
+            "user_id": "user-1",
+            "usage_override": CompletionUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
             "error": None,
         }
     ]

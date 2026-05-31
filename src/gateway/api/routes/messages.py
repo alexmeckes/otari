@@ -182,6 +182,32 @@ def _message_streaming_response(
     )
 
 
+async def _message_response_payload(
+    *,
+    result: MessageResponse,
+    response: Response,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    message_context: MessageRequestContext,
+    model: str,
+    provider: Any,
+    rate_limit_info: RateLimitInfo | None,
+) -> dict[str, Any]:
+    usage_data = _message_response_usage(result)
+    if usage_data:
+        await _log_message_usage(
+            db=db,
+            log_writer=log_writer,
+            message_context=message_context,
+            model=model,
+            provider=provider,
+            usage_data=usage_data,
+        )
+
+    apply_rate_limit_headers(response, rate_limit_info)
+    return result.model_dump(exclude_none=True)
+
+
 @router.post("/messages", response_model=None)
 async def create_message(
     raw_request: Request,
@@ -222,17 +248,16 @@ async def create_message(
             )
 
         result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
-
-        usage_data = _message_response_usage(result)
-        if usage_data:
-            await _log_message_usage(
-                db=db,
-                log_writer=log_writer,
-                message_context=message_context,
-                model=model,
-                provider=provider,
-                usage_data=usage_data,
-            )
+        return await _message_response_payload(
+            result=result,
+            response=response,
+            db=db,
+            log_writer=log_writer,
+            message_context=message_context,
+            model=model,
+            provider=provider,
+            rate_limit_info=rate_limit_info,
+        )
 
     except HTTPException:
         raise
@@ -251,7 +276,3 @@ async def create_message(
             _PROVIDER_ERROR,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         ) from e
-
-    apply_rate_limit_headers(response, rate_limit_info)
-
-    return result.model_dump(exclude_none=True)
