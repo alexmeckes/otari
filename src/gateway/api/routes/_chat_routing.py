@@ -269,13 +269,7 @@ async def _record_routing_attempt_success(
     attempt: _RoutingAttemptContext,
     completion: ChatCompletion,
 ) -> None:
-    attempt.record.update(
-        {
-            "status": "success",
-            "duration_ms": round((time.perf_counter() - attempt.started_at) * 1000, 2),
-        }
-    )
-    attempt.attempts.append(attempt.record)
+    _finalize_routing_attempt_record(attempt, status="success")
     await log_usage(
         db=execution.db,
         log_writer=execution.log_writer,
@@ -352,15 +346,12 @@ async def _record_routing_attempt_error(
         tags=execution.plan.tags,
         error=str(exc),
     )
-    attempt.record.update(
-        {
-            "status": "error",
-            "error_class": error_class,
-            "error_message": str(exc),
-            "duration_ms": round((time.perf_counter() - attempt.started_at) * 1000, 2),
-        }
+    _finalize_routing_attempt_record(
+        attempt,
+        status="error",
+        error_class=error_class,
+        error_message=str(exc),
     )
-    attempt.attempts.append(attempt.record)
     if not final:
         return None
     return await record_route_trace(
@@ -374,3 +365,23 @@ async def _record_routing_attempt_error(
         selected_candidate=attempt.candidate,
         endpoint=execution.trace_endpoint,
     )
+
+
+def _finalize_routing_attempt_record(
+    attempt: _RoutingAttemptContext,
+    *,
+    status: str,
+    error_class: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    attempt.record.update(
+        {
+            "status": status,
+            "duration_ms": round((time.perf_counter() - attempt.started_at) * 1000, 2),
+        }
+    )
+    if error_class is not None:
+        attempt.record["error_class"] = error_class
+    if error_message is not None:
+        attempt.record["error_message"] = error_message
+    attempt.attempts.append(attempt.record)
