@@ -13,7 +13,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing
 from gateway.types.moderation import ModerationResponse
 
 # Locked phrasing — cross-SDK error contract. Do not reword.
@@ -63,14 +62,14 @@ async def create_moderation(
             total_tokens=None,
         )
 
-        pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
-        if pricing and pricing.input_price_per_million:
-            # Flat per-request rate stored as input_price_per_million (moderation has no token usage).
-            usage_log.cost = pricing.input_price_per_million / 1_000_000
-        else:
-            usage_log.cost = 0.0
-            # Intentionally do NOT emit "No pricing configured" warning for
-            # moderations (free at most providers; keeps logs clean).
+        # Moderation has no token usage; missing pricing is intentionally treated as free.
+        await context.apply_input_metered_cost(
+            db,
+            usage_log,
+            units=1,
+            missing_cost=0.0,
+            warn_missing_pricing=False,
+        )
 
         await log_writer.put(usage_log)
 

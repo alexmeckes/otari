@@ -113,12 +113,33 @@ class OpenAIProviderRequestContext:
         token_count: int | None,
         require_positive_tokens: bool = False,
     ) -> None:
+        await self.apply_input_metered_cost(
+            db,
+            usage_log,
+            units=token_count,
+            require_positive_units=require_positive_tokens,
+        )
+
+    async def apply_input_metered_cost(
+        self,
+        db: AsyncSession,
+        usage_log: UsageLog,
+        *,
+        units: float | None,
+        price_divisor: float = 1_000_000,
+        require_positive_units: bool = False,
+        missing_cost: float | None = None,
+        warn_missing_pricing: bool = True,
+    ) -> None:
         pricing = await find_model_pricing(db, self.provider, self.model, as_of=usage_log.timestamp)
         if pricing:
-            if token_count is not None and (token_count or not require_positive_tokens):
-                usage_log.cost = (token_count / 1_000_000) * pricing.input_price_per_million
+            if units is not None and (units or not require_positive_units):
+                usage_log.cost = (units / price_divisor) * pricing.input_price_per_million
         else:
-            log_missing_pricing(self.provider, self.model)
+            if missing_cost is not None:
+                usage_log.cost = missing_cost
+            if warn_missing_pricing:
+                log_missing_pricing(self.provider, self.model)
 
 
 async def resolve_openai_provider_request_context(

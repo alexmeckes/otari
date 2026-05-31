@@ -187,3 +187,55 @@ async def test_provider_context_apply_input_token_cost_logs_missing_pricing(
 
     assert usage_log.cost is None
     assert calls == [("openai", "gpt-4o-mini")]
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_metered_cost_sets_scaled_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+
+    class Pricing:
+        input_price_per_million = 2.0
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
+        return Pricing()
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+
+    await _context().apply_input_metered_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        units=3,
+        price_divisor=1,
+    )
+
+    assert usage_log.cost == 6.0
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_metered_cost_uses_missing_default_without_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+    calls: list[tuple[str, str]] = []
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    def fake_log_missing_pricing(provider: str, model: str) -> None:
+        calls.append((provider, model))
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
+
+    await _context().apply_input_metered_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        units=1,
+        missing_cost=0.0,
+        warn_missing_pricing=False,
+    )
+
+    assert usage_log.cost == 0.0
+    assert calls == []

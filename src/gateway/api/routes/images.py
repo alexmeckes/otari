@@ -14,7 +14,6 @@ from gateway.api.routes._provider_context import resolve_openai_provider_request
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 
 router = APIRouter(prefix="/v1", tags=["images"])
 
@@ -68,13 +67,13 @@ async def create_image(
             total_tokens=0,
         )
 
-        # Image pricing: repurpose input_price_per_million as price-per-image
-        pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
-        if pricing:
-            cost = n_images * pricing.input_price_per_million
-            usage_log.cost = cost
-        else:
-            log_missing_pricing(context.provider, context.model)
+        # Image pricing stores price-per-image in input_price_per_million.
+        await context.apply_input_metered_cost(
+            db,
+            usage_log,
+            units=n_images,
+            price_divisor=1,
+        )
 
         await log_writer.put(usage_log)
 
