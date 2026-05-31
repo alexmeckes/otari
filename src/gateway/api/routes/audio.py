@@ -84,14 +84,7 @@ async def create_transcription(
 
     try:
         result: Transcription = await atranscription(**transcription_kwargs)
-        await log_writer.put(
-            context.usage_log(
-                endpoint=_TRANSCRIPTIONS_ENDPOINT,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-            )
-        )
+        await context.log_zero_token_usage(log_writer, endpoint=_TRANSCRIPTIONS_ENDPOINT)
 
     except HTTPException:
         raise
@@ -157,14 +150,7 @@ async def create_speech(
 
     try:
         audio_bytes: bytes = await aspeech(**speech_kwargs)
-        await log_writer.put(
-            context.usage_log(
-                endpoint=_SPEECH_ENDPOINT,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-            )
-        )
+        await context.log_zero_token_usage(log_writer, endpoint=_SPEECH_ENDPOINT)
 
     except HTTPException:
         raise

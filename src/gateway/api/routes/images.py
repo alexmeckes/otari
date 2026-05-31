@@ -60,12 +60,7 @@ async def create_image(
 
         n_images = len(result.data) if result.data else (request.n or 1)
 
-        usage_log = context.usage_log(
-            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-        )
+        usage_log = context.zero_token_usage_log(endpoint=_IMAGE_GENERATIONS_ENDPOINT)
 
         # Image pricing stores price-per-image in input_price_per_million.
         await context.apply_input_metered_cost(
