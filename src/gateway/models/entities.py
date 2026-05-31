@@ -10,6 +10,20 @@ class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
 
 
+def _dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    if copy_value:
+        return dict(value)
+    return value
+
+
+def _list_or_empty(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return value
+    return []
+
+
 class APIKey(Base):
     """API Key model for authentication and authorization."""
 
@@ -31,9 +45,7 @@ class APIKey(Base):
     route_traces = relationship("RouteTrace", back_populates="api_key", passive_deletes=True)
 
     def metadata_dict(self) -> dict[str, Any]:
-        if isinstance(self.metadata_, dict):
-            return self.metadata_
-        return {}
+        return _dict_or_empty(self.metadata_)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -79,9 +91,7 @@ class Budget(Base):
     alerts = relationship("BudgetAlert", back_populates="budget", cascade="all, delete-orphan")
 
     def match_tag_dict(self) -> dict[str, Any]:
-        if isinstance(self.match_tags, dict):
-            return self.match_tags
-        return {}
+        return _dict_or_empty(self.match_tags)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -131,9 +141,7 @@ class User(Base):
     reset_logs = relationship("BudgetResetLog", back_populates="user", passive_deletes=True)
 
     def metadata_dict(self) -> dict[str, Any]:
-        if isinstance(self.metadata_, dict):
-            return self.metadata_
-        return {}
+        return _dict_or_empty(self.metadata_)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -206,9 +214,7 @@ class RoutingPolicy(Base):
     route_traces = relationship("RouteTrace", back_populates="routing_policy", passive_deletes=True)
 
     def config_dict(self) -> dict[str, Any]:
-        if isinstance(self.config_, dict):
-            return dict(self.config_)
-        return {}
+        return _dict_or_empty(self.config_, copy_value=True)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -247,9 +253,7 @@ class RoutingPolicyRevision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     def config_dict(self) -> dict[str, Any]:
-        if isinstance(self.config_, dict):
-            return dict(self.config_)
-        return {}
+        return _dict_or_empty(self.config_, copy_value=True)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -300,9 +304,7 @@ class Project(Base):
     reset_logs = relationship("BudgetResetLog", back_populates="project", passive_deletes=True)
 
     def metadata_dict(self) -> dict[str, Any]:
-        if isinstance(self.metadata_, dict):
-            return self.metadata_
-        return {}
+        return _dict_or_empty(self.metadata_)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -358,9 +360,7 @@ class UsageLog(Base):
     project = relationship("Project", back_populates="usage_logs")
 
     def tag_dict(self) -> dict[str, Any]:
-        if isinstance(self.tags, dict):
-            return self.tags
-        return {}
+        return _dict_or_empty(self.tags)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -431,29 +431,19 @@ class RouteTrace(Base):
     routing_policy = relationship("RoutingPolicy", back_populates="route_traces")
 
     def tag_dict(self) -> dict[str, Any]:
-        if isinstance(self.tags, dict):
-            return self.tags
-        return {}
+        return _dict_or_empty(self.tags)
 
     def guardrail_dict(self) -> dict[str, Any]:
-        if isinstance(self.guardrails, dict):
-            return self.guardrails
-        return {}
+        return _dict_or_empty(self.guardrails)
 
     def context_dict(self) -> dict[str, Any]:
-        if isinstance(self.context, dict):
-            return self.context
-        return {}
+        return _dict_or_empty(self.context)
 
     def candidate_list(self) -> list[dict[str, Any]]:
-        if isinstance(self.candidates, list):
-            return self.candidates
-        return []
+        return _list_or_empty(self.candidates)
 
     def attempt_list(self) -> list[dict[str, Any]]:
-        if isinstance(self.attempts, list):
-            return self.attempts
-        return []
+        return _list_or_empty(self.attempts)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
@@ -547,9 +537,7 @@ class BudgetAlert(Base):
     budget = relationship("Budget", back_populates="alerts")
 
     def metadata_dict(self) -> dict[str, Any]:
-        if isinstance(self.metadata_, dict):
-            return self.metadata_
-        return {}
+        return _dict_or_empty(self.metadata_)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
