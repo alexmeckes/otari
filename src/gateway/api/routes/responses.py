@@ -39,6 +39,39 @@ from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL
 router = APIRouter(prefix="/v1", tags=["responses"])
 
 
+async def _run_default_routing_response(
+    *,
+    raw_request: Request,
+    response: FastAPIResponse,
+    background_tasks: BackgroundTasks,
+    request_body: ResponsesRequest,
+    db: AsyncSession,
+    config: GatewayConfig,
+    log_writer: LogWriter,
+) -> dict[str, Any] | StreamingResponse:
+    if request_body.stream:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Routing policies do not support streaming responses yet",
+        )
+    chat_request = chat_request_from_response_request(request_body)
+    chat_result = await chat_completions(
+        raw_request=raw_request,
+        response=response,
+        background_tasks=background_tasks,
+        request=chat_request,
+        db=db,
+        config=config,
+        log_writer=log_writer,
+    )
+    if isinstance(chat_result, StreamingResponse):
+        return chat_result
+    metadata = metadata_from_model_selector(chat_result.model)
+    if metadata is not None:
+        set_served_headers(response, metadata)
+    return chat_completion_to_response_payload(chat_result)
+
+
 @router.post("/responses", response_model=None)
 async def create_response(
     raw_request: Request,
@@ -52,27 +85,15 @@ async def create_response(
 ) -> dict[str, Any] | StreamingResponse:
     """OpenAI-compatible Responses endpoint."""
     if not config.is_platform_mode and request_body.model == DEFAULT_ROUTING_MODEL:
-        if request_body.stream:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Routing policies do not support streaming responses yet",
-            )
-        chat_request = chat_request_from_response_request(request_body)
-        chat_result = await chat_completions(
+        return await _run_default_routing_response(
             raw_request=raw_request,
             response=response,
             background_tasks=background_tasks,
-            request=chat_request,
+            request_body=request_body,
             db=db,
             config=config,
             log_writer=log_writer,
         )
-        if isinstance(chat_result, StreamingResponse):
-            return chat_result
-        metadata = metadata_from_model_selector(chat_result.model)
-        if metadata is not None:
-            set_served_headers(response, metadata)
-        return chat_completion_to_response_payload(chat_result)
 
     api_key, is_master_key = auth_result
     api_key_id = api_key.id if api_key else None
