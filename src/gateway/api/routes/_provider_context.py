@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 
 from any_llm import AnyLLM
 from fastapi import Request
@@ -10,10 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
-from gateway.api.routes._usage import make_usage_log
+from gateway.api.routes._usage import (
+    log_and_raise_provider_error,
+    log_usage_error,
+    make_usage_log,
+)
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
+from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 
@@ -59,6 +64,34 @@ class OpenAIProviderRequestContext:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             tags=tags,
+        )
+
+    async def log_usage_error(self, log_writer: LogWriter, *, endpoint: str, error: BaseException) -> None:
+        await log_usage_error(
+            log_writer,
+            api_key_id=self.api_key_id,
+            user_id=self.user_id,
+            model=self.model,
+            provider=self.provider,
+            endpoint=endpoint,
+            error=error,
+        )
+
+    async def log_and_raise_provider_error(
+        self,
+        log_writer: LogWriter,
+        *,
+        endpoint: str,
+        error: BaseException,
+    ) -> NoReturn:
+        await log_and_raise_provider_error(
+            log_writer,
+            api_key_id=self.api_key_id,
+            user_id=self.user_id,
+            model=self.model,
+            provider=self.provider,
+            endpoint=endpoint,
+            error=error,
         )
 
 

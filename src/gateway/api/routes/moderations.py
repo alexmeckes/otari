@@ -9,11 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._moderation_models import ModerationRequest
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
-from gateway.api.routes._usage import (
-    apply_rate_limit_headers,
-    log_and_raise_provider_error,
-    log_usage_error,
-)
+from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
@@ -82,12 +78,8 @@ async def create_moderation(
     except HTTPException:
         raise
     except NotImplementedError as e:
-        await log_usage_error(
+        await context.log_usage_error(
             log_writer,
-            api_key_id=context.api_key_id,
-            user_id=context.user_id,
-            model=context.model,
-            provider=context.provider,
             endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
@@ -102,12 +94,8 @@ async def create_moderation(
             detail="The request could not be completed by the provider",
         ) from e
     except Exception as e:
-        await log_and_raise_provider_error(
+        await context.log_and_raise_provider_error(
             log_writer,
-            api_key_id=context.api_key_id,
-            user_id=context.user_id,
-            model=context.model,
-            provider=context.provider,
             endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )

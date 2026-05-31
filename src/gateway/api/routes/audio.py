@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._audio_helpers import (
     log_audio_usage,
-    raise_audio_provider_error,
 )
 from gateway.api.routes._audio_models import AudioSpeechRequest
 from gateway.api.routes._helpers import with_optional_kwargs
@@ -98,9 +97,8 @@ async def create_transcription(
     except HTTPException:
         raise
     except Exception as e:
-        await raise_audio_provider_error(
+        await context.log_and_raise_provider_error(
             log_writer=log_writer,
-            context=context,
             endpoint=_TRANSCRIPTIONS_ENDPOINT,
             error=e,
         )
@@ -169,9 +167,8 @@ async def create_speech(
     except HTTPException:
         raise
     except Exception as e:
-        await raise_audio_provider_error(
+        await context.log_and_raise_provider_error(
             log_writer=log_writer,
-            context=context,
             endpoint=_SPEECH_ENDPOINT,
             error=e,
         )

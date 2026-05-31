@@ -1,4 +1,18 @@
+from dataclasses import dataclass, field
+
+import pytest
+from fastapi import HTTPException
+
 from gateway.api.routes._provider_context import OpenAIProviderRequestContext
+from gateway.models.entities import UsageLog
+
+
+@dataclass
+class StubLogWriter:
+    logs: list[UsageLog] = field(default_factory=list)
+
+    async def put(self, log: UsageLog) -> None:
+        self.logs.append(log)
 
 
 def _context() -> OpenAIProviderRequestContext:
@@ -41,3 +55,38 @@ def test_provider_context_usage_log_includes_identity_fields() -> None:
     assert usage_log.completion_tokens == 2
     assert usage_log.total_tokens == 3
     assert usage_log.tags == {"kind": "unit"}
+
+
+@pytest.mark.asyncio
+async def test_provider_context_log_usage_error_writes_identity_fields() -> None:
+    writer = StubLogWriter()
+
+    await _context().log_usage_error(writer, endpoint="/v1/test", error=RuntimeError("provider down"))
+
+    assert len(writer.logs) == 1
+    log = writer.logs[0]
+    assert log.api_key_id == "key-1"
+    assert log.user_id == "user-1"
+    assert log.model == "gpt-4o-mini"
+    assert log.provider == "openai"
+    assert log.endpoint == "/v1/test"
+    assert log.status == "error"
+    assert log.error_message == "provider down"
+
+
+@pytest.mark.asyncio
+async def test_provider_context_log_and_raise_provider_error_logs_then_raises() -> None:
+    writer = StubLogWriter()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _context().log_and_raise_provider_error(
+            writer,
+            endpoint="/v1/test",
+            error=RuntimeError("provider down"),
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "The request could not be completed by the provider"
+    assert len(writer.logs) == 1
+    assert writer.logs[0].status == "error"
+    assert writer.logs[0].error_message == "provider down"

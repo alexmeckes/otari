@@ -11,7 +11,7 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._embedding_models import EmbeddingRequest
 from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
-from gateway.api.routes._usage import apply_rate_limit_headers, log_and_raise_provider_error
+from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
@@ -77,12 +77,8 @@ async def create_embedding(
     except HTTPException:
         raise
     except Exception as e:
-        await log_and_raise_provider_error(
+        await context.log_and_raise_provider_error(
             log_writer,
-            api_key_id=context.api_key_id,
-            user_id=context.user_id,
-            model=context.model,
-            provider=context.provider,
             endpoint=_EMBEDDINGS_ENDPOINT,
             error=e,
         )
