@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -72,15 +73,8 @@ async def run_standalone_routing_plan(
     api_key_id: str | None,
     user_id: str | None,
     rate_limit_info: RateLimitInfo | None,
-    mcp_server_configs: list[McpServerConfig] | None,
+    tool_selection: ChatToolSelection,
     max_tool_iterations: int,
-    sandbox_tool_entry: dict[str, Any] | None,
-    sandbox_url: str | None,
-    use_sandbox: bool,
-    web_search_tool_entry: dict[str, Any] | None,
-    web_search_url: str | None,
-    use_web_search: bool,
-    remaining_user_tools: list[dict[str, Any]] | None,
     trace_endpoint: str,
     completion_fn: Callable[..., Awaitable[ChatCompletion | AsyncIterator[ChatCompletionChunk]]],
     mcp_client_pool_factory: Callable[[list[McpServerConfig]], Any],
@@ -88,8 +82,8 @@ async def run_standalone_routing_plan(
     """Execute a standalone routing plan with pre-response fallback."""
     request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
-        tools_extracted=sandbox_tool_entry is not None or web_search_tool_entry is not None,
-        remaining_user_tools=remaining_user_tools,
+        tools_extracted=tool_selection.tools_extracted,
+        remaining_user_tools=tool_selection.remaining_user_tools,
     )
     request_fields, _ = apply_guardrail_redactions(plan.policy.config_ or {}, request_fields)
     request_fields, _ = apply_context_policy(plan.policy.config_ or {}, request_fields)
@@ -114,15 +108,15 @@ async def run_standalone_routing_plan(
                 completion_kwargs=completion_kwargs,
                 completion_fn=completion_fn,
                 mcp_client_pool_factory=mcp_client_pool_factory,
-                mcp_server_configs=mcp_server_configs,
+                mcp_server_configs=request.mcp_servers,
                 max_tool_iterations=max_tool_iterations,
                 tools_header=request.tools_header,
-                use_sandbox=use_sandbox,
-                sandbox_url=sandbox_url,
-                sandbox_tool_entry=sandbox_tool_entry,
-                use_web_search=use_web_search,
-                web_search_url=web_search_url,
-                web_search_tool_entry=web_search_tool_entry,
+                use_sandbox=tool_selection.use_sandbox,
+                sandbox_url=tool_selection.sandbox_url,
+                sandbox_tool_entry=tool_selection.sandbox_tool_entry,
+                use_web_search=tool_selection.use_web_search,
+                web_search_url=tool_selection.web_search_url,
+                web_search_tool_entry=tool_selection.web_search_tool_entry,
             )
         except HTTPException:
             raise

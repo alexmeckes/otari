@@ -73,13 +73,6 @@ async def chat_completions(
         tools=request.tools,
         mcp_servers=request.mcp_servers,
     )
-    sandbox_tool_entry = tool_selection.sandbox_tool_entry
-    sandbox_url = tool_selection.sandbox_url
-    use_sandbox = tool_selection.use_sandbox
-    web_search_tool_entry = tool_selection.web_search_tool_entry
-    web_search_url = tool_selection.web_search_url
-    use_web_search = tool_selection.use_web_search
-    remaining_user_tools = tool_selection.remaining_user_tools
 
     routing_plan = await resolve_standalone_chat_routing_plan(
         request=request,
@@ -132,7 +125,6 @@ async def chat_completions(
     # subsequent failures terminate the request — we never swap providers
     # between tool-use rounds.
     # ------------------------------------------------------------------
-    mcp_server_configs = request.mcp_servers
     max_tool_iterations = min(
         request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
         MAX_TOOL_ITERATIONS_CAP,
@@ -164,15 +156,8 @@ async def chat_completions(
             api_key_id=api_key_id,
             user_id=user_id,
             rate_limit_info=rate_limit_info,
-            mcp_server_configs=mcp_server_configs,
+            tool_selection=tool_selection,
             max_tool_iterations=max_tool_iterations,
-            sandbox_tool_entry=sandbox_tool_entry,
-            sandbox_url=sandbox_url,
-            use_sandbox=use_sandbox,
-            web_search_tool_entry=web_search_tool_entry,
-            web_search_url=web_search_url,
-            use_web_search=use_web_search,
-            remaining_user_tools=remaining_user_tools,
             trace_endpoint=request.route_trace_endpoint,
             completion_fn=acompletion,
             mcp_client_pool_factory=MCPClientPool,
