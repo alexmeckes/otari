@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from gateway.api.routes._response_datetime import datetime_isoformat
+from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket
 from gateway.models.entities import RouteTrace
 from gateway.services.routing_trace_attempts import attempt_duration_ms
 
@@ -106,23 +107,11 @@ def _trace_latency_ms(trace: RouteTrace) -> float | None:
 
 
 def _new_bucket(key: str) -> dict[str, Any]:
-    return {
-        "key": key,
-        "count": 0,
-        "success_count": 0,
-        "error_count": 0,
-        "estimated_cost": 0.0,
-        "latency_total_ms": 0.0,
-        "latency_count": 0,
-    }
+    return new_status_bucket(key, estimated_cost=0.0, latency_total_ms=0.0, latency_count=0)
 
 
 def _add_trace_to_bucket(bucket: dict[str, Any], trace: RouteTrace, latency_ms: float | None) -> None:
-    bucket["count"] += 1
-    if trace.status == "success":
-        bucket["success_count"] += 1
-    elif trace.status == "error":
-        bucket["error_count"] += 1
+    add_status_counts(bucket, trace.status)
     if trace.estimated_cost:
         bucket["estimated_cost"] += trace.estimated_cost
     if latency_ms is not None:

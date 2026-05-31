@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from gateway.api.deps import _as_utc
 from gateway.api.routes._response_datetime import datetime_isoformat
+from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket
 from gateway.models.entities import UsageLog
 
 
@@ -98,24 +99,11 @@ def matches_tag_filter(log: UsageLog, tag_key: str | None, tag_value: str | None
 
 
 def _new_bucket(key: str) -> dict[str, Any]:
-    return {
-        "key": key,
-        "count": 0,
-        "success_count": 0,
-        "error_count": 0,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "total_tokens": 0,
-        "cost": 0.0,
-    }
+    return new_status_bucket(key, prompt_tokens=0, completion_tokens=0, total_tokens=0, cost=0.0)
 
 
 def _add_log_to_bucket(bucket: dict[str, Any], log: UsageLog) -> None:
-    bucket["count"] += 1
-    if log.status == "success":
-        bucket["success_count"] += 1
-    elif log.status == "error":
-        bucket["error_count"] += 1
+    add_status_counts(bucket, log.status)
     bucket["prompt_tokens"] += log.prompt_tokens or 0
     bucket["completion_tokens"] += log.completion_tokens or 0
     bucket["total_tokens"] += log.total_tokens or 0
