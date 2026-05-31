@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from gateway.api.routes._usage_models import usage_log_tags
 from gateway.models.entities import UsageLog, User
 
 
@@ -93,5 +92,5 @@ class UsageLogResponse(BaseModel):
             cost=log.cost,
             status=log.status,
             error_message=log.error_message,
-            tags=usage_log_tags(log),
+            tags=log.tag_dict(),
         )

@@ -44,7 +44,7 @@ def _budget_alert_metadata(log: UsageLog) -> dict[str, object]:
         "model": log.model,
         "provider": log.provider,
         "status": log.status,
-        "tags": log.tags if isinstance(log.tags, dict) else {},
+        "tags": log.tag_dict(),
     }
 
 
@@ -96,7 +96,7 @@ async def _add_log_and_record_budget_alerts(db: AsyncSession, log: UsageLog) -> 
         created_alerts.extend(project_alerts)
     tag_alerts = await increment_matching_tag_budget_spend(
         db,
-        tags=log.tags if isinstance(log.tags, dict) else {},
+        tags=log.tag_dict(),
         cost=log.cost,
         metadata=alert_metadata,
     )

@@ -13,12 +13,6 @@ def _format_timestamp(value: datetime) -> str:
     return (_as_utc(value) or value).isoformat()
 
 
-def usage_log_tags(log: UsageLog) -> dict[str, Any]:
-    if isinstance(log.tags, dict):
-        return log.tags
-    return {}
-
-
 class UsageEntry(BaseModel):
     """A single usage log entry."""
 
@@ -55,7 +49,7 @@ class UsageEntry(BaseModel):
             cost=log.cost,
             status=log.status,
             error_message=log.error_message,
-            tags=usage_log_tags(log),
+            tags=log.tag_dict(),
         )
 
 
@@ -94,7 +88,7 @@ class UsageSummaryResponse(BaseModel):
 def matches_tag_filter(log: UsageLog, tag_key: str | None, tag_value: str | None) -> bool:
     if tag_key is None:
         return True
-    tags = usage_log_tags(log)
+    tags = log.tag_dict()
     if tag_key not in tags:
         return False
     if tag_value is None:
@@ -172,7 +166,7 @@ def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
             bucket = buckets.setdefault(key, _new_bucket(key))
             _add_log_to_bucket(bucket, log)
 
-        for key, value in usage_log_tags(log).items():
+        for key, value in log.tag_dict().items():
             tag_bucket_key = _tag_bucket_key(str(key), value)
             bucket = tag_buckets.setdefault(tag_bucket_key, _new_bucket(tag_bucket_key))
             _add_log_to_bucket(bucket, log)

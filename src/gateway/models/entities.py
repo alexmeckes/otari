@@ -327,6 +327,11 @@ class UsageLog(Base):
     user = relationship("User", back_populates="usage_logs")
     project = relationship("Project", back_populates="usage_logs")
 
+    def tag_dict(self) -> dict[str, Any]:
+        if isinstance(self.tags, dict):
+            return self.tags
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -344,7 +349,7 @@ class UsageLog(Base):
             "cost": self.cost,
             "status": self.status,
             "error_message": self.error_message,
-            "tags": self.tags or {},
+            "tags": self.tag_dict(),
         }
 
 
