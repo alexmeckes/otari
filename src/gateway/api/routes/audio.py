@@ -1,6 +1,7 @@
 """OpenAI-compatible audio transcription and speech endpoints."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -17,7 +18,7 @@ from gateway.api.routes._usage import rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
-from gateway.rate_limit import check_rate_limit
+from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.budget_service import validate_user_budget
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
@@ -37,6 +38,73 @@ _SPEECH_CONTENT_TYPES: dict[str | None, str] = {
     "wav": "audio/wav",
     "pcm": "audio/L16",
 }
+
+
+@dataclass(frozen=True)
+class _AudioRequestContext:
+    api_key_id: str | None
+    user_id: str
+    rate_limit_info: RateLimitInfo | None
+
+
+def _resolve_audio_request_context(
+    *,
+    raw_request: Request,
+    auth_result: tuple[APIKey | None, bool],
+    user: str | None,
+) -> _AudioRequestContext:
+    api_key, is_master_key = auth_result
+    user_id = resolve_user_id(
+        user_id_from_request=user,
+        api_key=api_key,
+        is_master_key=is_master_key,
+        master_key_error=HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="When using master key, 'user' field is required in request body",
+        ),
+        no_api_key_error=HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API key validation failed",
+        ),
+        no_user_error=HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API key has no associated user",
+        ),
+    )
+    return _AudioRequestContext(
+        api_key_id=api_key.id if api_key else None,
+        user_id=user_id,
+        rate_limit_info=check_rate_limit(raw_request, user_id),
+    )
+
+
+async def _log_audio_usage(
+    *,
+    log_writer: LogWriter,
+    context: _AudioRequestContext,
+    model: str,
+    provider: Any,
+    endpoint: str,
+    error: str | None = None,
+) -> None:
+    usage_log = UsageLog(
+        id=str(uuid.uuid4()),
+        api_key_id=context.api_key_id,
+        user_id=context.user_id,
+        timestamp=datetime.now(UTC),
+        model=model,
+        provider=provider,
+        endpoint=endpoint,
+        status="success" if error is None else "error",
+        error_message=error,
+    )
+    if error is None:
+        # Audio endpoints do not expose measurable usage units yet, so cost is
+        # left unset until a dedicated pricing metric is available.
+        usage_log.prompt_tokens = 0
+        usage_log.completion_tokens = 0
+        usage_log.total_tokens = 0
+    await log_writer.put(usage_log)
 
 
 @router.post("/audio/transcriptions", response_model=None)
@@ -62,30 +130,13 @@ async def create_transcription(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_user_id(
-        user_id_from_request=user,
-        api_key=api_key,
-        is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="When using master key, 'user' field is required in request body",
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key validation failed",
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key has no associated user",
-        ),
+    context = _resolve_audio_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=user,
     )
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    _ = await validate_user_budget(db, user_id, model, strategy=config.budget_strategy)
+    _ = await validate_user_budget(db, context.user_id, model, strategy=config.budget_strategy)
     if config.budget_strategy == "for_update":
         await db.rollback()
 
@@ -117,41 +168,25 @@ async def create_transcription(
 
     try:
         result: Transcription = await atranscription(**transcription_kwargs)
-
-        usage_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
+        await _log_audio_usage(
+            log_writer=log_writer,
+            context=context,
             model=model_name,
             provider=provider,
             endpoint="/v1/audio/transcriptions",
-            status="success",
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
         )
-
-        # Audio transcription lacks a measurable usage unit (tokens, seconds, etc.)
-        # so cost is left unset until a dedicated pricing metric is available.
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise
     except Exception as e:
-        error_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
+        await _log_audio_usage(
+            log_writer=log_writer,
+            context=context,
             model=model_name,
             provider=provider,
             endpoint="/v1/audio/transcriptions",
-            status="error",
-            error_message=str(e),
+            error=str(e),
         )
-        await log_writer.put(error_log)
 
         logger.error("Provider call failed for %s:%s: %s", provider, model_name, e)
         raise HTTPException(
@@ -159,8 +194,8 @@ async def create_transcription(
             detail="The request could not be completed by the provider",
         ) from e
 
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
+    if context.rate_limit_info:
+        for key, value in rate_limit_headers(context.rate_limit_info).items():
             response.headers[key] = value
 
     return result.model_dump()
@@ -199,30 +234,13 @@ async def create_speech(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_user_id(
-        user_id_from_request=request.user,
-        api_key=api_key,
-        is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="When using master key, 'user' field is required in request body",
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key validation failed",
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key has no associated user",
-        ),
+    context = _resolve_audio_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=request.user,
     )
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
+    _ = await validate_user_budget(db, context.user_id, request.model, strategy=config.budget_strategy)
     if config.budget_strategy == "for_update":
         await db.rollback()
 
@@ -246,41 +264,25 @@ async def create_speech(
 
     try:
         audio_bytes: bytes = await aspeech(**speech_kwargs)
-
-        usage_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
+        await _log_audio_usage(
+            log_writer=log_writer,
+            context=context,
             model=model_name,
             provider=provider,
             endpoint="/v1/audio/speech",
-            status="success",
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
         )
-
-        # Audio speech lacks a measurable usage unit (tokens, seconds, characters, etc.)
-        # so cost is left unset until a dedicated pricing metric is available.
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise
     except Exception as e:
-        error_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
+        await _log_audio_usage(
+            log_writer=log_writer,
+            context=context,
             model=model_name,
             provider=provider,
             endpoint="/v1/audio/speech",
-            status="error",
-            error_message=str(e),
+            error=str(e),
         )
-        await log_writer.put(error_log)
 
         logger.error("Provider call failed for %s:%s: %s", provider, model_name, e)
         raise HTTPException(
@@ -291,8 +293,8 @@ async def create_speech(
     content_type = _SPEECH_CONTENT_TYPES.get(request.response_format, "audio/mpeg")
 
     headers: dict[str, str] = {}
-    if rate_limit_info:
-        headers.update(rate_limit_headers(rate_limit_info))
+    if context.rate_limit_info:
+        headers.update(rate_limit_headers(context.rate_limit_info))
 
     return StreamingResponse(
         content=iter([audio_bytes]),
