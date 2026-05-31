@@ -12,7 +12,6 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._audio_models import AudioSpeechRequest
 from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
-from gateway.api.routes._usage import apply_rate_limit_headers, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
@@ -103,7 +102,7 @@ async def create_transcription(
             error=e,
         )
 
-    apply_rate_limit_headers(response, context.rate_limit_info)
+    context.apply_rate_limit_headers(response)
 
     return result.model_dump()
 
@@ -179,8 +178,7 @@ async def create_speech(
     content_type = _SPEECH_CONTENT_TYPES.get(request.response_format, "audio/mpeg")
 
     headers: dict[str, str] = {}
-    if context.rate_limit_info:
-        headers.update(rate_limit_headers(context.rate_limit_info))
+    headers.update(context.rate_limit_headers())
 
     return StreamingResponse(
         content=iter([audio_bytes]),

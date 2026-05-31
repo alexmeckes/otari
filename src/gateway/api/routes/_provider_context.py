@@ -5,15 +5,17 @@ from dataclasses import dataclass
 from typing import Any, NoReturn
 
 from any_llm import AnyLLM
-from fastapi import Request
+from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._usage import (
+    apply_rate_limit_headers,
     log_and_raise_provider_error,
     log_usage_error,
     make_usage_log,
+    rate_limit_headers,
 )
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
@@ -38,6 +40,14 @@ class OpenAIProviderRequestContext:
             **kwargs,
             **self.provider_kwargs,
         }
+
+    def rate_limit_headers(self) -> dict[str, str]:
+        if self.rate_limit_info is None:
+            return {}
+        return rate_limit_headers(self.rate_limit_info)
+
+    def apply_rate_limit_headers(self, response: Response) -> None:
+        apply_rate_limit_headers(response, self.rate_limit_info)
 
     def usage_log(
         self,

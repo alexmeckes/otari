@@ -10,7 +10,6 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._rerank_models import RerankRequest
-from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
@@ -84,6 +83,6 @@ async def create_rerank(
             error=e,
         )
 
-    apply_rate_limit_headers(response, context.rate_limit_info)
+    context.apply_rate_limit_headers(response)
 
     return result

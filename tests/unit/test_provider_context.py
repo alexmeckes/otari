@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from gateway.api.routes._provider_context import OpenAIProviderRequestContext
 from gateway.models.entities import UsageLog
+from gateway.rate_limit import RateLimitInfo
 
 
 @dataclass
@@ -15,11 +16,11 @@ class StubLogWriter:
         self.logs.append(log)
 
 
-def _context() -> OpenAIProviderRequestContext:
+def _context(rate_limit_info: RateLimitInfo | None = None) -> OpenAIProviderRequestContext:
     return OpenAIProviderRequestContext(
         api_key_id="key-1",
         user_id="user-1",
-        rate_limit_info=None,
+        rate_limit_info=rate_limit_info,
         provider="openai",
         model="gpt-4o-mini",
         provider_kwargs={"api_key": "sk-test"},
@@ -35,6 +36,30 @@ def test_provider_context_call_kwargs_includes_provider_defaults() -> None:
         "input": "hello",
         "api_key": "sk-test",
     }
+
+
+def test_provider_context_rate_limit_headers_are_empty_when_disabled() -> None:
+    response = Response()
+    context = _context()
+
+    assert context.rate_limit_headers() == {}
+    context.apply_rate_limit_headers(response)
+    assert not any(header.startswith("x-ratelimit") for header in response.headers)
+
+
+def test_provider_context_rate_limit_headers_include_limit_state() -> None:
+    response = Response()
+    context = _context(RateLimitInfo(limit=10, remaining=7, reset=123.4))
+
+    assert context.rate_limit_headers() == {
+        "X-RateLimit-Limit": "10",
+        "X-RateLimit-Remaining": "7",
+        "X-RateLimit-Reset": "123",
+    }
+    context.apply_rate_limit_headers(response)
+    assert response.headers["X-RateLimit-Limit"] == "10"
+    assert response.headers["X-RateLimit-Remaining"] == "7"
+    assert response.headers["X-RateLimit-Reset"] == "123"
 
 
 def test_provider_context_usage_log_includes_identity_fields() -> None:
