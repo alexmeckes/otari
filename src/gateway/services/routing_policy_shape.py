@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
+from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
 
 DEFAULT_STRATEGY_TYPES = {"fallback", "intelligent", "weighted_score"}
@@ -51,7 +52,7 @@ def model_selector(provider: str | None, model: str) -> str:
     provider_value = provider.strip()
     if model_value.startswith(f"{provider_value}:") or model_value.startswith(f"{provider_value}/"):
         return model_value.replace("/", ":", 1)
-    return f"{provider_value}:{model_value}"
+    return pricing_model_ref(provider_value, model_value)
 
 
 def normalized_model_selector(provider: str | None, model: str) -> str:

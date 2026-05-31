@@ -7,7 +7,24 @@ from gateway.api.routes._model_catalog import _canonical_model_id, _stored_model
 from gateway.api.routes._responses_transform import metadata_from_model_selector, served_metadata
 from gateway.core.config import GatewayConfig
 from gateway.services import platform_gateway
-from gateway.services.routing_policy_shape import split_model_selector
+from gateway.services.routing_policy_shape import model_selector, split_model_selector
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "expected"),
+    [
+        ("openai", "gpt-4o", "openai:gpt-4o"),
+        ("openai", "openai/gpt-4o", "openai:gpt-4o"),
+        (None, "openai/gpt-4o", "openai:gpt-4o"),
+        (None, "gpt-4o", "gpt-4o"),
+    ],
+)
+def test_model_selector_preserves_existing_selector_shapes(
+    provider: str | None,
+    model: str,
+    expected: str,
+) -> None:
+    assert model_selector(provider, model) == expected
 
 
 @pytest.mark.parametrize(
