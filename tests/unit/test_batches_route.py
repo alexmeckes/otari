@@ -1,9 +1,20 @@
 """Unit tests for batch route Pydantic request models."""
 
+from dataclasses import dataclass, field
+
 import pytest
 from pydantic import ValidationError
 
-from gateway.api.routes.batches import BatchRequestItem, CreateBatchRequest
+from gateway.api.routes.batches import BatchRequestItem, CreateBatchRequest, log_batch_usage
+from gateway.models.entities import UsageLog
+
+
+@dataclass
+class StubLogWriter:
+    logs: list[UsageLog] = field(default_factory=list)
+
+    async def put(self, log: UsageLog) -> None:
+        self.logs.append(log)
 
 
 class TestBatchRequestItem:
@@ -66,3 +77,31 @@ class TestCreateBatchRequest:
             completion_window="48h",
         )
         assert request.completion_window == "48h"
+
+
+@pytest.mark.asyncio
+async def test_log_batch_usage_uses_common_usage_log_shape() -> None:
+    writer = StubLogWriter()
+
+    await log_batch_usage(
+        writer,
+        api_key_id="key-1",
+        user_id="user-1",
+        model="gpt-4o-mini",
+        provider="openai",
+        endpoint="/v1/batches",
+        error="provider down",
+    )
+
+    assert len(writer.logs) == 1
+    log = writer.logs[0]
+    assert log.id
+    assert log.timestamp is not None
+    assert log.api_key_id == "key-1"
+    assert log.user_id == "user-1"
+    assert log.model == "gpt-4o-mini"
+    assert log.provider == "openai"
+    assert log.endpoint == "/v1/batches"
+    assert log.status == "error"
+    assert log.error_message == "provider down"
+    assert log.tags == {}

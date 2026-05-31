@@ -3,9 +3,7 @@
 import json
 import os
 import tempfile
-import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from typing import Annotated, Any, TypeVar
 
 from any_llm import AnyLLM, LLMProvider
@@ -16,9 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from gateway.api.deps import get_config, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._batch_models import BatchRequestItem, CreateBatchRequest
+from gateway.api.routes._usage import make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.models.entities import APIKey, UsageLog
+from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 
@@ -40,11 +39,9 @@ async def log_batch_usage(
     error: str | None = None,
 ) -> None:
     """Log batch API usage."""
-    usage_log = UsageLog(
-        id=str(uuid.uuid4()),
+    usage_log = make_usage_log(
         api_key_id=api_key_id,
         user_id=user_id,
-        timestamp=datetime.now(UTC),
         model=model,
         provider=provider,
         endpoint=endpoint,
