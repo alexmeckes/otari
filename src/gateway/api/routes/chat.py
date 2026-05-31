@@ -16,7 +16,7 @@ from gateway.api.deps import get_config, get_db_if_needed, get_log_writer
 from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolve_chat_request_context
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_routing import run_standalone_routing_plan
+from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
@@ -42,12 +42,6 @@ from gateway.services.platform_gateway import (
     report_platform_usage,
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
-from gateway.services.routing_policy_service import (
-    DEFAULT_ROUTING_MODEL,
-    RoutingPlan,
-    RoutingPolicyError,
-    resolve_routing_plan,
-)
 from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
@@ -75,7 +69,6 @@ async def chat_completions(
     - API key without user field: Use virtual user created with API key
     """
     platform_mode = config.is_platform_mode
-    routing_plan: RoutingPlan | None = None
 
     context = await resolve_chat_request_context(
         raw_request=raw_request,
@@ -109,22 +102,11 @@ async def chat_completions(
     remaining_user_tools = tool_selection.remaining_user_tools
     tools_extracted = tool_selection.tools_extracted
 
-    if not platform_mode and request.model == DEFAULT_ROUTING_MODEL:
-        if request.stream:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Routing policies do not support streaming chat completions yet",
-            )
-        assert db is not None
-        try:
-            routing_plan = await resolve_routing_plan(
-                db,
-                request_body=request.model_dump(exclude_unset=True),
-                project_id=request.project_id,
-                tags=request.tags,
-            )
-        except RoutingPolicyError as exc:
-            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    routing_plan = await resolve_standalone_chat_routing_plan(
+        request=request,
+        db=db,
+        platform_mode=platform_mode,
+    )
 
     # ------------------------------------------------------------------
     # Streaming path: iterate `route.attempts` before any bytes are flushed,

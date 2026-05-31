@@ -22,14 +22,43 @@ from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.platform_gateway import classify_upstream_error
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import (
+    DEFAULT_ROUTING_MODEL,
     RoutingCandidate,
     RoutingPlan,
+    RoutingPolicyError,
     apply_context_policy,
     apply_guardrail_redactions,
     record_route_trace,
+    resolve_routing_plan,
 )
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
+
+
+async def resolve_standalone_chat_routing_plan(
+    *,
+    request: ChatCompletionRequest,
+    db: AsyncSession | None,
+    platform_mode: bool,
+) -> RoutingPlan | None:
+    """Resolve a standalone default_routing chat request into an execution plan."""
+    if platform_mode or request.model != DEFAULT_ROUTING_MODEL:
+        return None
+    if request.stream:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Routing policies do not support streaming chat completions yet",
+        )
+    assert db is not None
+    try:
+        return await resolve_routing_plan(
+            db,
+            request_body=request.model_dump(exclude_unset=True),
+            project_id=request.project_id,
+            tags=request.tags,
+        )
+    except RoutingPolicyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 async def run_standalone_routing_plan(
