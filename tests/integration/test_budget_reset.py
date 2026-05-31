@@ -148,7 +148,7 @@ def test_budget_actually_resets_when_duration_passes(
 
     initial_time = datetime(2025, 10, 1, 12, 0, 0, tzinfo=UTC)
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = initial_time
 
         client.post(
@@ -225,7 +225,7 @@ def test_per_user_reset_schedules_with_actual_reset(client: TestClient, master_k
     user_a_time = datetime(2025, 10, 1, 0, 0, 0, tzinfo=UTC)
     user_b_time = datetime(2025, 10, 2, 0, 0, 0, tzinfo=UTC)
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = user_a_time
 
         response_a = client.post(
@@ -234,7 +234,7 @@ def test_per_user_reset_schedules_with_actual_reset(client: TestClient, master_k
             headers=master_key_header,
         )
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = user_b_time
 
         response_b = client.post(

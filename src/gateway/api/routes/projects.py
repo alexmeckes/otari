@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -46,7 +45,7 @@ async def create_project(
         project_kwargs["project_id"] = request.project_id
     project = Project(**project_kwargs)
     if budget is not None:
-        start_budget_period(project, budget, datetime.now(UTC))
+        start_budget_period(project, budget)
     db.add(project)
     await commit_or_database_error(db)
     await db.refresh(project)
@@ -93,7 +92,7 @@ async def update_project(
     if "budget_id" in payload and payload["budget_id"] is not None:
         budget = await get_budget_or_404(db, str(payload["budget_id"]))
         project.budget_id = str(payload["budget_id"])
-        start_budget_period(project, budget, datetime.now(UTC))
+        start_budget_period(project, budget)
     elif "budget_id" in payload:
         project.budget_id = None
         project.budget_started_at = None

@@ -61,7 +61,7 @@ async def create_user(
         db.add(user)
 
     if budget is not None:
-        start_budget_period(user, budget, datetime.now(UTC))
+        start_budget_period(user, budget)
 
     await commit_or_database_error(db)
     await db.refresh(user)
@@ -105,7 +105,7 @@ async def update_user(
     if request.budget_id is not None:
         budget = await get_budget_or_404(db, request.budget_id)
         user.budget_id = request.budget_id
-        start_budget_period(user, budget, datetime.now(UTC))
+        start_budget_period(user, budget)
     if request.blocked is not None:
         user.blocked = request.blocked
     if request.metadata is not None:

@@ -74,7 +74,7 @@ def test_delete_user_preserves_budget_reset_logs(
     )
 
     initial_time = datetime(2025, 10, 1, 12, 0, 0, tzinfo=UTC)
-    with patch("gateway.api.routes.users.datetime") as mock_dt:
+    with patch("gateway.services.budget_periods.datetime") as mock_dt:
         mock_dt.now.return_value = initial_time
         client.post(
             "/v1/users",
