@@ -1,9 +1,7 @@
-import asyncio
-
-import httpx
 from fastapi import BackgroundTasks, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from gateway.api.routes._chat_platform_errors import platform_attempt_failure_exception
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_tools import ChatToolSelection
@@ -80,12 +78,4 @@ async def run_platform_streaming_chat(
             route.request_id,
             exc,
         )
-        if isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="LLM provider timeout" if len(route.attempts) <= 1 else "All upstream providers timed out",
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error" if len(route.attempts) <= 1 else "All upstream providers failed",
-        ) from exc
+        raise platform_attempt_failure_exception(exc, attempts_count=len(route.attempts)) from exc

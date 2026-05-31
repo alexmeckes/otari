@@ -1,13 +1,12 @@
-import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, NamedTuple
 
-import httpx
 from any_llm import LLMProvider
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
 from fastapi import BackgroundTasks, HTTPException, Response, status
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
+from gateway.api.routes._chat_platform_errors import platform_attempt_failure_exception
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers
@@ -175,15 +174,4 @@ async def run_platform_non_streaming_chat(
         route.request_id,
         failures,
     )
-    is_single_attempt = len(route.attempts) <= 1
-    if last_exc is not None and isinstance(last_exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-        detail = "LLM provider timeout" if is_single_attempt else "All upstream providers timed out"
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=detail,
-        ) from last_exc
-    detail = "LLM provider error" if is_single_attempt else "All upstream providers failed"
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=detail,
-    ) from last_exc
+    raise platform_attempt_failure_exception(last_exc, attempts_count=len(route.attempts)) from last_exc
