@@ -59,9 +59,9 @@ class RouteTraceResponse(BaseModel):
             estimated_cost=trace.estimated_cost,
             fallback_enabled=bool(trace.fallback_enabled),
             policy_source=trace.policy_source,
-            tags=dict(trace.tags) if trace.tags else {},
-            guardrails=dict(trace.guardrails) if trace.guardrails else {},
-            context=dict(trace.context) if trace.context else {},
+            tags=trace.tag_dict(),
+            guardrails=trace.guardrail_dict(),
+            context=trace.context_dict(),
             candidates=list(trace.candidates) if trace.candidates else [],
             attempts=list(trace.attempts) if trace.attempts else [],
         )

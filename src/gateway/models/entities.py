@@ -405,6 +405,21 @@ class RouteTrace(Base):
     project = relationship("Project", back_populates="route_traces")
     routing_policy = relationship("RoutingPolicy", back_populates="route_traces")
 
+    def tag_dict(self) -> dict[str, Any]:
+        if isinstance(self.tags, dict):
+            return self.tags
+        return {}
+
+    def guardrail_dict(self) -> dict[str, Any]:
+        if isinstance(self.guardrails, dict):
+            return self.guardrails
+        return {}
+
+    def context_dict(self) -> dict[str, Any]:
+        if isinstance(self.context, dict):
+            return self.context
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -427,9 +442,9 @@ class RouteTrace(Base):
             "estimated_cost": self.estimated_cost,
             "fallback_enabled": self.fallback_enabled,
             "policy_source": self.policy_source,
-            "tags": self.tags,
-            "guardrails": self.guardrails or {},
-            "context": self.context or {},
+            "tags": self.tag_dict(),
+            "guardrails": self.guardrail_dict(),
+            "context": self.context_dict(),
             "candidates": self.candidates,
             "attempts": self.attempts,
         }
