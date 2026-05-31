@@ -540,7 +540,7 @@ async def test_log_and_raise_message_provider_error_preserves_logging_and_error_
     ]
     assert logger_calls == [
         (
-            ("Provider call failed for %s:%s: %s", "anthropic", "claude-3-5-sonnet", provider_error),
+            ("Provider call failed for %s: %s", "anthropic:claude-3-5-sonnet", provider_error),
             {},
         )
     ]

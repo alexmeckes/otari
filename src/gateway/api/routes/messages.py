@@ -258,17 +258,14 @@ async def _log_and_raise_message_provider_error(
     execution_context: MessageExecutionContext,
     error: BaseException,
 ) -> NoReturn:
-    provider_call_context = execution_context.provider_call_context
-
     await execution_context.log_usage(
         db=db,
         log_writer=log_writer,
         error=str(error),
     )
     logger.error(
-        "Provider call failed for %s:%s: %s",
-        provider_call_context.provider,
-        provider_call_context.model,
+        "Provider call failed for %s: %s",
+        execution_context.provider_label,
         error,
     )
     raise _anthropic_error(
