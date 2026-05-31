@@ -1,5 +1,4 @@
 import asyncio
-import time
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, NamedTuple
 
@@ -13,20 +12,17 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
+from gateway.api.deps import get_config, get_db_if_needed, get_log_writer
+from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolve_chat_request_context
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import run_standalone_routing_plan
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
-from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.models.entities import APIKey
-from gateway.rate_limit import RateLimitInfo, check_rate_limit
-from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
 from gateway.services.chat_tool_config import (
     build_web_search_backend,
     resolve_sandbox_purpose_hint,
@@ -42,12 +38,8 @@ from gateway.services.mcp_loop import (
     mcp_tool_loop_stream,
 )
 from gateway.services.platform_gateway import (
-    ResolvedRoute,
     classify_upstream_error,
-    extract_platform_user_token,
     report_platform_usage,
-    resolve_platform_credentials,
-    resolve_platform_mcp_servers,
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import (
@@ -82,87 +74,27 @@ async def chat_completions(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key: APIKey | None = None
-    api_key_id: str | None = None
-    user_id: str | None = None
-    rate_limit_info: RateLimitInfo | None = None
     platform_mode = config.is_platform_mode
-    route: ResolvedRoute | None = None
     routing_plan: RoutingPlan | None = None
-    user_token: str | None = None  # set inside the platform_mode branch; referenced again later
 
-    if platform_mode:
-        user_token = extract_platform_user_token(raw_request)
-        start_time = time.perf_counter()
-        route = await resolve_platform_credentials(
-            config=config,
-            user_token=user_token,
-            model_selector=request.model,
-        )
-        resolve_latency_ms = (time.perf_counter() - start_time) * 1000
-        response.headers["X-Otari-Request-ID"] = route.request_id
-        logger.info(
-            "Platform resolve succeeded request_id=%s attempts=%d fallback_enabled=%s resolve_latency_ms=%.2f",
-            route.request_id,
-            len(route.attempts),
-            route.fallback_enabled,
-            resolve_latency_ms,
-        )
-    else:
-        if db is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database session unavailable",
-            )
+    context = await resolve_chat_request_context(
+        raw_request=raw_request,
+        response=response,
+        request=request,
+        db=db,
+        config=config,
+    )
+    api_key_id = context.api_key_id
+    user_id = context.user_id
+    rate_limit_info = context.rate_limit_info
+    route = context.route
 
-        api_key, is_master_key = await verify_api_key_or_master_key(raw_request, db, config)
-        api_key_id = api_key.id if api_key else None
-        user_id = resolve_user_id(
-            user_id_from_request=request.user,
-            api_key=api_key,
-            is_master_key=is_master_key,
-            master_key_error=HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="When using master key, 'user' field is required in request body",
-            ),
-            no_api_key_error=HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="API key validation failed",
-            ),
-            no_user_error=HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="API key has no associated user",
-            ),
-        )
-
-        rate_limit_info = check_rate_limit(raw_request, user_id)
-        _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
-        if request.project_id is not None:
-            _ = await validate_project_budget(db, request.project_id, request.model, strategy=config.budget_strategy)
-        _ = await validate_tag_budgets(db, request.tags, request.model, strategy=config.budget_strategy)
-        if config.budget_strategy == "for_update":
-            await db.rollback()
-
-    # Workspace-scoped MCP server references (platform mode only). Callers
-    # pass `mcp_server_ids: [uuid, ...]` instead of inlining each config; we
-    # resolve them against the platform's `/gateway/mcp-servers/resolve`
-    # endpoint and combine with any inline `mcp_servers` so the downstream
-    # MCP loop sees a single list. In standalone mode there's no platform
-    # to consult, so we reject the field with a 400 rather than silently
-    # ignoring it.
-    if request.mcp_server_ids and not platform_mode:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="mcp_server_ids is only available in platform mode",
-        )
-    if platform_mode and request.mcp_server_ids:
-        assert user_token is not None  # guaranteed by the platform_mode branch above
-        resolved_mcp_servers = await resolve_platform_mcp_servers(
-            config=config,
-            user_token=user_token,
-            mcp_server_ids=request.mcp_server_ids,
-        )
-        request.mcp_servers = (request.mcp_servers or []) + resolved_mcp_servers
+    await resolve_chat_mcp_server_ids(
+        request=request,
+        config=config,
+        platform_mode=platform_mode,
+        user_token=context.user_token,
+    )
 
     tool_selection = resolve_chat_tool_selection(
         tools=request.tools,
