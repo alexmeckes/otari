@@ -15,6 +15,16 @@ from gateway.services.budget_service import start_budget_period
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
 
+async def _get_active_user_or_404(db: AsyncSession, user_id: str) -> User:
+    user = await get_active_user(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id '{user_id}' not found",
+        )
+    return user
+
+
 @router.post("", dependencies=[Depends(verify_master_key)])
 async def create_user(
     request: CreateUserRequest,
@@ -79,14 +89,7 @@ async def get_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Get details of a specific user."""
-    user = await get_active_user(db, user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id '{user_id}' not found",
-        )
-
+    user = await _get_active_user_or_404(db, user_id)
     return UserResponse.from_model(user)
 
 
@@ -97,14 +100,7 @@ async def update_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Update a user."""
-    user = await get_active_user(db, user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id '{user_id}' not found",
-        )
-
+    user = await _get_active_user_or_404(db, user_id)
     if request.alias is not None:
         user.alias = request.alias
     if request.budget_id is not None:
@@ -128,14 +124,7 @@ async def delete_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a user."""
-    user = await get_active_user(db, user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id '{user_id}' not found",
-        )
-
+    user = await _get_active_user_or_404(db, user_id)
     await db.execute(
         update(APIKey)
         .where(APIKey.user_id == user_id)
