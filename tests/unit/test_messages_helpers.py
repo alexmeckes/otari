@@ -11,7 +11,7 @@ from any_llm.types.messages import (
     MessageUsage,
     TextBlock,
 )
-from fastapi import HTTPException, Response
+from fastapi import HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
@@ -120,6 +120,59 @@ def test_message_provider_call_context_preserves_request_field_precedence(
     assert context.call_kwargs["top_p"] == 0.4
     assert context.call_kwargs["messages"] == [{"role": "user", "content": "Hello"}]
     assert context.call_kwargs["max_tokens"] == 1024
+
+
+@pytest.mark.asyncio
+async def test_message_execution_context_resolves_rate_limit_budget_and_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[Any, ...]] = []
+    raw_request = cast(Request, object())
+    db = cast(AsyncSession, object())
+    config = cast(GatewayConfig, SimpleNamespace(budget_strategy="fail_closed"))
+    request = _messages_request({"user_id": "metadata-user"})
+    rate_limit_info = RateLimitInfo(limit=10, remaining=7, reset=123.4)
+
+    def fake_check_rate_limit(raw_request_arg: Request, user_id: str) -> RateLimitInfo:
+        calls.append(("rate_limit", raw_request_arg, user_id))
+        return rate_limit_info
+
+    async def fake_validate_user_request_budget(
+        db_arg: AsyncSession,
+        user_id: str,
+        model: str,
+        *,
+        strategy: str,
+    ) -> None:
+        calls.append(("budget", db_arg, user_id, model, strategy))
+
+    def fake_get_provider_kwargs(config_arg: GatewayConfig, provider: Any) -> dict[str, Any]:
+        calls.append(("provider_kwargs", config_arg, provider))
+        return {"api_key": "sk-test"}
+
+    monkeypatch.setattr(messages, "check_rate_limit", fake_check_rate_limit)
+    monkeypatch.setattr(messages, "validate_user_request_budget", fake_validate_user_request_budget)
+    monkeypatch.setattr(messages, "get_provider_kwargs", fake_get_provider_kwargs)
+
+    context = await messages._message_execution_context(
+        raw_request=raw_request,
+        request=request,
+        auth_result=(_api_key(), False),
+        db=db,
+        config=config,
+    )
+
+    assert context.message_context == messages.MessageRequestContext(api_key_id="key-1", user_id="metadata-user")
+    assert context.rate_limit_info is rate_limit_info
+    assert context.provider_call_context.provider == "anthropic"
+    assert context.provider_call_context.model == "claude-3-5-sonnet"
+    assert context.provider_call_context.call_kwargs["api_key"] == "sk-test"
+    assert context.provider_call_context.call_kwargs["model"] == "anthropic:claude-3-5-sonnet"
+    assert calls == [
+        ("rate_limit", raw_request, "metadata-user"),
+        ("budget", db, "metadata-user", "anthropic:claude-3-5-sonnet", "fail_closed"),
+        ("provider_kwargs", config, context.provider_call_context.provider),
+    ]
 
 
 @pytest.mark.asyncio

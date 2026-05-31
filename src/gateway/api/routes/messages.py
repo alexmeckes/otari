@@ -59,6 +59,13 @@ class MessageProviderCallContext:
     call_kwargs: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class MessageExecutionContext:
+    message_context: MessageRequestContext
+    rate_limit_info: RateLimitInfo | None
+    provider_call_context: MessageProviderCallContext
+
+
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
     prompt_tokens = input_tokens or 0
     completion_tokens = output_tokens or 0
@@ -115,6 +122,26 @@ def _message_provider_call_context(request: MessagesRequest, config: GatewayConf
         provider=provider,
         model=model,
         call_kwargs={**provider_kwargs, **request_fields},
+    )
+
+
+async def _message_execution_context(
+    *,
+    raw_request: Request,
+    request: MessagesRequest,
+    auth_result: tuple[APIKey | None, bool],
+    db: AsyncSession,
+    config: GatewayConfig,
+) -> MessageExecutionContext:
+    message_context = _resolve_message_request_context(request, auth_result)
+    rate_limit_info = check_rate_limit(raw_request, message_context.user_id)
+
+    await validate_user_request_budget(db, message_context.user_id, request.model, strategy=config.budget_strategy)
+
+    return MessageExecutionContext(
+        message_context=message_context,
+        rate_limit_info=rate_limit_info,
+        provider_call_context=_message_provider_call_context(request, config),
     )
 
 
@@ -266,13 +293,16 @@ async def create_message(
     log_writer: Annotated[LogWriter, Depends(get_log_writer)],
 ) -> dict[str, Any] | StreamingResponse:
     """Anthropic Messages API-compatible endpoint."""
-    message_context = _resolve_message_request_context(request, auth_result)
-
-    rate_limit_info = check_rate_limit(raw_request, message_context.user_id)
-
-    await validate_user_request_budget(db, message_context.user_id, request.model, strategy=config.budget_strategy)
-
-    provider_call_context = _message_provider_call_context(request, config)
+    execution_context = await _message_execution_context(
+        raw_request=raw_request,
+        request=request,
+        auth_result=auth_result,
+        db=db,
+        config=config,
+    )
+    message_context = execution_context.message_context
+    rate_limit_info = execution_context.rate_limit_info
+    provider_call_context = execution_context.provider_call_context
     call_kwargs = provider_call_context.call_kwargs
 
     try:
