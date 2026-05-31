@@ -84,6 +84,9 @@ class BudgetResponse(BaseModel):
         """Create a BudgetResponse from a Budget ORM model."""
         scope_type = getattr(budget, "scope_type", "entity")
         match_tags = getattr(budget, "match_tags", {})
+        match_tag_dict = getattr(budget, "match_tag_dict", None)
+        if callable(match_tag_dict):
+            match_tags = match_tag_dict()
         alert_thresholds = getattr(budget, "alert_thresholds", [])
         alert_webhook_url = getattr(budget, "alert_webhook_url", None)
         spend = getattr(budget, "spend", 0.0)

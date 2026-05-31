@@ -31,7 +31,7 @@ def normalize_budget_strategy(strategy: str) -> str:
 
 
 def tag_scope_id(budget: Budget) -> str | None:
-    match_tags = budget.match_tags if isinstance(budget.match_tags, dict) else {}
+    match_tags = budget.match_tag_dict()
     if not match_tags:
         return None
     return ",".join(f"{key}={match_tags[key]}" for key in sorted(match_tags))
@@ -41,7 +41,7 @@ def budget_matches_tags(budget: Budget, tags: dict[str, Any] | None) -> bool:
     """Return whether a tag-scoped budget applies to a request's tags."""
     if budget.scope_type != TAG_BUDGET_SCOPE or not budget.is_active:
         return False
-    match_tags = budget.match_tags if isinstance(budget.match_tags, dict) else {}
+    match_tags = budget.match_tag_dict()
     if not match_tags:
         return False
     request_tags = tags if isinstance(tags, dict) else {}

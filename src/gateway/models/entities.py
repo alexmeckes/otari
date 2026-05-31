@@ -73,6 +73,11 @@ class Budget(Base):
     reset_logs = relationship("BudgetResetLog", back_populates="budget")
     alerts = relationship("BudgetAlert", back_populates="budget", cascade="all, delete-orphan")
 
+    def match_tag_dict(self) -> dict[str, Any]:
+        if isinstance(self.match_tags, dict):
+            return self.match_tags
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -80,7 +85,7 @@ class Budget(Base):
             "max_budget": self.max_budget,
             "budget_duration_sec": self.budget_duration_sec,
             "scope_type": self.scope_type,
-            "match_tags": self.match_tags or {},
+            "match_tags": self.match_tag_dict(),
             "alert_thresholds": self.alert_thresholds or [],
             "alert_webhook_url": self.alert_webhook_url,
             "spend": self.spend,
