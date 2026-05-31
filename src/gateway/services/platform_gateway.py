@@ -283,16 +283,7 @@ async def report_platform_usage(
     usage_url = _platform_url(platform_base_url, "/gateway/usage")
     headers = {"X-Gateway-Token": config.platform_token or ""}
 
-    payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
-    if outcome == "success":
-        token_usage = usage or CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
-        payload["usage"] = {
-            "prompt_tokens": token_usage.prompt_tokens,
-            "completion_tokens": token_usage.completion_tokens,
-            "total_tokens": token_usage.total_tokens,
-        }
-    elif error_class is not None:
-        payload["error_class"] = error_class
+    payload = _platform_usage_payload(correlation_id, outcome, usage, error_class=error_class)
 
     delay_seconds = 0.25
     for attempt in range(1, max_retries + 1):
@@ -317,3 +308,23 @@ async def report_platform_usage(
 
         await asyncio.sleep(delay_seconds)
         delay_seconds *= 2
+
+
+def _platform_usage_payload(
+    correlation_id: str,
+    outcome: str,
+    usage: CompletionUsage | None,
+    *,
+    error_class: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
+    if outcome == "success":
+        token_usage = usage or CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+        payload["usage"] = {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens,
+        }
+    elif error_class is not None:
+        payload["error_class"] = error_class
+    return payload
