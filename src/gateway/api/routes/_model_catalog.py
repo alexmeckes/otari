@@ -23,6 +23,7 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import ModelPricing
 from gateway.services.model_discovery_service import discover_all_models, get_model_cache
+from gateway.services.pricing_service import legacy_pricing_model_ref, pricing_model_ref
 from gateway.services.routing_policy_shape import split_model_selector
 
 T = TypeVar("T")
@@ -59,13 +60,13 @@ def _split_model_key(model_key: str) -> tuple[str, str]:
 def _canonical_model_id(model_key: str) -> str:
     """Return a provider/model ID for a stored model key."""
     provider, model_name = _split_model_key(model_key)
-    return f"{provider}/{model_name}"
+    return legacy_pricing_model_ref(provider, model_name)
 
 
 def _stored_model_key(selector: str) -> str:
     """Return the canonical storage key for either provider:model or provider/model."""
     provider, model_name = _split_model_key(selector)
-    return f"{provider}:{model_name}"
+    return pricing_model_ref(provider, model_name)
 
 
 def _model_pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None:
@@ -113,7 +114,7 @@ def _catalog_record_from_discovered(
     model: Model,
     pricing: ModelPricing | None,
 ) -> CatalogRecord:
-    model_key = f"{provider_name}:{model.id}"
+    model_key = pricing_model_ref(provider_name, model.id)
     created_at = _iso_from_epoch(model.created)
     return CatalogRecord(
         model_key=model_key,
@@ -215,7 +216,7 @@ async def load_catalog_records(
             discovered = []
 
         for provider_name, model in discovered:
-            model_key = f"{provider_name}:{model.id}"
+            model_key = pricing_model_ref(provider_name, model.id)
             pricing = pricing_map.pop(model_key, None)
             records[model_key] = _catalog_record_from_discovered(provider_name, model, pricing)
 
