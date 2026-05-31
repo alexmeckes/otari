@@ -47,6 +47,21 @@ def budget_matches_tags(budget: Budget, tags: dict[str, Any] | None) -> bool:
     return all(str(request_tags.get(key)) == str(value) for key, value in match_tags.items())
 
 
+def _new_tag_budget_reset_log(
+    budget: Budget,
+    *,
+    previous_spend: float,
+    reset_at: datetime,
+    next_reset_at: datetime | None,
+) -> BudgetResetLog:
+    return BudgetResetLog(
+        budget_id=budget.budget_id,
+        previous_spend=previous_spend,
+        reset_at=reset_at,
+        next_reset_at=next_reset_at,
+    )
+
+
 async def matching_tag_budgets(
     db: AsyncSession,
     tags: dict[str, Any] | None,
@@ -69,8 +84,8 @@ async def reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> N
     budget.spend = 0.0
     budget.budget_started_at, budget.next_budget_reset_at = budget_period_window(budget.budget_duration_sec, now)
     db.add(
-        BudgetResetLog(
-            budget_id=budget.budget_id,
+        _new_tag_budget_reset_log(
+            budget,
             previous_spend=previous_spend,
             reset_at=now,
             next_reset_at=budget.next_budget_reset_at,
@@ -105,8 +120,8 @@ async def cas_reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) 
     rowcount = getattr(result, "rowcount", 0)
     if rowcount and rowcount > 0:
         db.add(
-            BudgetResetLog(
-                budget_id=budget.budget_id,
+            _new_tag_budget_reset_log(
+                budget,
                 previous_spend=float(budget.spend),
                 reset_at=now,
                 next_reset_at=next_reset_at,
