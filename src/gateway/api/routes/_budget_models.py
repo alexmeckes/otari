@@ -34,6 +34,12 @@ def _budget_alert_thresholds(budget: Budget) -> list[float]:
     return alert_thresholds if isinstance(alert_thresholds, list) else []
 
 
+def _optional_datetime_isoformat(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return None
+
+
 class CreateBudgetRequest(BaseModel):
     """Request model for creating a new budget."""
 
@@ -118,12 +124,8 @@ class BudgetResponse(BaseModel):
             alert_thresholds=_budget_alert_thresholds(budget),
             alert_webhook_url=alert_webhook_url if isinstance(alert_webhook_url, str) else None,
             spend=float(spend) if isinstance(spend, int | float) else 0.0,
-            budget_started_at=budget_started_at.isoformat() if isinstance(budget_started_at, datetime) else None,
-            next_budget_reset_at=(
-                next_budget_reset_at.isoformat()
-                if isinstance(next_budget_reset_at, datetime)
-                else None
-            ),
+            budget_started_at=_optional_datetime_isoformat(budget_started_at),
+            next_budget_reset_at=_optional_datetime_isoformat(next_budget_reset_at),
             blocked=blocked if isinstance(blocked, bool) else False,
             is_active=is_active if isinstance(is_active, bool) else True,
             created_at=budget.created_at.isoformat(),
@@ -202,32 +204,16 @@ class BudgetAlertResponse(BaseModel):
             threshold=alert.threshold,
             spend=alert.spend,
             max_budget=alert.max_budget,
-            budget_period_start=(
-                alert.budget_period_start.isoformat()
-                if isinstance(alert.budget_period_start, datetime)
-                else None
-            ),
+            budget_period_start=_optional_datetime_isoformat(alert.budget_period_start),
             webhook_url=alert.webhook_url,
             delivery_status=alert.delivery_status,
             delivery_attempts=alert.delivery_attempts,
             last_delivery_status_code=alert.last_delivery_status_code,
             last_delivery_error=alert.last_delivery_error,
-            last_delivery_attempt_at=(
-                alert.last_delivery_attempt_at.isoformat()
-                if isinstance(alert.last_delivery_attempt_at, datetime)
-                else None
-            ),
-            next_delivery_attempt_at=(
-                alert.next_delivery_attempt_at.isoformat()
-                if isinstance(alert.next_delivery_attempt_at, datetime)
-                else None
-            ),
-            delivered_at=alert.delivered_at.isoformat() if isinstance(alert.delivered_at, datetime) else None,
-            dead_lettered_at=(
-                alert.dead_lettered_at.isoformat()
-                if isinstance(alert.dead_lettered_at, datetime)
-                else None
-            ),
+            last_delivery_attempt_at=_optional_datetime_isoformat(alert.last_delivery_attempt_at),
+            next_delivery_attempt_at=_optional_datetime_isoformat(alert.next_delivery_attempt_at),
+            delivered_at=_optional_datetime_isoformat(alert.delivered_at),
+            dead_lettered_at=_optional_datetime_isoformat(alert.dead_lettered_at),
             created_at=alert.created_at.isoformat(),
             metadata=alert.metadata_dict(),
         )
