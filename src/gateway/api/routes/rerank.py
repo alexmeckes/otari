@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._rerank_models import RerankRequest
 from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -44,22 +44,10 @@ async def create_rerank(
     api_key, is_master_key = auth_result
     api_key_id = api_key.id if api_key else None
 
-    user_id = resolve_user_id(
+    user_id = resolve_openai_user_id(
         user_id_from_request=request.user,
         api_key=api_key,
         is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="When using master key, 'user' field is required in request body",
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key validation failed",
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key has no associated user",
-        ),
     )
 
     rate_limit_info = check_rate_limit(raw_request, user_id)

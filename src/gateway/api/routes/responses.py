@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_scoped_request_budgets
-from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._responses_native import (
     log_native_response_usage,
     native_response_call_kwargs,
@@ -37,10 +37,6 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL
 
 router = APIRouter(prefix="/v1", tags=["responses"])
-
-_MASTER_KEY_USER_REQUIRED = "When using master key, 'user' field is required in request body"
-_API_KEY_VALIDATION_FAILED = "API key validation failed"
-_API_KEY_NO_USER = "API key has no associated user"
 
 
 @router.post("/responses", response_model=None)
@@ -81,22 +77,10 @@ async def create_response(
     api_key, is_master_key = auth_result
     api_key_id = api_key.id if api_key else None
 
-    user_id = resolve_user_id(
+    user_id = resolve_openai_user_id(
         user_id_from_request=request_body.user,
         api_key=api_key,
         is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_MASTER_KEY_USER_REQUIRED,
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_API_KEY_VALIDATION_FAILED,
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_API_KEY_NO_USER,
-        ),
     )
 
     rate_limit_info = check_rate_limit(raw_request, user_id)

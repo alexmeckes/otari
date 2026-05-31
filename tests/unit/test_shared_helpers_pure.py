@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id, resolve_user_id
 from gateway.api.routes.budgets import BudgetResponse
 from gateway.api.routes.pricing import PricingResponse
 
@@ -109,6 +109,45 @@ def test_resolve_user_id_empty_string_treated_as_missing() -> None:
             no_user_error=_make_error("no user"),
         )
     assert exc_info.value.detail == "master key requires user"
+
+
+def test_resolve_openai_user_id_uses_standard_master_key_error() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_openai_user_id(
+            user_id_from_request=None,
+            api_key=None,
+            is_master_key=True,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "When using master key, 'user' field is required in request body"
+
+
+def test_resolve_openai_user_id_uses_standard_api_key_error() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_openai_user_id(
+            user_id_from_request=None,
+            api_key=None,
+            is_master_key=False,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "API key validation failed"
+
+
+def test_resolve_openai_user_id_uses_standard_missing_user_error() -> None:
+    api_key = MagicMock()
+    api_key.user_id = None
+
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_openai_user_id(
+            user_id_from_request=None,
+            api_key=api_key,
+            is_master_key=False,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "API key has no associated user"
 
 
 def test_budget_response_from_model() -> None:

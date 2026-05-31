@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
@@ -33,22 +33,10 @@ def resolve_audio_request_context(
     user: str | None,
 ) -> AudioRequestContext:
     api_key, is_master_key = auth_result
-    user_id = resolve_user_id(
+    user_id = resolve_openai_user_id(
         user_id_from_request=user,
         api_key=api_key,
         is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="When using master key, 'user' field is required in request body",
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key validation failed",
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key has no associated user",
-        ),
     )
     return AudioRequestContext(
         api_key_id=api_key.id if api_key else None,
