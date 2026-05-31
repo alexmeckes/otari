@@ -100,7 +100,7 @@ def native_response_streaming_response(
             fmt=RESPONSES_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
-            label=f"{context.provider}:{context.model}",
+            label=context.provider_label,
         ),
         media_type="text/event-stream",
         headers=_response_stream_headers(context),

@@ -129,7 +129,7 @@ async def _run_provider_native_response(
             request_body=request_body,
             error=str(e),
         )
-        logger.error("Provider call failed for %s:%s: %s", context.provider, context.model, e)
+        logger.error("Provider call failed for %s: %s", context.provider_label, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="LLM provider error",

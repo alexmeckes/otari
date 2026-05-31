@@ -76,6 +76,10 @@ def test_provider_context_call_kwargs_includes_provider_defaults() -> None:
     }
 
 
+def test_provider_context_formats_provider_label() -> None:
+    assert _context().provider_label == "openai:gpt-4o-mini"
+
+
 def test_provider_context_call_kwargs_filters_optional_values_after_provider_defaults() -> None:
     context = OpenAIProviderRequestContext(
         api_key_id="key-1",

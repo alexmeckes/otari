@@ -34,6 +34,10 @@ class OpenAIProviderRequestContext:
     model: str
     provider_kwargs: dict[str, Any]
 
+    @property
+    def provider_label(self) -> str:
+        return f"{self.provider}:{self.model}"
+
     def call_kwargs(self, *, optional: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         call_kwargs = {
             "model": self.model,
