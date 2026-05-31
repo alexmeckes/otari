@@ -4,8 +4,9 @@ import json
 import os
 import tempfile
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 
 from any_llm import AnyLLM, LLMProvider
 from any_llm.api import acancel_batch, acreate_batch, alist_batches, aretrieve_batch, aretrieve_batch_results
@@ -24,6 +25,8 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 __all__ = ["BatchRequestItem", "CreateBatchRequest", "router"]
 
 router = APIRouter(prefix="/v1/batches", tags=["batches"])
+
+T = TypeVar("T")
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +72,38 @@ def _parse_provider(provider: str) -> LLMProvider:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
+
+
+def _batch_provider_context(config: GatewayConfig, provider: str) -> tuple[LLMProvider, dict[str, Any]]:
+    provider_enum = _parse_provider(provider)
+    return provider_enum, get_provider_kwargs(config, provider_enum)
+
+
+async def _run_batch_operation(
+    *,
+    action: str,
+    provider: str,
+    operation: Callable[..., Awaitable[T]],
+    call_kwargs: dict[str, Any],
+) -> T:
+    try:
+        return await operation(**call_kwargs)
+    except HTTPException:
+        raise
+    except BatchNotCompleteError:
+        raise
+    except Exception as e:
+        logger.error("Batch %s failed for %s: %s", action, provider, e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="LLM provider error",
+        ) from e
+
+
+def _batch_response(batch: Batch, provider: str) -> dict[str, Any]:
+    response_data = batch.model_dump()
+    response_data["provider"] = provider
+    return response_data
 
 
 # ---------------------------------------------------------------------------
@@ -175,27 +210,14 @@ async def retrieve_batch(
     config: Annotated[GatewayConfig, Depends(get_config)],
 ) -> dict[str, Any]:
     """Retrieve the status of a batch."""
-    provider_enum = _parse_provider(provider)
-    provider_kwargs = get_provider_kwargs(config, provider_enum)
-
-    try:
-        batch: Batch = await aretrieve_batch(
-            provider=provider_enum,
-            batch_id=batch_id,
-            **provider_kwargs,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Batch retrieve failed for %s: %s", provider, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from e
-
-    response_data = batch.model_dump()
-    response_data["provider"] = provider
-    return response_data
+    provider_enum, provider_kwargs = _batch_provider_context(config, provider)
+    batch = await _run_batch_operation(
+        action="retrieve",
+        provider=provider,
+        operation=aretrieve_batch,
+        call_kwargs={"provider": provider_enum, "batch_id": batch_id, **provider_kwargs},
+    )
+    return _batch_response(batch, provider)
 
 
 @router.post("/{batch_id}/cancel", response_model=None)
@@ -207,27 +229,14 @@ async def cancel_batch(
     config: Annotated[GatewayConfig, Depends(get_config)],
 ) -> dict[str, Any]:
     """Cancel a batch."""
-    provider_enum = _parse_provider(provider)
-    provider_kwargs = get_provider_kwargs(config, provider_enum)
-
-    try:
-        batch: Batch = await acancel_batch(
-            provider=provider_enum,
-            batch_id=batch_id,
-            **provider_kwargs,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Batch cancel failed for %s: %s", provider, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from e
-
-    response_data = batch.model_dump()
-    response_data["provider"] = provider
-    return response_data
+    provider_enum, provider_kwargs = _batch_provider_context(config, provider)
+    batch = await _run_batch_operation(
+        action="cancel",
+        provider=provider,
+        operation=acancel_batch,
+        call_kwargs={"provider": provider_enum, "batch_id": batch_id, **provider_kwargs},
+    )
+    return _batch_response(batch, provider)
 
 
 @router.get("", response_model=None)
@@ -240,28 +249,20 @@ async def list_batches(
     limit: int | None = None,
 ) -> dict[str, Any]:
     """List batches for a provider."""
-    provider_enum = _parse_provider(provider)
-    provider_kwargs = get_provider_kwargs(config, provider_enum)
+    provider_enum, provider_kwargs = _batch_provider_context(config, provider)
 
-    list_kwargs: dict[str, Any] = {**provider_kwargs}
+    list_kwargs: dict[str, Any] = {"provider": provider_enum, **provider_kwargs}
     if after is not None:
         list_kwargs["after"] = after
     if limit is not None:
         list_kwargs["limit"] = limit
 
-    try:
-        batches = await alist_batches(
-            provider=provider_enum,
-            **list_kwargs,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Batch list failed for %s: %s", provider, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from e
+    batches = await _run_batch_operation(
+        action="list",
+        provider=provider,
+        operation=alist_batches,
+        call_kwargs=list_kwargs,
+    )
 
     return {"data": [{**batch.model_dump(), "provider": provider} for batch in batches]}
 
@@ -287,17 +288,15 @@ async def retrieve_batch_results(
     api_key_id = api_key.id if api_key else None
     user_id = api_key.user_id if api_key else None
 
-    provider_enum = _parse_provider(provider)
-    provider_kwargs = get_provider_kwargs(config, provider_enum)
+    provider_enum, provider_kwargs = _batch_provider_context(config, provider)
 
     try:
-        result = await aretrieve_batch_results(
-            provider=provider_enum,
-            batch_id=batch_id,
-            **provider_kwargs,
+        result = await _run_batch_operation(
+            action="results retrieve",
+            provider=provider,
+            operation=aretrieve_batch_results,
+            call_kwargs={"provider": provider_enum, "batch_id": batch_id, **provider_kwargs},
         )
-    except HTTPException:
-        raise
     except BatchNotCompleteError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -305,12 +304,6 @@ async def retrieve_batch_results(
                 f"Batch '{batch_id}' is not yet complete (status: {e.batch_status}). "
                 f"Call GET /v1/batches/{batch_id}?provider={provider} to check the current status."
             ),
-        ) from e
-    except Exception as e:
-        logger.error("Batch results retrieve failed for %s: %s", provider, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
         ) from e
 
     # Extract model from the first successful result if available
