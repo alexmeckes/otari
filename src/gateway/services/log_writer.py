@@ -8,6 +8,7 @@ from typing import Protocol
 
 from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.core.database import create_session
 from gateway.log_config import logger
@@ -62,6 +63,47 @@ def _record_new_budget_alert_metrics(alerts: list[BudgetAlert]) -> None:
         record_budget_alert_created(alert.scope_type, alert.delivery_status)
 
 
+async def _add_log_and_record_budget_alerts(db: AsyncSession, log: UsageLog) -> list[BudgetAlert]:
+    db.add(log)
+    if not log.cost:
+        return []
+
+    created_alerts: list[BudgetAlert] = []
+    alert_metadata = _budget_alert_metadata(log)
+    if log.user_id:
+        await db.execute(
+            update(User)
+            .where(User.user_id == log.user_id, User.deleted_at.is_(None))
+            .values(spend=User.spend + log.cost)
+        )
+        user_alerts = await record_user_budget_alerts_after_spend(
+            db,
+            user_id=log.user_id,
+            metadata=alert_metadata,
+        )
+        created_alerts.extend(user_alerts)
+    if log.project_id:
+        await db.execute(
+            update(Project)
+            .where(Project.project_id == log.project_id)
+            .values(spend=Project.spend + log.cost)
+        )
+        project_alerts = await record_project_budget_alerts_after_spend(
+            db,
+            project_id=log.project_id,
+            metadata=alert_metadata,
+        )
+        created_alerts.extend(project_alerts)
+    tag_alerts = await increment_matching_tag_budget_spend(
+        db,
+        tags=log.tags if isinstance(log.tags, dict) else {},
+        cost=log.cost,
+        metadata=alert_metadata,
+    )
+    created_alerts.extend(tag_alerts)
+    return created_alerts
+
+
 class SingleLogWriter:
     """Write each usage log inline, one transaction per event."""
 
@@ -69,40 +111,7 @@ class SingleLogWriter:
         created_alerts: list[BudgetAlert] = []
         async with create_session() as db:
             try:
-                db.add(log)
-                alert_metadata = _budget_alert_metadata(log)
-                if log.cost and log.user_id:
-                    await db.execute(
-                        update(User)
-                        .where(User.user_id == log.user_id, User.deleted_at.is_(None))
-                        .values(spend=User.spend + log.cost)
-                    )
-                    user_alerts = await record_user_budget_alerts_after_spend(
-                        db,
-                        user_id=log.user_id,
-                        metadata=alert_metadata,
-                    )
-                    created_alerts.extend(user_alerts)
-                if log.cost and log.project_id:
-                    await db.execute(
-                        update(Project)
-                        .where(Project.project_id == log.project_id)
-                        .values(spend=Project.spend + log.cost)
-                    )
-                    project_alerts = await record_project_budget_alerts_after_spend(
-                        db,
-                        project_id=log.project_id,
-                        metadata=alert_metadata,
-                    )
-                    created_alerts.extend(project_alerts)
-                if log.cost:
-                    tag_alerts = await increment_matching_tag_budget_spend(
-                        db,
-                        tags=log.tags if isinstance(log.tags, dict) else {},
-                        cost=log.cost,
-                        metadata=alert_metadata,
-                    )
-                    created_alerts.extend(tag_alerts)
+                created_alerts = await _add_log_and_record_budget_alerts(db, log)
                 await db.commit()
                 log_writer_rows.labels(writer="single", result="written").inc()
             except SQLAlchemyError as e:  # pragma: no cover - defensive logging
@@ -182,40 +191,8 @@ class BatchLogWriter:
         try:
             async with create_session() as db:
                 for log in batch:
-                    db.add(log)
-                    alert_metadata = _budget_alert_metadata(log)
-                    if log.cost and log.user_id:
-                        await db.execute(
-                            update(User)
-                            .where(User.user_id == log.user_id, User.deleted_at.is_(None))
-                            .values(spend=User.spend + log.cost)
-                        )
-                        user_alerts = await record_user_budget_alerts_after_spend(
-                            db,
-                            user_id=log.user_id,
-                            metadata=alert_metadata,
-                        )
-                        created_alerts.extend(user_alerts)
-                    if log.cost and log.project_id:
-                        await db.execute(
-                            update(Project)
-                            .where(Project.project_id == log.project_id)
-                            .values(spend=Project.spend + log.cost)
-                        )
-                        project_alerts = await record_project_budget_alerts_after_spend(
-                            db,
-                            project_id=log.project_id,
-                            metadata=alert_metadata,
-                        )
-                        created_alerts.extend(project_alerts)
-                    if log.cost:
-                        tag_alerts = await increment_matching_tag_budget_spend(
-                            db,
-                            tags=log.tags if isinstance(log.tags, dict) else {},
-                            cost=log.cost,
-                            metadata=alert_metadata,
-                        )
-                        created_alerts.extend(tag_alerts)
+                    log_alerts = await _add_log_and_record_budget_alerts(db, log)
+                    created_alerts.extend(log_alerts)
                 await db.commit()
                 log_writer_rows.labels(writer="batch", result="written").inc(len(batch))
             log_writer_flush_duration.labels(writer="batch", result="ok").observe(time.monotonic() - start)
