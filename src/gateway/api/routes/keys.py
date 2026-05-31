@@ -1,75 +1,17 @@
 import uuid
-from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
+from gateway.api.routes._key_models import CreateKeyRequest, CreateKeyResponse, KeyInfo, UpdateKeyRequest
 from gateway.auth.models import generate_api_key, hash_key
 from gateway.models.entities import APIKey, User
 
 router = APIRouter(prefix="/v1/keys", tags=["keys"])
-
-
-class CreateKeyRequest(BaseModel):
-    """Request model for creating a new API key."""
-
-    key_name: str | None = Field(default=None, description="Optional name for the key")
-    user_id: str | None = Field(default=None, description="Optional user ID to associate with this key")
-    expires_at: datetime | None = Field(default=None, description="Optional expiration timestamp")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Optional metadata")
-
-
-class CreateKeyResponse(BaseModel):
-    """Response model for creating a new API key."""
-
-    id: str
-    key: str
-    key_name: str | None
-    user_id: str | None
-    created_at: str
-    expires_at: str | None
-    is_active: bool
-    metadata: dict[str, Any]
-
-
-class KeyInfo(BaseModel):
-    """Response model for key information."""
-
-    id: str
-    key_name: str | None
-    user_id: str | None
-    created_at: str
-    last_used_at: str | None
-    expires_at: str | None
-    is_active: bool
-    metadata: dict[str, Any]
-
-    @classmethod
-    def from_model(cls, key: APIKey) -> "KeyInfo":
-        return cls(
-            id=str(key.id),
-            key_name=str(key.key_name) if key.key_name else None,
-            user_id=str(key.user_id) if key.user_id else None,
-            created_at=key.created_at.isoformat(),
-            last_used_at=key.last_used_at.isoformat() if key.last_used_at else None,
-            expires_at=key.expires_at.isoformat() if key.expires_at else None,
-            is_active=bool(key.is_active),
-            metadata=dict(key.metadata_) if key.metadata_ else {},
-        )
-
-
-class UpdateKeyRequest(BaseModel):
-    """Request model for updating a key."""
-
-    key_name: str | None = None
-    is_active: bool | None = None
-    expires_at: datetime | None = None
-    metadata: dict[str, Any] | None = None
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
