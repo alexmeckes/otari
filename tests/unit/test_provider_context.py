@@ -113,19 +113,6 @@ def test_provider_context_usage_log_includes_identity_fields() -> None:
     assert usage_log.tags == {"kind": "unit"}
 
 
-def test_provider_context_zero_token_usage_log_sets_zero_counts() -> None:
-    usage_log = _context().zero_token_usage_log(endpoint="/v1/test")
-
-    assert usage_log.api_key_id == "key-1"
-    assert usage_log.user_id == "user-1"
-    assert usage_log.model == "gpt-4o-mini"
-    assert usage_log.provider == "openai"
-    assert usage_log.endpoint == "/v1/test"
-    assert usage_log.prompt_tokens == 0
-    assert usage_log.completion_tokens == 0
-    assert usage_log.total_tokens == 0
-
-
 @pytest.mark.asyncio
 async def test_provider_context_log_zero_token_usage_writes_log() -> None:
     writer = StubLogWriter()
@@ -133,6 +120,11 @@ async def test_provider_context_log_zero_token_usage_writes_log() -> None:
     usage_log = await _context().log_zero_token_usage(writer, endpoint="/v1/test")
 
     assert writer.logs == [usage_log]
+    assert usage_log.api_key_id == "key-1"
+    assert usage_log.user_id == "user-1"
+    assert usage_log.model == "gpt-4o-mini"
+    assert usage_log.provider == "openai"
+    assert usage_log.endpoint == "/v1/test"
     assert usage_log.prompt_tokens == 0
     assert usage_log.completion_tokens == 0
     assert usage_log.total_tokens == 0

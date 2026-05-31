@@ -80,16 +80,13 @@ class OpenAIProviderRequestContext:
             tags=tags,
         )
 
-    def zero_token_usage_log(self, *, endpoint: str) -> UsageLog:
-        return self.usage_log(
+    async def log_zero_token_usage(self, log_writer: LogWriter, *, endpoint: str) -> UsageLog:
+        usage_log = self.usage_log(
             endpoint=endpoint,
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
         )
-
-    async def log_zero_token_usage(self, log_writer: LogWriter, *, endpoint: str) -> UsageLog:
-        usage_log = self.zero_token_usage_log(endpoint=endpoint)
         await log_writer.put(usage_log)
         return usage_log
 
