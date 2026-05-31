@@ -6,9 +6,14 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from gateway.log_config import logger
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
+from gateway.services.routing_guardrail_helpers import (
+    guardrail_violation,
+    guardrails_config,
+    named_patterns,
+    string_list,
+)
 from gateway.services.routing_request_analysis import bool_config, jsonable_text
 
 ExternalClassifierPost = _routing_guardrail_external.ExternalClassifierPost
@@ -66,19 +71,6 @@ _GUARDRAIL_PRESET_ALIASES = {
     "prompt_shield": "prompt_injection",
     "prompt_injection_detection": "prompt_injection",
 }
-
-
-def _string_list(value: Any) -> list[str]:
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _guardrails_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    guardrails = config.get("guardrails")
-    return guardrails if isinstance(guardrails, dict) else {}
 
 
 def _normalize_guardrail_preset_name(value: Any) -> str | None:
@@ -171,7 +163,7 @@ def _guardrail_preset_expansion(
 def _effective_guardrails_config(
     config: Mapping[str, Any],
 ) -> tuple[Mapping[str, Any], dict[str, list[str]] | None]:
-    guardrails = _guardrails_config(config)
+    guardrails = guardrails_config(config)
     preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
     if not preset_config:
         return guardrails, preset_metadata
@@ -179,12 +171,12 @@ def _effective_guardrails_config(
 
 
 def _guardrails_enabled(config: Mapping[str, Any]) -> bool:
-    guardrails = _guardrails_config(config)
+    guardrails = guardrails_config(config)
     return bool_config(guardrails.get("enabled"), bool(guardrails))
 
 
 def guardrail_action(config: Mapping[str, Any]) -> str:
-    action = _guardrails_config(config).get("action")
+    action = guardrails_config(config).get("action")
     if isinstance(action, str) and action.strip().lower() in _GUARDRAIL_ACTIONS:
         return action.strip().lower()
     return "block"
@@ -197,31 +189,6 @@ def _request_guardrail_text(request_body: Mapping[str, Any]) -> str:
         jsonable_text(request_body.get("instructions")),
     ]
     return "\n".join(part for part in parts if part)
-
-
-def _named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
-    if not isinstance(value, list):
-        return []
-    patterns: list[tuple[str, re.Pattern[str]]] = []
-    for index, item in enumerate(value, start=1):
-        name = f"pattern_{index}"
-        pattern_value: Any = item
-        if isinstance(item, dict):
-            name_value = item.get("name")
-            if isinstance(name_value, str) and name_value.strip():
-                name = name_value.strip()
-            pattern_value = item.get("pattern")
-        if not isinstance(pattern_value, str) or not pattern_value.strip():
-            continue
-        try:
-            patterns.append((name, re.compile(pattern_value, re.IGNORECASE)))
-        except re.error:
-            logger.warning("Ignoring invalid routing guardrail regex pattern '%s'", name)
-    return patterns
-
-
-def _guardrail_violation(kind: str, rule: str) -> dict[str, str]:
-    return {"type": kind, "rule": rule}
 
 
 async def evaluate_guardrails(
@@ -239,23 +206,23 @@ async def evaluate_guardrails(
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
 
-    for term in _string_list(guardrails.get("blocked_terms")):
+    for term in string_list(guardrails.get("blocked_terms")):
         if term.lower() in normalized_text:
-            violations.append(_guardrail_violation("blocked_term", term))
+            violations.append(guardrail_violation("blocked_term", term))
 
-    for name, pattern in _named_patterns(guardrails.get("blocked_patterns")):
+    for name, pattern in named_patterns(guardrails.get("blocked_patterns")):
         if pattern.search(request_text):
-            violations.append(_guardrail_violation("blocked_pattern", name))
+            violations.append(guardrail_violation("blocked_pattern", name))
 
     pii_config = guardrails.get("pii")
     pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
     if pii_enabled:
         type_config = pii_config.get("types") if isinstance(pii_config, dict) else None
-        pii_types = _string_list(type_config) or sorted(_PII_PATTERNS)
+        pii_types = string_list(type_config) or sorted(_PII_PATTERNS)
         for pii_type in pii_types:
             pii_pattern = _PII_PATTERNS.get(pii_type)
             if pii_pattern is not None and pii_pattern.search(request_text):
-                violations.append(_guardrail_violation("pii", pii_type))
+                violations.append(guardrail_violation("pii", pii_type))
 
     injection_config = guardrails.get("prompt_injection")
     injection_enabled = bool_config(
@@ -263,10 +230,10 @@ async def evaluate_guardrails(
         False,
     )
     if injection_enabled:
-        phrases = _string_list(injection_config.get("phrases") if isinstance(injection_config, dict) else None)
+        phrases = string_list(injection_config.get("phrases") if isinstance(injection_config, dict) else None)
         for phrase in [*phrases, *_PROMPT_INJECTION_PHRASES]:
             if phrase.lower() in normalized_text:
-                violations.append(_guardrail_violation("prompt_injection", phrase))
+                violations.append(guardrail_violation("prompt_injection", phrase))
 
     external_violations, classifier_results = await _routing_guardrail_external.evaluate_external_classifiers(
         guardrails=guardrails,

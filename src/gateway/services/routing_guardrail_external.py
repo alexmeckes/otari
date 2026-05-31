@@ -6,16 +6,13 @@ from typing import Any
 import httpx
 
 from gateway.services.routing_config_values import non_negative_float_or_none
+from gateway.services.routing_guardrail_helpers import guardrail_violation
 from gateway.services.routing_request_analysis import bool_config
 
 ExternalClassifierPost = Callable[
     ...,
     Awaitable[tuple[int | None, dict[str, Any] | None, str | None]],
 ]
-
-
-def _guardrail_violation(kind: str, rule: str) -> dict[str, str]:
-    return {"type": kind, "rule": rule}
 
 
 def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -91,7 +88,7 @@ def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: flo
     raw_violations = payload.get("violations")
     if isinstance(raw_violations, list):
         for item in raw_violations:
-            violations.append(_guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
+            violations.append(guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
 
     flagged = payload.get("blocked") is True or payload.get("flagged") is True
     score = non_negative_float_or_none(payload.get("score"))
@@ -99,7 +96,7 @@ def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: flo
         flagged = True
     if flagged and not violations:
         label = _classifier_rule(payload.get("label"), fallback=name)
-        violations.append(_guardrail_violation("external_classifier", label))
+        violations.append(guardrail_violation("external_classifier", label))
     return violations
 
 
@@ -137,7 +134,7 @@ async def evaluate_external_classifiers(
                 }
             )
             if fail_closed:
-                violations.append(_guardrail_violation("external_classifier_error", name))
+                violations.append(guardrail_violation("external_classifier_error", name))
             continue
         assert payload is not None
         classifier_violations = _classifier_violations(name, payload, threshold)

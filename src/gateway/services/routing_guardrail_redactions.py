@@ -5,7 +5,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.log_config import logger
+from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, string_list
 from gateway.services.routing_request_analysis import bool_config
 
 _PII_PATTERNS = {
@@ -15,48 +15,14 @@ _PII_PATTERNS = {
 }
 
 
-def _string_list(value: Any) -> list[str]:
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _guardrails_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    guardrails = config.get("guardrails")
-    return guardrails if isinstance(guardrails, dict) else {}
-
-
 def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    redactions = _guardrails_config(config).get("redactions")
+    redactions = guardrails_config(config).get("redactions")
     return redactions if isinstance(redactions, dict) else {}
 
 
 def _redactions_enabled(config: Mapping[str, Any]) -> bool:
     redactions = _redactions_config(config)
     return bool_config(redactions.get("enabled"), bool(redactions))
-
-
-def _named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
-    if not isinstance(value, list):
-        return []
-    patterns: list[tuple[str, re.Pattern[str]]] = []
-    for index, item in enumerate(value, start=1):
-        name = f"pattern_{index}"
-        pattern_value: Any = item
-        if isinstance(item, dict):
-            name_value = item.get("name")
-            if isinstance(name_value, str) and name_value.strip():
-                name = name_value.strip()
-            pattern_value = item.get("pattern")
-        if not isinstance(pattern_value, str) or not pattern_value.strip():
-            continue
-        try:
-            patterns.append((name, re.compile(pattern_value, re.IGNORECASE)))
-        except re.error:
-            logger.warning("Ignoring invalid routing guardrail regex pattern '%s'", name)
-    return patterns
 
 
 def _redaction_rules(config: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
@@ -67,13 +33,13 @@ def _redaction_rules(config: Mapping[str, Any]) -> list[tuple[str, str, re.Patte
     pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
     if pii_enabled:
         type_config = pii_config.get("types") if isinstance(pii_config, dict) else redactions.get("pii_types")
-        pii_types = _string_list(type_config) or sorted(_PII_PATTERNS)
+        pii_types = string_list(type_config) or sorted(_PII_PATTERNS)
         for pii_type in pii_types:
             pattern = _PII_PATTERNS.get(pii_type)
             if pattern is not None:
                 rules.append(("pii", pii_type, pattern))
 
-    for name, pattern in _named_patterns(redactions.get("patterns")):
+    for name, pattern in named_patterns(redactions.get("patterns")):
         rules.append(("pattern", name, pattern))
     return rules
 
@@ -173,5 +139,5 @@ def apply_guardrail_redactions(
         "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": count_items,
-        "pattern_count": len(_named_patterns(redactions.get("patterns"))),
+        "pattern_count": len(named_patterns(redactions.get("patterns"))),
     }
