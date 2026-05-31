@@ -12,33 +12,18 @@ from any_llm.api import acancel_batch, acreate_batch, alist_batches, aretrieve_b
 from any_llm.exceptions import BatchNotCompleteError, UnsupportedProviderError
 from any_llm.types.batch import Batch
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
 
 from gateway.api.deps import get_config, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._batch_models import BatchRequestItem, CreateBatchRequest
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 
+__all__ = ["BatchRequestItem", "CreateBatchRequest", "router"]
+
 router = APIRouter(prefix="/v1/batches", tags=["batches"])
-
-
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
-
-
-class BatchRequestItem(BaseModel):
-    custom_id: str
-    body: dict[str, Any]
-
-
-class CreateBatchRequest(BaseModel):
-    model: str
-    requests: list[BatchRequestItem] = Field(min_length=1, max_length=10_000)
-    completion_window: str = "24h"
-    metadata: dict[str, str] | None = None
 
 
 # ---------------------------------------------------------------------------
