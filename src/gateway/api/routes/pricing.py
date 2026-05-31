@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from any_llm import AnyLLM
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -34,34 +34,44 @@ def _candidate_model_keys(raw_key: str) -> list[str]:
     return candidates
 
 
-async def _get_effective_pricing(
+async def _first_pricing(
     db: AsyncSession,
     model_keys: list[str],
-    as_of: datetime,
+    *criteria: Any,
 ) -> ModelPricing | None:
+    rows = await _pricing_rows(db, model_keys, *criteria, limit=1)
+    return rows[0] if rows else None
+
+
+async def _pricing_rows(
+    db: AsyncSession,
+    model_keys: list[str],
+    *criteria: Any,
+    limit: int | None = None,
+) -> list[ModelPricing]:
     for key in model_keys:
         stmt = (
             select(ModelPricing)
-            .where(
-                ModelPricing.model_key == key,
-                ModelPricing.effective_at <= as_of,
-            )
+            .where(ModelPricing.model_key == key, *criteria)
             .order_by(ModelPricing.effective_at.desc())
-            .limit(1)
         )
-        pricing = (await db.execute(stmt)).scalar_one_or_none()
-        if pricing:
-            return pricing
-    return None
-
-
-async def _get_pricing_history(db: AsyncSession, model_keys: list[str]) -> list[ModelPricing]:
-    for key in model_keys:
-        stmt = select(ModelPricing).where(ModelPricing.model_key == key).order_by(ModelPricing.effective_at.desc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
         pricings = list((await db.execute(stmt)).scalars().all())
         if pricings:
             return pricings
     return []
+
+
+async def _commit_or_database_error(db: AsyncSession) -> None:
+    try:
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error",
+        ) from None
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -93,14 +103,7 @@ async def set_pricing(
         )
         db.add(pricing)
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await _commit_or_database_error(db)
     await db.refresh(pricing)
 
     return PricingResponse.from_model(pricing)
@@ -133,7 +136,7 @@ async def get_pricing_history(
     """Return the full pricing history for a model."""
 
     candidates = _candidate_model_keys(model_key)
-    pricings = await _get_pricing_history(db, candidates)
+    pricings = await _pricing_rows(db, candidates)
     if not pricings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -152,7 +155,7 @@ async def get_pricing(
     """Get pricing for a specific model as of a timestamp."""
 
     candidates = _candidate_model_keys(model_key)
-    pricing = await _get_effective_pricing(db, candidates, normalize_effective_at(as_of))
+    pricing = await _first_pricing(db, candidates, ModelPricing.effective_at <= normalize_effective_at(as_of))
 
     if not pricing:
         raise HTTPException(
@@ -181,32 +184,20 @@ async def delete_pricing(
     """Delete pricing entries for a model."""
 
     candidates = _candidate_model_keys(model_key)
-    targets: list[ModelPricing] = []
 
     if effective_at is not None:
         normalized_effective_at = normalize_effective_at(effective_at)
-        for key in candidates:
-            stmt = (
-                select(ModelPricing)
-                .where(
-                    ModelPricing.model_key == key,
-                    ModelPricing.effective_at == normalized_effective_at,
-                )
-                .limit(1)
-            )
-            pricing = (await db.execute(stmt)).scalar_one_or_none()
-            if pricing:
-                targets = [pricing]
-                break
-        if not targets:
+        pricing = await _first_pricing(db, candidates, ModelPricing.effective_at == normalized_effective_at)
+        if not pricing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=(
                     f"Pricing for model '{model_key}' with effective_at {normalized_effective_at.isoformat()} not found"
                 ),
             )
+        targets = [pricing]
     else:
-        targets = await _get_pricing_history(db, candidates)
+        targets = await _pricing_rows(db, candidates)
         if not targets:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -216,11 +207,4 @@ async def delete_pricing(
     for pricing in targets:
         await db.delete(pricing)
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await _commit_or_database_error(db)
