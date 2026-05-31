@@ -98,3 +98,28 @@ def test_resolved_attempt_provider_kwargs_omit_missing_api_base() -> None:
     )
 
     assert attempt.provider_kwargs == {"api_key": "sk-test"}
+
+
+def test_parse_resolve_payload_maps_legacy_payload_to_single_attempt() -> None:
+    route = platform_gateway.parse_resolve_payload(
+        {
+            "correlation_id": "corr-1",
+            "provider": "anthropic",
+            "model": "claude-3-5-sonnet",
+            "api_key": "sk-test",
+            "api_base": "https://anthropic.local",
+            "managed": True,
+        }
+    )
+
+    assert route.request_id == "corr-1"
+    assert route.fallback_enabled is False
+    assert len(route.attempts) == 1
+    attempt = route.attempts[0]
+    assert attempt.attempt_id == "corr-1"
+    assert attempt.position == 0
+    assert attempt.provider == "anthropic"
+    assert attempt.model == "claude-3-5-sonnet"
+    assert attempt.api_key == "sk-test"
+    assert attempt.api_base == "https://anthropic.local"
+    assert attempt.managed is True

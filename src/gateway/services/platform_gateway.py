@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from collections.abc import Mapping
 from typing import Any, NoReturn
 
 import httpx
@@ -181,18 +182,7 @@ def parse_resolve_payload(payload: dict[str, Any]) -> ResolvedRoute:
     """Build a ResolvedRoute from the current or legacy platform payload shape."""
     attempts_payload = payload.get("attempts")
     if attempts_payload is not None:
-        attempts = [
-            ResolvedAttempt(
-                attempt_id=str(att["attempt_id"]),
-                position=int(att["position"]),
-                provider=str(att["provider"]),
-                model=str(att["model"]),
-                api_base=att.get("api_base"),
-                api_key=str(att["api_key"]),
-                managed=bool(att.get("managed", False)),
-            )
-            for att in attempts_payload
-        ]
+        attempts = [_resolved_attempt_from_payload(att) for att in attempts_payload]
         return ResolvedRoute(
             request_id=str(payload["request_id"]),
             fallback_enabled=bool(payload.get("fallback_enabled", False)),
@@ -203,17 +193,24 @@ def parse_resolve_payload(payload: dict[str, Any]) -> ResolvedRoute:
     return ResolvedRoute(
         request_id=correlation_id,
         fallback_enabled=False,
-        attempts=[
-            ResolvedAttempt(
-                attempt_id=correlation_id,
-                position=0,
-                provider=str(payload["provider"]),
-                model=str(payload["model"]),
-                api_base=payload.get("api_base"),
-                api_key=str(payload["api_key"]),
-                managed=bool(payload.get("managed", False)),
-            )
-        ],
+        attempts=[_resolved_attempt_from_payload(payload, attempt_id=correlation_id, position=0)],
+    )
+
+
+def _resolved_attempt_from_payload(
+    payload: Mapping[str, Any],
+    *,
+    attempt_id: str | None = None,
+    position: int | None = None,
+) -> ResolvedAttempt:
+    return ResolvedAttempt(
+        attempt_id=str(payload["attempt_id"] if attempt_id is None else attempt_id),
+        position=int(payload["position"] if position is None else position),
+        provider=str(payload["provider"]),
+        model=str(payload["model"]),
+        api_base=payload.get("api_base"),
+        api_key=str(payload["api_key"]),
+        managed=bool(payload.get("managed", False)),
     )
 
 
