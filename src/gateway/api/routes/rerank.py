@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id, with_optional_kwargs
 from gateway.api.routes._rerank_models import RerankRequest
 from gateway.api.routes._usage import apply_rate_limit_headers, log_and_raise_provider_error, make_usage_log
 from gateway.core.config import GatewayConfig
@@ -57,17 +57,17 @@ async def create_rerank(
 
     provider_kwargs = get_provider_kwargs(config, provider)
 
-    rerank_kwargs: dict[str, Any] = {
-        "model": model,
-        "query": request.query,
-        "documents": request.documents,
-        "provider": provider,
-        **provider_kwargs,
-    }
-    if request.top_n is not None:
-        rerank_kwargs["top_n"] = request.top_n
-    if request.max_tokens_per_doc is not None:
-        rerank_kwargs["max_tokens_per_doc"] = request.max_tokens_per_doc
+    rerank_kwargs = with_optional_kwargs(
+        {
+            "model": model,
+            "query": request.query,
+            "documents": request.documents,
+            "provider": provider,
+            **provider_kwargs,
+        },
+        top_n=request.top_n,
+        max_tokens_per_doc=request.max_tokens_per_doc,
+    )
 
     try:
         result = await arerank(**rerank_kwargs)

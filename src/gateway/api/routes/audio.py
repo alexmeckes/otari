@@ -13,9 +13,9 @@ from gateway.api.routes._audio_helpers import (
     audio_provider_call_context,
     log_audio_usage,
     raise_audio_provider_error,
-    with_optional_kwargs,
 )
 from gateway.api.routes._audio_models import AudioSpeechRequest
+from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._usage import apply_rate_limit_headers, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey

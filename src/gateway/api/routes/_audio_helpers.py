@@ -88,11 +88,6 @@ async def audio_provider_call_context(
     return context, provider, model_name, get_provider_kwargs(config, provider)
 
 
-def with_optional_kwargs(call_kwargs: dict[str, Any], **optional: Any) -> dict[str, Any]:
-    call_kwargs.update({key: value for key, value in optional.items() if value is not None})
-    return call_kwargs
-
-
 async def raise_audio_provider_error(
     *,
     log_writer: LogWriter,

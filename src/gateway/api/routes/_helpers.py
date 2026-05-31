@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, status
 
@@ -10,6 +10,11 @@ if TYPE_CHECKING:
 _OPENAI_MASTER_KEY_USER_REQUIRED = "When using master key, 'user' field is required in request body"
 _OPENAI_API_KEY_VALIDATION_FAILED = "API key validation failed"
 _OPENAI_API_KEY_NO_USER = "API key has no associated user"
+
+
+def with_optional_kwargs(call_kwargs: dict[str, Any], **optional: Any) -> dict[str, Any]:
+    call_kwargs.update({key: value for key, value in optional.items() if value is not None})
+    return call_kwargs
 
 
 def resolve_user_id(

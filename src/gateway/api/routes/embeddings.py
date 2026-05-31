@@ -1,6 +1,6 @@
 """OpenAI-compatible embeddings endpoint."""
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from any_llm import AnyLLM, aembedding
 from any_llm.types.completion import CreateEmbeddingResponse
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._embedding_models import EmbeddingRequest
-from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id, with_optional_kwargs
 from gateway.api.routes._usage import apply_rate_limit_headers, log_and_raise_provider_error, make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
@@ -58,16 +58,16 @@ async def create_embedding(
 
     provider_kwargs = get_provider_kwargs(config, provider)
 
-    embedding_kwargs: dict[str, Any] = {
-        "model": model,
-        "inputs": request.input,
-        "provider": provider,
-        **provider_kwargs,
-    }
-    if request.encoding_format is not None:
-        embedding_kwargs["encoding_format"] = request.encoding_format
-    if request.dimensions is not None:
-        embedding_kwargs["dimensions"] = request.dimensions
+    embedding_kwargs = with_optional_kwargs(
+        {
+            "model": model,
+            "inputs": request.input,
+            "provider": provider,
+            **provider_kwargs,
+        },
+        encoding_format=request.encoding_format,
+        dimensions=request.dimensions,
+    )
 
     try:
         result = await aembedding(**embedding_kwargs)

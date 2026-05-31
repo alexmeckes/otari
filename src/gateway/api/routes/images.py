@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._helpers import resolve_openai_user_id, with_optional_kwargs
 from gateway.api.routes._image_models import ImageGenerationRequest
 from gateway.api.routes._usage import apply_rate_limit_headers, log_and_raise_provider_error, make_usage_log
 from gateway.core.config import GatewayConfig
@@ -58,22 +58,19 @@ async def create_image(
 
     provider_kwargs = get_provider_kwargs(config, provider)
 
-    image_kwargs: dict[str, Any] = {
-        "model": model,
-        "prompt": request.prompt,
-        "provider": provider,
-        **provider_kwargs,
-    }
-    if request.n is not None:
-        image_kwargs["n"] = request.n
-    if request.size is not None:
-        image_kwargs["size"] = request.size
-    if request.quality is not None:
-        image_kwargs["quality"] = request.quality
-    if request.style is not None:
-        image_kwargs["style"] = request.style
-    if request.response_format is not None:
-        image_kwargs["response_format"] = request.response_format
+    image_kwargs = with_optional_kwargs(
+        {
+            "model": model,
+            "prompt": request.prompt,
+            "provider": provider,
+            **provider_kwargs,
+        },
+        n=request.n,
+        size=request.size,
+        quality=request.quality,
+        style=request.style,
+        response_format=request.response_format,
+    )
 
     try:
         result: ImagesResponse = await aimage_generation(**image_kwargs)
