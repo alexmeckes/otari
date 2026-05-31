@@ -7,12 +7,11 @@ from any_llm.types.completion import ChatCompletion, ChatCompletionChunk, Comple
 from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.log_config import logger
 from gateway.metrics import record_cost, record_tokens
 from gateway.models.entities import UsageLog
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing
+from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 
 
 def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
@@ -83,7 +82,6 @@ async def log_usage(
             usage_log.cost = cost
             record_cost(str(provider or ""), model, cost)
         else:
-            model_ref = f"{provider}:{model}" if provider else model
-            logger.warning("No pricing configured for '%s'. Usage will be tracked without cost.", model_ref)
+            log_missing_pricing(provider, model)
 
     await log_writer.put(usage_log)

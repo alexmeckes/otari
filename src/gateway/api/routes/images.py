@@ -19,7 +19,7 @@ from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing
+from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["images"])
@@ -101,8 +101,7 @@ async def create_image(
             cost = n_images * pricing.input_price_per_million
             usage_log.cost = cost
         else:
-            model_ref = f"{provider}:{model}" if provider else model
-            logger.warning("No pricing configured for '%s'. Usage will be tracked without cost.", model_ref)
+            log_missing_pricing(provider, model)
 
         await log_writer.put(usage_log)
 
