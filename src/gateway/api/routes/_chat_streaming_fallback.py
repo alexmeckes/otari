@@ -102,11 +102,8 @@ async def run_streaming_with_fallback(
     async def _build_for_attempt(
         attempt: ResolvedAttempt,
     ) -> AsyncIterator[ChatCompletionChunk]:
-        provider_kwargs: dict[str, Any] = {"api_key": attempt.api_key}
-        if attempt.api_base:
-            provider_kwargs["api_base"] = attempt.api_base
         completion_kwargs = chat_provider_call_kwargs(
-            provider_kwargs,
+            attempt.provider_kwargs,
             base_request_fields,
             model=attempt.model_selector,
         )

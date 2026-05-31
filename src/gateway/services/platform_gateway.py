@@ -39,6 +39,13 @@ class ResolvedAttempt(BaseModel):
     def model_selector(self) -> str:
         return pricing_model_ref(self.provider, self.model)
 
+    @property
+    def provider_kwargs(self) -> dict[str, str]:
+        kwargs = {"api_key": self.api_key}
+        if self.api_base:
+            kwargs["api_base"] = self.api_base
+        return kwargs
+
 
 class ResolvedRoute(BaseModel):
     """The full resolution plan returned by the platform."""

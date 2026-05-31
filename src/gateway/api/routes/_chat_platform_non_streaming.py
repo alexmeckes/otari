@@ -69,12 +69,8 @@ async def run_platform_non_streaming_chat(
     mcp_server_configs = request.mcp_servers
 
     for attempt in route.attempts:
-        attempt_kwargs: dict[str, Any] = {"api_key": attempt.api_key}
-        if attempt.api_base:
-            attempt_kwargs["api_base"] = attempt.api_base
-
         completion_kwargs = chat_provider_call_kwargs(
-            attempt_kwargs,
+            attempt.provider_kwargs,
             base_request_fields,
             model=attempt.model_selector,
         )

@@ -68,3 +68,33 @@ async def test_resolve_platform_credentials_uses_shared_request_setup(
     assert route.request_id == "request-1"
     assert route.attempts[0].model == "gpt-4o-mini"
     assert route.attempts[0].model_selector == "openai:gpt-4o-mini"
+
+
+def test_resolved_attempt_provider_kwargs_include_optional_api_base() -> None:
+    attempt = platform_gateway.ResolvedAttempt(
+        attempt_id="attempt-1",
+        position=0,
+        provider="openai",
+        model="gpt-4o-mini",
+        api_key="sk-test",
+        api_base="https://api.openai.com/v1",
+        managed=True,
+    )
+
+    assert attempt.provider_kwargs == {
+        "api_key": "sk-test",
+        "api_base": "https://api.openai.com/v1",
+    }
+
+
+def test_resolved_attempt_provider_kwargs_omit_missing_api_base() -> None:
+    attempt = platform_gateway.ResolvedAttempt(
+        attempt_id="attempt-1",
+        position=0,
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        api_key="sk-test",
+        managed=True,
+    )
+
+    assert attempt.provider_kwargs == {"api_key": "sk-test"}
