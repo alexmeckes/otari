@@ -61,17 +61,17 @@ async def create_image(
 
         n_images = len(result.data) if result.data else (request.n or 1)
 
-        usage_log = context.zero_token_usage_log(endpoint=_IMAGE_GENERATIONS_ENDPOINT)
-
         # Image pricing stores price-per-image in input_price_per_million.
-        await context.apply_input_metered_cost(
+        await context.log_input_metered_usage(
             db,
-            usage_log,
-            units=n_images,
+            log_writer,
+            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
+            prompt_tokens=0,
+            total_tokens=0,
+            cost_units=n_images,
+            apply_cost=True,
             price_divisor=1,
         )
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise

@@ -103,7 +103,10 @@ class OpenAIProviderRequestContext:
         total_tokens: int | None,
         cost_units: float | None,
         apply_cost: bool,
+        price_divisor: float = 1_000_000,
         require_positive_units: bool = False,
+        missing_cost: float | None = None,
+        warn_missing_pricing: bool = True,
     ) -> UsageLog:
         usage_log = self.usage_log(
             endpoint=endpoint,
@@ -116,7 +119,10 @@ class OpenAIProviderRequestContext:
                 db,
                 usage_log,
                 units=cost_units,
+                price_divisor=price_divisor,
                 require_positive_units=require_positive_units,
+                missing_cost=missing_cost,
+                warn_missing_pricing=warn_missing_pricing,
             )
         await log_writer.put(usage_log)
         return usage_log

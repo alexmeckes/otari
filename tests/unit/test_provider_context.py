@@ -198,6 +198,39 @@ async def test_provider_context_log_input_metered_usage_skips_cost_when_disabled
 
 
 @pytest.mark.asyncio
+async def test_provider_context_log_input_metered_usage_uses_missing_default_without_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writer = StubLogWriter()
+    calls: list[tuple[str, str]] = []
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    def fake_log_missing_pricing(provider: str, model: str) -> None:
+        calls.append((provider, model))
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
+
+    usage_log = await _context().log_input_metered_usage(
+        object(),  # type: ignore[arg-type]
+        writer,
+        endpoint="/v1/test",
+        prompt_tokens=None,
+        total_tokens=None,
+        cost_units=1,
+        apply_cost=True,
+        missing_cost=0.0,
+        warn_missing_pricing=False,
+    )
+
+    assert writer.logs == [usage_log]
+    assert usage_log.cost == 0.0
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_provider_context_log_usage_error_writes_identity_fields() -> None:
     writer = StubLogWriter()
 

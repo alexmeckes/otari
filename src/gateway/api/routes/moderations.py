@@ -55,23 +55,18 @@ async def create_moderation(
     try:
         result = await amoderation(**moderation_kwargs)
 
-        usage_log = context.usage_log(
+        # Moderation has no token usage; missing pricing is intentionally treated as free.
+        await context.log_input_metered_usage(
+            db,
+            log_writer,
             endpoint=_MODERATIONS_ENDPOINT,
             prompt_tokens=None,
-            completion_tokens=0,
             total_tokens=None,
-        )
-
-        # Moderation has no token usage; missing pricing is intentionally treated as free.
-        await context.apply_input_metered_cost(
-            db,
-            usage_log,
-            units=1,
+            cost_units=1,
+            apply_cost=True,
             missing_cost=0.0,
             warn_missing_pricing=False,
         )
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise
