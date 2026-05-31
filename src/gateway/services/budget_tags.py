@@ -37,6 +37,12 @@ def tag_scope_id(budget: Budget) -> str | None:
     return ",".join(f"{key}={match_tags[key]}" for key in sorted(match_tags))
 
 
+def _request_tag_dict(tags: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(tags, dict):
+        return tags
+    return {}
+
+
 def budget_matches_tags(budget: Budget, tags: dict[str, Any] | None) -> bool:
     """Return whether a tag-scoped budget applies to a request's tags."""
     if budget.scope_type != TAG_BUDGET_SCOPE or not budget.is_active:
@@ -44,7 +50,7 @@ def budget_matches_tags(budget: Budget, tags: dict[str, Any] | None) -> bool:
     match_tags = budget.match_tag_dict()
     if not match_tags:
         return False
-    request_tags = tags if isinstance(tags, dict) else {}
+    request_tags = _request_tag_dict(tags)
     return all(str(request_tags.get(key)) == str(value) for key, value in match_tags.items())
 
 
@@ -54,7 +60,7 @@ async def matching_tag_budgets(
     *,
     for_update: bool = False,
 ) -> list[Budget]:
-    request_tags = tags if isinstance(tags, dict) else {}
+    request_tags = _request_tag_dict(tags)
     if not request_tags:
         return []
     stmt = select(Budget).where(Budget.scope_type == TAG_BUDGET_SCOPE, Budget.is_active.is_(True))
