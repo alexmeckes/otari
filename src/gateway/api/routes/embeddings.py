@@ -63,10 +63,10 @@ async def create_embedding(
         )
 
         if result.usage:
-            await context.apply_input_token_cost(
+            await context.apply_input_metered_cost(
                 db,
                 usage_log,
-                token_count=result.usage.prompt_tokens,
+                units=result.usage.prompt_tokens,
             )
 
         await log_writer.put(usage_log)

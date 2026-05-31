@@ -118,21 +118,6 @@ class OpenAIProviderRequestContext:
             error=error,
         )
 
-    async def apply_input_token_cost(
-        self,
-        db: AsyncSession,
-        usage_log: UsageLog,
-        *,
-        token_count: int | None,
-        require_positive_tokens: bool = False,
-    ) -> None:
-        await self.apply_input_metered_cost(
-            db,
-            usage_log,
-            units=token_count,
-            require_positive_units=require_positive_tokens,
-        )
-
     async def apply_input_metered_cost(
         self,
         db: AsyncSession,

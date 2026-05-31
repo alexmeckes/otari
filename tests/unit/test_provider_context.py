@@ -144,28 +144,7 @@ async def test_provider_context_log_and_raise_provider_error_logs_then_raises() 
 
 
 @pytest.mark.asyncio
-async def test_provider_context_apply_input_token_cost_sets_cost(monkeypatch: pytest.MonkeyPatch) -> None:
-    usage_log = _context().usage_log(endpoint="/v1/test")
-
-    class Pricing:
-        input_price_per_million = 2.0
-
-    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
-        return Pricing()
-
-    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
-
-    await _context().apply_input_token_cost(
-        object(),  # type: ignore[arg-type]
-        usage_log,
-        token_count=250_000,
-    )
-
-    assert usage_log.cost == 0.5
-
-
-@pytest.mark.asyncio
-async def test_provider_context_apply_input_token_cost_keeps_zero_absent_when_required(
+async def test_provider_context_apply_input_metered_cost_defaults_to_per_million(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     usage_log = _context().usage_log(endpoint="/v1/test")
@@ -178,18 +157,41 @@ async def test_provider_context_apply_input_token_cost_keeps_zero_absent_when_re
 
     monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
 
-    await _context().apply_input_token_cost(
+    await _context().apply_input_metered_cost(
         object(),  # type: ignore[arg-type]
         usage_log,
-        token_count=0,
-        require_positive_tokens=True,
+        units=250_000,
+    )
+
+    assert usage_log.cost == 0.5
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_metered_cost_keeps_zero_absent_when_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+
+    class Pricing:
+        input_price_per_million = 2.0
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
+        return Pricing()
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+
+    await _context().apply_input_metered_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        units=0,
+        require_positive_units=True,
     )
 
     assert usage_log.cost is None
 
 
 @pytest.mark.asyncio
-async def test_provider_context_apply_input_token_cost_logs_missing_pricing(
+async def test_provider_context_apply_input_metered_cost_logs_missing_pricing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     usage_log = _context().usage_log(endpoint="/v1/test")
@@ -204,10 +206,10 @@ async def test_provider_context_apply_input_token_cost_logs_missing_pricing(
     monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
     monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
 
-    await _context().apply_input_token_cost(
+    await _context().apply_input_metered_cost(
         object(),  # type: ignore[arg-type]
         usage_log,
-        token_count=100,
+        units=100,
     )
 
     assert usage_log.cost is None

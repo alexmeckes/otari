@@ -64,11 +64,11 @@ async def create_rerank(
         )
 
         if result.usage:
-            await context.apply_input_token_cost(
+            await context.apply_input_metered_cost(
                 db,
                 usage_log,
-                token_count=total_tokens,
-                require_positive_tokens=True,
+                units=total_tokens,
+                require_positive_units=True,
             )
 
         await log_writer.put(usage_log)
