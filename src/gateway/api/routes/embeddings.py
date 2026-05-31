@@ -7,10 +7,10 @@ from typing import Annotated, Any
 from any_llm import AnyLLM, aembedding
 from any_llm.types.completion import CreateEmbeddingResponse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._embedding_models import EmbeddingRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -23,16 +23,6 @@ from gateway.services.pricing_service import find_model_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
-
-
-class EmbeddingRequest(BaseModel):
-    """OpenAI-compatible embedding request."""
-
-    model: str
-    input: str | list[str] = Field(description="Input text to embed")
-    user: str | None = None
-    encoding_format: str | None = None
-    dimensions: int | None = None
 
 
 @router.post("/embeddings", response_model=None)

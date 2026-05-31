@@ -7,11 +7,11 @@ from typing import Annotated, Any
 from any_llm import AnyLLM, aimage_generation
 from any_llm.types.image import ImagesResponse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._image_models import ImageGenerationRequest
 from gateway.api.routes._usage import rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -23,19 +23,6 @@ from gateway.services.pricing_service import find_model_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["images"])
-
-
-class ImageGenerationRequest(BaseModel):
-    """OpenAI-compatible image generation request."""
-
-    model: str
-    prompt: str
-    n: int | None = None
-    size: str | None = None
-    quality: str | None = None
-    style: str | None = None
-    response_format: str | None = None
-    user: str | None = None
 
 
 @router.post("/images/generations", response_model=None)

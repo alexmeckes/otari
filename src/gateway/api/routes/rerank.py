@@ -6,11 +6,11 @@ from typing import Annotated, Any
 
 from any_llm import AnyLLM, arerank
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._rerank_models import RerankRequest
 from gateway.api.routes._usage import rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -22,17 +22,6 @@ from gateway.services.pricing_service import find_model_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["rerank"])
-
-
-class RerankRequest(BaseModel):
-    """Rerank request."""
-
-    model: str = Field(description="Provider-prefixed model ID, e.g. 'cohere:rerank-v3.5'")
-    query: str = Field(description="The search query to rerank documents against")
-    documents: list[str] = Field(description="List of document strings to rerank", min_length=1)
-    top_n: int | None = Field(default=None, description="Maximum number of results to return", gt=0)
-    max_tokens_per_doc: int | None = Field(default=None, description="Per-document truncation limit", gt=0)
-    user: str | None = Field(default=None, description="User ID for usage attribution")
 
 
 @router.post("/rerank", response_model=None)
