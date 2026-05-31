@@ -118,11 +118,10 @@ def configured_candidate_specs(config: Mapping[str, Any]) -> list[CandidateSpec]
     deduped: list[CandidateSpec] = []
     seen: set[str] = set()
     for spec in specs:
-        provider, provider_model, normalized = split_model_selector(spec.model)
-        dedupe_key = f"{provider}:{provider_model}"
-        if dedupe_key in seen:
+        _provider, _provider_model, normalized = split_model_selector(spec.model)
+        if normalized in seen:
             continue
-        seen.add(dedupe_key)
+        seen.add(normalized)
         deduped.append(
             CandidateSpec(
                 model=normalized,
