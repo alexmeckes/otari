@@ -193,10 +193,11 @@ def _message_streaming_response(
     stream_result: Any,
     db: AsyncSession,
     log_writer: LogWriter,
-    message_context: MessageRequestContext,
-    provider_call_context: MessageProviderCallContext,
-    rate_limit_info: RateLimitInfo | None,
+    execution_context: MessageExecutionContext,
 ) -> StreamingResponse:
+    message_context = execution_context.message_context
+    provider_call_context = execution_context.provider_call_context
+
     async def _on_complete(usage_data: CompletionUsage) -> None:
         await _log_message_usage(
             db=db,
@@ -226,7 +227,7 @@ def _message_streaming_response(
             label=f"{provider_call_context.provider}:{provider_call_context.model}",
         ),
         media_type="text/event-stream",
-        headers=optional_rate_limit_headers(rate_limit_info),
+        headers=optional_rate_limit_headers(execution_context.rate_limit_info),
     )
 
 
@@ -236,10 +237,11 @@ async def _message_response_payload(
     response: Response,
     db: AsyncSession,
     log_writer: LogWriter,
-    message_context: MessageRequestContext,
-    provider_call_context: MessageProviderCallContext,
-    rate_limit_info: RateLimitInfo | None,
+    execution_context: MessageExecutionContext,
 ) -> dict[str, Any]:
+    message_context = execution_context.message_context
+    provider_call_context = execution_context.provider_call_context
+
     usage_data = _message_response_usage(result)
     if usage_data:
         await _log_message_usage(
@@ -250,7 +252,7 @@ async def _message_response_payload(
             usage_data=usage_data,
         )
 
-    apply_rate_limit_headers(response, rate_limit_info)
+    apply_rate_limit_headers(response, execution_context.rate_limit_info)
     return result.model_dump(exclude_none=True)
 
 
@@ -258,10 +260,12 @@ async def _log_and_raise_message_provider_error(
     *,
     db: AsyncSession,
     log_writer: LogWriter,
-    message_context: MessageRequestContext,
-    provider_call_context: MessageProviderCallContext,
+    execution_context: MessageExecutionContext,
     error: BaseException,
 ) -> NoReturn:
+    message_context = execution_context.message_context
+    provider_call_context = execution_context.provider_call_context
+
     await _log_message_usage(
         db=db,
         log_writer=log_writer,
@@ -290,9 +294,7 @@ async def _message_provider_response(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> dict[str, Any] | StreamingResponse:
-    message_context = execution_context.message_context
     provider_call_context = execution_context.provider_call_context
-    rate_limit_info = execution_context.rate_limit_info
     call_kwargs = _message_call_kwargs(provider_call_context, stream=request.stream)
 
     if request.stream:
@@ -301,9 +303,7 @@ async def _message_provider_response(
             stream_result=msg_stream,
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
-            rate_limit_info=rate_limit_info,
+            execution_context=execution_context,
         )
 
     result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
@@ -312,9 +312,7 @@ async def _message_provider_response(
         response=response,
         db=db,
         log_writer=log_writer,
-        message_context=message_context,
-        provider_call_context=provider_call_context,
-        rate_limit_info=rate_limit_info,
+        execution_context=execution_context,
     )
 
 
@@ -352,7 +350,6 @@ async def create_message(
         await _log_and_raise_message_provider_error(
             db=db,
             log_writer=log_writer,
-            message_context=execution_context.message_context,
-            provider_call_context=execution_context.provider_call_context,
+            execution_context=execution_context,
             error=e,
         )

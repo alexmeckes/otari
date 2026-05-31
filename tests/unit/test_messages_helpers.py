@@ -240,6 +240,7 @@ async def test_message_provider_response_calls_non_streaming_provider_and_payloa
     )
     provider_result = _message_response()
     payload = {"ok": True}
+    execution_context = _execution_context(provider_call_context=provider_context)
 
     async def fake_amessages(**kwargs: Any) -> MessageResponse:
         calls.append(("amessages", kwargs))
@@ -257,7 +258,7 @@ async def test_message_provider_response_calls_non_streaming_provider_and_payloa
         response=response,
         db=db,
         log_writer=log_writer,
-        execution_context=_execution_context(provider_call_context=provider_context),
+        execution_context=execution_context,
     )
 
     assert result == payload
@@ -273,9 +274,7 @@ async def test_message_provider_response_calls_non_streaming_provider_and_payloa
                 "response": response,
                 "db": db,
                 "log_writer": log_writer,
-                "message_context": messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
-                "provider_call_context": provider_context,
-                "rate_limit_info": RateLimitInfo(limit=10, remaining=8, reset=123.4),
+                "execution_context": execution_context,
             },
         ),
     ]
@@ -298,6 +297,7 @@ async def test_message_provider_response_calls_streaming_provider_and_response_h
     request.stream = True
     stream_result = object()
     streaming_response = cast(StreamingResponse, object())
+    execution_context = _execution_context(provider_call_context=provider_context)
 
     async def fake_amessages(**kwargs: Any) -> object:
         calls.append(("amessages", kwargs))
@@ -315,7 +315,7 @@ async def test_message_provider_response_calls_streaming_provider_and_response_h
         response=response,
         db=db,
         log_writer=log_writer,
-        execution_context=_execution_context(provider_call_context=provider_context),
+        execution_context=execution_context,
     )
 
     assert result is streaming_response
@@ -331,9 +331,7 @@ async def test_message_provider_response_calls_streaming_provider_and_response_h
                 "stream_result": stream_result,
                 "db": db,
                 "log_writer": log_writer,
-                "message_context": messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
-                "provider_call_context": provider_context,
-                "rate_limit_info": RateLimitInfo(limit=10, remaining=8, reset=123.4),
+                "execution_context": execution_context,
             },
         ),
     ]
@@ -382,7 +380,6 @@ async def test_message_response_payload_logs_usage_sets_headers_and_serializes(
     db = cast(AsyncSession, object())
     log_writer = cast(LogWriter, object())
     response = Response()
-    message_context = messages.MessageRequestContext(api_key_id="key-1", user_id="user-1")
 
     async def fake_log_usage(**kwargs: Any) -> None:
         calls.append(kwargs)
@@ -394,9 +391,7 @@ async def test_message_response_payload_logs_usage_sets_headers_and_serializes(
         response=response,
         db=db,
         log_writer=log_writer,
-        message_context=message_context,
-        provider_call_context=_provider_call_context(),
-        rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
+        execution_context=_execution_context(),
     )
 
     assert response.headers["X-RateLimit-Limit"] == "10"
@@ -483,8 +478,7 @@ async def test_log_and_raise_message_provider_error_preserves_logging_and_error_
         await messages._log_and_raise_message_provider_error(
             db=db,
             log_writer=log_writer,
-            message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
-            provider_call_context=_provider_call_context(),
+            execution_context=_execution_context(),
             error=provider_error,
         )
 
@@ -523,7 +517,6 @@ async def test_message_streaming_response_logs_usage_and_sets_headers(monkeypatc
     calls: list[dict[str, Any]] = []
     db = cast(AsyncSession, object())
     log_writer = cast(LogWriter, object())
-    message_context = messages.MessageRequestContext(api_key_id="key-1", user_id="user-1")
 
     async def fake_log_usage(**kwargs: Any) -> None:
         calls.append(kwargs)
@@ -541,9 +534,7 @@ async def test_message_streaming_response_logs_usage_and_sets_headers(monkeypatc
         stream_result=fake_stream(),
         db=db,
         log_writer=log_writer,
-        message_context=message_context,
-        provider_call_context=_provider_call_context(),
-        rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
+        execution_context=_execution_context(),
     )
 
     chunks = [chunk async for chunk in response.body_iterator]
