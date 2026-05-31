@@ -9,9 +9,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._audio_helpers import (
-    log_audio_usage,
-)
 from gateway.api.routes._audio_models import AudioSpeechRequest
 from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
@@ -88,10 +85,13 @@ async def create_transcription(
 
     try:
         result: Transcription = await atranscription(**transcription_kwargs)
-        await log_audio_usage(
-            log_writer=log_writer,
-            context=context,
-            endpoint=_TRANSCRIPTIONS_ENDPOINT,
+        await log_writer.put(
+            context.usage_log(
+                endpoint=_TRANSCRIPTIONS_ENDPOINT,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+            )
         )
 
     except HTTPException:
@@ -158,10 +158,13 @@ async def create_speech(
 
     try:
         audio_bytes: bytes = await aspeech(**speech_kwargs)
-        await log_audio_usage(
-            log_writer=log_writer,
-            context=context,
-            endpoint=_SPEECH_ENDPOINT,
+        await log_writer.put(
+            context.usage_log(
+                endpoint=_SPEECH_ENDPOINT,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+            )
         )
 
     except HTTPException:
