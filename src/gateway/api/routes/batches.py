@@ -12,7 +12,7 @@ from any_llm import AnyLLM, LLMProvider
 from any_llm.api import acancel_batch, acreate_batch, alist_batches, aretrieve_batch, aretrieve_batch_results
 from any_llm.exceptions import BatchNotCompleteError, UnsupportedProviderError
 from any_llm.types.batch import Batch
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from gateway.api.deps import get_config, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._batch_models import BatchRequestItem, CreateBatchRequest
@@ -27,11 +27,7 @@ __all__ = ["BatchRequestItem", "CreateBatchRequest", "router"]
 router = APIRouter(prefix="/v1/batches", tags=["batches"])
 
 T = TypeVar("T")
-
-
-# ---------------------------------------------------------------------------
-# Usage logging helper
-# ---------------------------------------------------------------------------
+ErrorLogger = Callable[[str], Awaitable[None]]
 
 
 async def log_batch_usage(
@@ -58,11 +54,6 @@ async def log_batch_usage(
     await log_writer.put(usage_log)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _parse_provider(provider: str) -> LLMProvider:
     """Parse a provider string into an LLMProvider enum, raising 400 on invalid values."""
     try:
@@ -72,6 +63,25 @@ def _parse_provider(provider: str) -> LLMProvider:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
+
+
+def _split_batch_model(model: str) -> tuple[LLMProvider, str]:
+    try:
+        return AnyLLM.split_model_provider(model)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid request: {e}",
+        ) from e
+
+
+def _ensure_batch_supported(provider: LLMProvider) -> None:
+    provider_class = AnyLLM.get_provider_class(provider)
+    if not getattr(provider_class, "SUPPORTS_BATCH", False):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Provider '{provider.value}' does not support batch operations",
+        )
 
 
 def _batch_provider_context(config: GatewayConfig, provider: str) -> tuple[LLMProvider, dict[str, Any]]:
@@ -85,6 +95,7 @@ async def _run_batch_operation(
     provider: str,
     operation: Callable[..., Awaitable[T]],
     call_kwargs: dict[str, Any],
+    on_error: ErrorLogger | None = None,
 ) -> T:
     try:
         return await operation(**call_kwargs)
@@ -93,6 +104,8 @@ async def _run_batch_operation(
     except BatchNotCompleteError:
         raise
     except Exception as e:
+        if on_error is not None:
+            await on_error(str(e))
         logger.error("Batch %s failed for %s: %s", action, provider, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -106,44 +119,7 @@ def _batch_response(batch: Batch, provider: str) -> dict[str, Any]:
     return response_data
 
 
-# ---------------------------------------------------------------------------
-# Route handlers
-# ---------------------------------------------------------------------------
-
-
-@router.post("", response_model=None)
-async def create_batch(
-    raw_request: Request,
-    background_tasks: BackgroundTasks,
-    request: CreateBatchRequest,
-    auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
-    config: Annotated[GatewayConfig, Depends(get_config)],
-    log_writer: Annotated[LogWriter, Depends(get_log_writer)],
-) -> dict[str, Any]:
-    """Create a batch of LLM requests for asynchronous processing."""
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-    user_id = api_key.user_id if api_key else None
-
-    try:
-        provider, model = AnyLLM.split_model_provider(request.model)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid request: {e}",
-        ) from e
-
-    # Validate provider supports batch operations
-    provider_class = AnyLLM.get_provider_class(provider)
-    if not getattr(provider_class, "SUPPORTS_BATCH", False):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Provider '{provider.value}' does not support batch operations",
-        )
-
-    provider_kwargs = get_provider_kwargs(config, provider)
-
-    # Build JSONL temp file from requests
+def _write_batch_input_file(request: CreateBatchRequest, model: str) -> str:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
         for req_item in request.requests:
             line = {
@@ -153,20 +129,34 @@ async def create_batch(
                 "body": {**req_item.body, "model": model},
             }
             tmp.write(json.dumps(line) + "\n")
-        tmp_path = tmp.name
+        return tmp.name
 
+
+def _remove_batch_input_file(path: str) -> None:
     try:
-        batch: Batch = await acreate_batch(
-            provider=provider,
-            input_file_path=tmp_path,
-            endpoint="/v1/chat/completions",
-            completion_window=request.completion_window,
-            metadata=request.metadata,
-            **provider_kwargs,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
+        os.unlink(path)
+    except OSError:
+        logger.warning("Failed to remove temp file %s", path)
+
+
+@router.post("", response_model=None)
+async def create_batch(
+    request: CreateBatchRequest,
+    auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
+    config: Annotated[GatewayConfig, Depends(get_config)],
+    log_writer: Annotated[LogWriter, Depends(get_log_writer)],
+) -> dict[str, Any]:
+    """Create a batch of LLM requests for asynchronous processing."""
+    api_key = auth_result[0]
+    api_key_id = api_key.id if api_key else None
+    user_id = api_key.user_id if api_key else None
+
+    provider, model = _split_batch_model(request.model)
+    _ensure_batch_supported(provider)
+    provider_kwargs = get_provider_kwargs(config, provider)
+    tmp_path = _write_batch_input_file(request, model)
+
+    async def _log_create_error(error: str) -> None:
         await log_batch_usage(
             log_writer=log_writer,
             api_key_id=api_key_id,
@@ -174,18 +164,26 @@ async def create_batch(
             provider=provider.value,
             endpoint="/v1/batches",
             user_id=user_id,
-            error=str(e),
+            error=error,
         )
-        logger.error("Batch create failed for %s: %s", provider, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from e
+
+    try:
+        batch = await _run_batch_operation(
+            action="create",
+            provider=provider.value,
+            operation=acreate_batch,
+            call_kwargs={
+                "provider": provider,
+                "input_file_path": tmp_path,
+                "endpoint": "/v1/chat/completions",
+                "completion_window": request.completion_window,
+                "metadata": request.metadata,
+                **provider_kwargs,
+            },
+            on_error=_log_create_error,
+        )
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            logger.warning("Failed to remove temp file %s", tmp_path)
+        _remove_batch_input_file(tmp_path)
 
     await log_batch_usage(
         log_writer=log_writer,
@@ -196,16 +194,13 @@ async def create_batch(
         user_id=user_id,
     )
 
-    response_data = batch.model_dump()
-    response_data["provider"] = provider.value
-    return response_data
+    return _batch_response(batch, provider.value)
 
 
 @router.get("/{batch_id}", response_model=None)
 async def retrieve_batch(
     batch_id: str,
     provider: str,
-    raw_request: Request,
     auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
     config: Annotated[GatewayConfig, Depends(get_config)],
 ) -> dict[str, Any]:
@@ -224,7 +219,6 @@ async def retrieve_batch(
 async def cancel_batch(
     batch_id: str,
     provider: str,
-    raw_request: Request,
     auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
     config: Annotated[GatewayConfig, Depends(get_config)],
 ) -> dict[str, Any]:
@@ -242,7 +236,6 @@ async def cancel_batch(
 @router.get("", response_model=None)
 async def list_batches(
     provider: str,
-    raw_request: Request,
     auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
     config: Annotated[GatewayConfig, Depends(get_config)],
     after: str | None = None,
@@ -278,13 +271,12 @@ async def list_batches(
 async def retrieve_batch_results(
     batch_id: str,
     provider: str,
-    raw_request: Request,
     auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
     config: Annotated[GatewayConfig, Depends(get_config)],
     log_writer: Annotated[LogWriter, Depends(get_log_writer)],
 ) -> dict[str, Any]:
     """Retrieve the results of a completed batch."""
-    api_key, is_master_key = auth_result
+    api_key = auth_result[0]
     api_key_id = api_key.id if api_key else None
     user_id = api_key.user_id if api_key else None
 
