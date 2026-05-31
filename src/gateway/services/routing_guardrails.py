@@ -7,14 +7,14 @@ from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
-from gateway.services.routing_config_values import string_list
+from gateway.services.routing_config_values import bool_config, string_list
 from gateway.services.routing_guardrail_helpers import (
     PII_PATTERNS,
     guardrail_violation,
     guardrails_config,
     named_patterns,
 )
-from gateway.services.routing_request_analysis import bool_config, jsonable_text
+from gateway.services.routing_request_analysis import jsonable_text
 
 ExternalClassifierPost = _routing_guardrail_external.ExternalClassifierPost
 post_external_guardrail_classifier = _routing_guardrail_external.post_external_guardrail_classifier

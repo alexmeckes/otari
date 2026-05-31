@@ -21,6 +21,7 @@ from gateway.services import routing_provider_health as _routing_provider_health
 from gateway.services import routing_request_analysis as _routing_request_analysis
 from gateway.services import routing_weighted_scoring as _routing_weighted_scoring
 from gateway.services.pricing_service import find_model_pricing
+from gateway.services.routing_config_values import bool_config
 from gateway.services.routing_context_policy import apply_context_policy as apply_context_policy
 from gateway.services.routing_provider_health import ProviderHealth as ProviderHealth
 
@@ -38,8 +39,6 @@ ROUTING_STRATEGIES = {
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
 _TIER_ORDER = _routing_candidate_specs.TIER_ORDER
-_bool_config = _routing_request_analysis.bool_config
-_int_config = _routing_request_analysis.int_config
 _jsonable_text = _routing_request_analysis.jsonable_text
 classify_request_tier = _routing_request_analysis.classify_request_tier
 estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
@@ -246,7 +245,7 @@ def _order_candidates(
 def _fallback_enabled(config: Mapping[str, Any], *, strategy: str) -> bool:
     if strategy == "single":
         return False
-    return _bool_config(config.get("fallback_enabled"), True)
+    return bool_config(config.get("fallback_enabled"), True)
 
 
 async def _post_external_guardrail_classifier(

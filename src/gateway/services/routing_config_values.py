@@ -19,6 +19,30 @@ def string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def int_config(value: Any, default: int) -> int:
+    if isinstance(value, int) and value > 0:
+        return value
+    return default
+
+
+def non_negative_int_config(value: Any, default: int) -> int:
+    if isinstance(value, int) and value >= 0:
+        return value
+    return default
+
+
+def bool_config(value: Any, default: bool, *, coerce_strings: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if coerce_strings and isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
 def float_or_none(value: Any) -> float | None:
     if isinstance(value, bool):
         return None

@@ -5,13 +5,10 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_config_values import bool_config, dict_or_empty, int_config, non_negative_int_config
 from gateway.services.routing_request_analysis import (
-    bool_config,
     estimate_prompt_tokens,
-    int_config,
     jsonable_text,
-    non_negative_int_config,
 )
 
 _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}

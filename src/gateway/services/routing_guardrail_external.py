@@ -5,9 +5,8 @@ from typing import Any
 
 import httpx
 
-from gateway.services.routing_config_values import non_negative_float_or_none
+from gateway.services.routing_config_values import bool_config, non_negative_float_or_none
 from gateway.services.routing_guardrail_helpers import guardrail_violation
-from gateway.services.routing_request_analysis import bool_config
 
 ExternalClassifierPost = Callable[
     ...,

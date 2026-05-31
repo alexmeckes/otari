@@ -1,9 +1,12 @@
 import pytest
 
 from gateway.services.routing_config_values import (
+    bool_config,
     dict_or_empty,
     float_or_none,
+    int_config,
     non_negative_float_or_none,
+    non_negative_int_config,
     score_or_none,
     string_list,
 )
@@ -40,6 +43,60 @@ def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
 )
 def test_string_list(value: object, expected: list[str]) -> None:
     assert string_list(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "default", "expected"),
+    [
+        (True, False, True),
+        (False, True, False),
+        ("true", False, False),
+        (None, True, True),
+    ],
+)
+def test_bool_config_strict(value: object, default: bool, expected: bool) -> None:
+    assert bool_config(value, default) is expected
+
+
+@pytest.mark.parametrize(
+    ("value", "default", "expected"),
+    [
+        ("true", False, True),
+        (" yes ", False, True),
+        ("0", True, False),
+        ("off", True, False),
+        ("maybe", True, True),
+        (None, False, False),
+    ],
+)
+def test_bool_config_can_coerce_strings(value: object, default: bool, expected: bool) -> None:
+    assert bool_config(value, default, coerce_strings=True) is expected
+
+
+@pytest.mark.parametrize(
+    ("value", "default", "expected"),
+    [
+        (3, 1, 3),
+        (0, 1, 1),
+        (-1, 1, 1),
+        ("3", 1, 1),
+    ],
+)
+def test_int_config(value: object, default: int, expected: int) -> None:
+    assert int_config(value, default) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "default", "expected"),
+    [
+        (3, 1, 3),
+        (0, 1, 0),
+        (-1, 1, 1),
+        ("3", 1, 1),
+    ],
+)
+def test_non_negative_int_config(value: object, default: int, expected: int) -> None:
+    assert non_negative_int_config(value, default) == expected
 
 
 @pytest.mark.parametrize(

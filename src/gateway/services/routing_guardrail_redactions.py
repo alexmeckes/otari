@@ -5,9 +5,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty, string_list
+from gateway.services.routing_config_values import bool_config, dict_or_empty, string_list
 from gateway.services.routing_guardrail_helpers import PII_PATTERNS, guardrails_config, named_patterns
-from gateway.services.routing_request_analysis import bool_config
 
 
 def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:

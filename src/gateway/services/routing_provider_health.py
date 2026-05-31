@@ -6,14 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import RouteTrace
-from gateway.services import routing_request_analysis as _routing_request_analysis
-from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none
+from gateway.services.routing_config_values import bool_config, dict_or_empty, int_config, non_negative_float_or_none
 from gateway.services.routing_trace_attempts import attempt_outcome, attempt_provider
 
 _HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
 _HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
-_bool_config = _routing_request_analysis.bool_config
-_int_config = _routing_request_analysis.int_config
 
 
 @dataclass(frozen=True)
@@ -46,7 +43,7 @@ def _provider_health_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _provider_health_enabled(config: Mapping[str, Any]) -> bool:
-    return _bool_config(_provider_health_config(config).get("enabled"), False)
+    return bool_config(_provider_health_config(config).get("enabled"), False)
 
 
 def _provider_health_mode(config: Mapping[str, Any]) -> str:
@@ -69,7 +66,7 @@ def _provider_health_from_counts(
     config: Mapping[str, Any],
 ) -> ProviderHealth:
     sample_count = success_count + error_count
-    min_samples = _int_config(_provider_health_config(config).get("min_samples"), 3)
+    min_samples = int_config(_provider_health_config(config).get("min_samples"), 3)
     degraded_rate = _provider_health_rate(config, "degraded_failure_rate", 0.25)
     unhealthy_rate = _provider_health_rate(config, "unhealthy_failure_rate", 0.50)
     failure_rate = None if sample_count == 0 else error_count / sample_count
@@ -128,7 +125,7 @@ async def attach_provider_health(
     if not candidate_providers:
         return list(candidates)
 
-    sample_limit = _int_config(_provider_health_config(config).get("sample_limit"), 200)
+    sample_limit = int_config(_provider_health_config(config).get("sample_limit"), 200)
     counts_by_provider = {
         provider: {"success": 0, "error": 0}
         for provider in candidate_providers

@@ -3,19 +3,7 @@ from typing import Any
 
 from any_llm import AnyLLM
 
-from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none, string_list
-
-
-def _bool_config(value: Any, default: bool) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on"}:
-            return True
-        if lowered in {"0", "false", "no", "off"}:
-            return False
-    return default
+from gateway.services.routing_config_values import bool_config, dict_or_empty, non_negative_float_or_none, string_list
 
 
 def _string_set(value: Any) -> set[str]:
@@ -90,7 +78,7 @@ def _constraint_failure(
     if blocked_regions and candidate_regions & blocked_regions:
         return "region_blocked"
 
-    if _bool_config(constraints.get("require_region_match"), False):
+    if bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
         requested_region = _request_region(constraints, tags)
         if requested_region is not None:
             if not candidate_regions:
@@ -102,7 +90,7 @@ def _constraint_failure(
     if max_estimated_cost is None:
         return None
 
-    allow_unknown_cost = _bool_config(constraints.get("allow_unknown_cost"), False)
+    allow_unknown_cost = bool_config(constraints.get("allow_unknown_cost"), False, coerce_strings=True)
     if candidate.estimated_cost is None:
         return None if allow_unknown_cost else "estimated_cost_unknown"
     if candidate.estimated_cost > max_estimated_cost:
