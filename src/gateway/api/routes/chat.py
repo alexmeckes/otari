@@ -2,7 +2,7 @@ import asyncio
 from typing import Annotated
 
 import httpx
-from any_llm import AnyLLM, acompletion
+from any_llm import acompletion
 from any_llm.types.completion import (
     ChatCompletion,
 )
@@ -12,25 +12,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer
 from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolve_chat_request_context
-from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_platform_non_streaming import run_platform_non_streaming_chat
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
+from gateway.api.routes._chat_standalone_non_streaming import run_standalone_non_streaming_chat
 from gateway.api.routes._chat_standalone_streaming import run_standalone_streaming_chat
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
-from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.services.chat_tool_config import strip_gateway_fields
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     MAX_TOOL_ITERATIONS_CAP,
-    MaxToolIterationsExceeded,
 )
-from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
@@ -219,10 +215,6 @@ async def chat_completions(
             mcp_client_pool_factory=MCPClientPool,
         )
 
-    if routing_plan is None:
-        provider, model = AnyLLM.split_model_provider(request.model)
-        provider_kwargs = get_provider_kwargs(config, provider)
-
     if routing_plan is not None:
         assert db is not None
         return await run_standalone_routing_plan(
@@ -249,114 +241,17 @@ async def chat_completions(
             mcp_client_pool_factory=MCPClientPool,
         )
 
-    # Standalone path (no platform / no fallback). Same MCP / sandbox /
-    # web_search semantics as platform mode above: if `mcp_servers` is set,
-    # the request goes through the MCP tool-use loop; if `tools` includes a
-    # code_execution entry, the request goes through the SandboxBackend
-    # tool-use loop; if `tools` includes a web_search entry, the request
-    # goes through the WebSearchBackend tool-use loop; otherwise a single
-    # ``acompletion`` call.
-    request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
-        tools_extracted=tools_extracted,
-        remaining_user_tools=remaining_user_tools,
+    return await run_standalone_non_streaming_chat(
+        request=request,
+        response=response,
+        config=config,
+        db=db,
+        log_writer=log_writer,
+        api_key_id=api_key_id,
+        user_id=user_id,
+        rate_limit_info=rate_limit_info,
+        tool_selection=tool_selection,
+        max_tool_iterations=max_tool_iterations,
+        completion_fn=acompletion,
+        mcp_client_pool_factory=MCPClientPool,
     )
-    completion_kwargs = {**provider_kwargs, **request_fields}
-
-    try:
-        completion = await run_non_streaming_completion(
-            completion_kwargs=completion_kwargs,
-            completion_fn=acompletion,
-            mcp_client_pool_factory=MCPClientPool,
-            mcp_server_configs=mcp_server_configs,
-            max_tool_iterations=max_tool_iterations,
-            tools_header=request.tools_header,
-            use_sandbox=use_sandbox,
-            sandbox_url=sandbox_url,
-            sandbox_tool_entry=sandbox_tool_entry,
-            use_web_search=use_web_search,
-            web_search_url=web_search_url,
-            web_search_tool_entry=web_search_tool_entry,
-        )
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                response=completion,
-            )
-    except HTTPException:
-        raise
-    except SandboxNotReachableError as exc:
-        # Sandbox is gateway-side infra, not an LLM provider. Clearer detail
-        # so operators don't chase a provider outage that's really the
-        # sandbox container being down.
-        logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-        ) from exc
-    except WebSearchNotReachableError as exc:
-        logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-        ) from exc
-    except MaxToolIterationsExceeded as e:
-        # Gateway-owned cap, not an upstream provider failure. 422 lets
-        # callers distinguish a runaway tool loop from a real outage.
-        logger.warning("Tool loop iteration cap hit (standalone): cap=%d", max_tool_iterations)
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                error=str(e),
-            )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
-        ) from e
-    except Exception as e:
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                error=str(e),
-            )
-
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
-        if isinstance(e, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="LLM provider timeout",
-            ) from e
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from e
-
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
-
-    return completion
