@@ -8,7 +8,7 @@ from any_llm import AnyLLM
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes._budget_checks import validate_user_request_budget
+from gateway.api.routes._budget_checks import validate_scoped_request_budgets
 from gateway.api.routes._helpers import resolve_openai_user_id
 from gateway.api.routes._usage import (
     apply_rate_limit_headers,
@@ -159,6 +159,8 @@ async def resolve_openai_provider_request_context(
     db: AsyncSession,
     config: GatewayConfig,
     model: str,
+    project_id: str | None = None,
+    tags: dict[str, Any] | None = None,
 ) -> OpenAIProviderRequestContext:
     api_key, is_master_key = auth_result
     api_key_id = api_key.id if api_key else None
@@ -169,7 +171,14 @@ async def resolve_openai_provider_request_context(
     )
     rate_limit_info = check_rate_limit(raw_request, user_id)
 
-    await validate_user_request_budget(db, user_id, model, strategy=config.budget_strategy)
+    await validate_scoped_request_budgets(
+        db,
+        user_id=user_id,
+        model=model,
+        project_id=project_id,
+        tags=tags,
+        strategy=config.budget_strategy,
+    )
 
     provider, model_name = AnyLLM.split_model_provider(model)
     return OpenAIProviderRequestContext(

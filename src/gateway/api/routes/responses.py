@@ -7,8 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._budget_checks import validate_scoped_request_budgets
-from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._responses_native import (
     log_native_response_usage,
     native_response_call_kwargs,
@@ -24,16 +23,13 @@ from gateway.api.routes._responses_transform import (
     set_served_headers,
     usage_to_completion_usage,
 )
-from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.api.routes.chat import (
     chat_completions,
 )
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
-from gateway.rate_limit import check_rate_limit
 from gateway.services.log_writer import LogWriter
-from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL
 
 router = APIRouter(prefix="/v1", tags=["responses"])
@@ -82,36 +78,31 @@ async def _run_provider_native_response(
     config: GatewayConfig,
     log_writer: LogWriter,
 ) -> dict[str, Any] | StreamingResponse:
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_openai_user_id(
-        user_id_from_request=request_body.user,
-        api_key=api_key,
-        is_master_key=is_master_key,
-    )
-
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    await validate_scoped_request_budgets(
-        db,
-        user_id=user_id,
+    context = await resolve_openai_provider_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=request_body.user,
+        db=db,
+        config=config,
         model=request_body.model,
         project_id=request_body.project_id,
         tags=request_body.tags,
-        strategy=config.budget_strategy,
     )
 
-    provider, model = AnyLLM.split_model_provider(request_body.model)
-    provider_class = AnyLLM.get_provider_class(provider)
+    provider_class = AnyLLM.get_provider_class(context.provider)
     if not getattr(provider_class, "SUPPORTS_RESPONSES", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Provider '{provider.value}' does not support the Responses API",
+            detail=f"Provider '{context.provider.value}' does not support the Responses API",
         )
 
-    provider_kwargs = get_provider_kwargs(config, provider)
-    call_kwargs, stream = native_response_call_kwargs(request_body, provider_kwargs, provider, model, user_id)
+    call_kwargs, stream = native_response_call_kwargs(
+        request_body,
+        context.provider_kwargs,
+        context.provider,
+        context.model,
+        context.user_id,
+    )
 
     try:
         if stream:
@@ -121,12 +112,12 @@ async def _run_provider_native_response(
                 stream_result=stream_result,
                 db=db,
                 log_writer=log_writer,
-                api_key_id=api_key_id,
-                provider=provider,
-                model=model,
-                user_id=user_id,
+                api_key_id=context.api_key_id,
+                provider=context.provider,
+                model=context.model,
+                user_id=context.user_id,
                 request_body=request_body,
-                rate_limit_info=rate_limit_info,
+                rate_limit_info=context.rate_limit_info,
             )
 
         result = await aresponses(**call_kwargs)
@@ -134,10 +125,10 @@ async def _run_provider_native_response(
         await log_native_response_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=api_key_id,
-            provider=provider,
-            model=model,
-            user_id=user_id,
+            api_key_id=context.api_key_id,
+            provider=context.provider,
+            model=context.model,
+            user_id=context.user_id,
             request_body=request_body,
             usage_data=usage_data,
         )
@@ -148,25 +139,29 @@ async def _run_provider_native_response(
         await log_native_response_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=api_key_id,
-            provider=provider,
-            model=model,
-            user_id=user_id,
+            api_key_id=context.api_key_id,
+            provider=context.provider,
+            model=context.model,
+            user_id=context.user_id,
             request_body=request_body,
             error=str(e),
         )
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
+        logger.error("Provider call failed for %s:%s: %s", context.provider, context.model, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="LLM provider error",
         ) from e
 
-    apply_rate_limit_headers(response, rate_limit_info)
+    context.apply_rate_limit_headers(response)
 
-    metadata = served_metadata(provider.value, model)
+    metadata = served_metadata(context.provider.value, context.model)
     set_served_headers(response, metadata)
     payload = result.model_dump(exclude_none=True)  # type: ignore[union-attr]
-    return response_payload_with_served_metadata(payload, provider=provider.value, requested_model=model)
+    return response_payload_with_served_metadata(
+        payload,
+        provider=context.provider.value,
+        requested_model=context.model,
+    )
 
 
 @router.post("/responses", response_model=None)

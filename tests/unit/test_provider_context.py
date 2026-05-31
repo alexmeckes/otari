@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from fastapi import HTTPException, Response
 
-from gateway.api.routes._provider_context import OpenAIProviderRequestContext
+from gateway.api.routes._provider_context import OpenAIProviderRequestContext, resolve_openai_provider_request_context
 from gateway.models.entities import UsageLog
 from gateway.rate_limit import RateLimitInfo
 
@@ -23,7 +24,10 @@ class StubPricing:
 
 
 _FIND_MODEL_PRICING = "gateway.api.routes._provider_context.find_model_pricing"
+_GET_PROVIDER_KWARGS = "gateway.api.routes._provider_context.get_provider_kwargs"
 _LOG_MISSING_PRICING = "gateway.api.routes._provider_context.log_missing_pricing"
+_CHECK_RATE_LIMIT = "gateway.api.routes._provider_context.check_rate_limit"
+_VALIDATE_SCOPED_BUDGETS = "gateway.api.routes._provider_context.validate_scoped_request_budgets"
 
 
 def _context(rate_limit_info: RateLimitInfo | None = None) -> OpenAIProviderRequestContext:
@@ -144,6 +148,63 @@ def test_provider_context_usage_log_includes_identity_fields() -> None:
     assert usage_log.completion_tokens == 2
     assert usage_log.total_tokens == 3
     assert usage_log.tags == {"kind": "unit"}
+
+
+@pytest.mark.asyncio
+async def test_resolve_provider_context_validates_scoped_budgets(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+    db = object()
+    tags = {"team": "platform"}
+
+    async def fake_validate_scoped_request_budgets(
+        db_arg: Any,
+        *,
+        user_id: str,
+        model: str,
+        project_id: str | None,
+        tags: dict[str, Any] | None,
+        strategy: str,
+    ) -> None:
+        captured.update(
+            {
+                "db": db_arg,
+                "user_id": user_id,
+                "model": model,
+                "project_id": project_id,
+                "tags": tags,
+                "strategy": strategy,
+            }
+        )
+
+    monkeypatch.setattr(_VALIDATE_SCOPED_BUDGETS, fake_validate_scoped_request_budgets)
+    monkeypatch.setattr(_CHECK_RATE_LIMIT, lambda raw_request, user_id: RateLimitInfo(10, 9, 123.0))
+    monkeypatch.setattr(_GET_PROVIDER_KWARGS, lambda config, provider: {"api_key": "sk-test"})
+
+    context = await resolve_openai_provider_request_context(
+        raw_request=object(),  # type: ignore[arg-type]
+        auth_result=(None, True),
+        user="user-1",
+        db=db,  # type: ignore[arg-type]
+        config=SimpleNamespace(budget_strategy="cas"),  # type: ignore[arg-type]
+        model="openai:gpt-4o-mini",
+        project_id="proj-1",
+        tags=tags,
+    )
+
+    assert captured == {
+        "db": db,
+        "user_id": "user-1",
+        "model": "openai:gpt-4o-mini",
+        "project_id": "proj-1",
+        "tags": tags,
+        "strategy": "cas",
+    }
+    assert context.api_key_id is None
+    assert context.user_id == "user-1"
+    assert context.provider.value == "openai"
+    assert context.model == "gpt-4o-mini"
+    assert context.provider_kwargs == {"api_key": "sk-test"}
+    assert context.rate_limit_info == RateLimitInfo(10, 9, 123.0)
 
 
 @pytest.mark.asyncio
