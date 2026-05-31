@@ -17,6 +17,7 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._message_models import MessagesRequest
+from gateway.api.routes._stream_events import format_typed_stream_event
 from gateway.api.routes._usage import (
     apply_rate_limit_headers,
     log_usage,
@@ -186,10 +187,6 @@ async def _message_execution_context(
     )
 
 
-def _format_message_stream_chunk(event: MessageStreamEvent) -> str:
-    return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
-
-
 def _message_stream_event_usage(event: MessageStreamEvent) -> CompletionUsage | None:
     if isinstance(event, MessageDeltaEvent):
         return _message_completion_usage(event.usage.input_tokens, event.usage.output_tokens)
@@ -224,7 +221,7 @@ def _message_streaming_response(
     return StreamingResponse(
         streaming_generator(
             stream=stream_result,
-            format_chunk=_format_message_stream_chunk,
+            format_chunk=format_typed_stream_event,
             extract_usage=_message_stream_event_usage,
             fmt=ANTHROPIC_STREAM_FORMAT,
             on_complete=_on_complete,

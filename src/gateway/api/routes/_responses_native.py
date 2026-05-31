@@ -14,6 +14,7 @@ from gateway.api.routes._responses_transform import (
     set_served_headers,
     usage_to_completion_usage,
 )
+from gateway.api.routes._stream_events import format_typed_stream_event
 from gateway.api.routes._usage import log_usage
 from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
@@ -95,7 +96,7 @@ def native_response_streaming_response(
     return StreamingResponse(
         streaming_generator(
             stream=stream_result,
-            format_chunk=_format_response_stream_event,
+            format_chunk=format_typed_stream_event,
             extract_usage=_extract_response_stream_usage,
             fmt=RESPONSES_STREAM_FORMAT,
             on_complete=_on_complete,
@@ -122,10 +123,6 @@ def native_response_payload(
         provider=context.provider.value,
         requested_model=context.model,
     )
-
-
-def _format_response_stream_event(event: ResponseStreamEvent) -> str:
-    return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
 
 
 def _extract_response_stream_usage(event: ResponseStreamEvent) -> CompletionUsage | None:
