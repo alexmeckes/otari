@@ -15,7 +15,7 @@ from gateway.api.routes._usage import (
     log_and_raise_provider_error,
     log_usage_error,
     make_usage_log,
-    rate_limit_headers,
+    optional_rate_limit_headers,
 )
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
@@ -46,9 +46,7 @@ class OpenAIProviderRequestContext:
         return call_kwargs
 
     def rate_limit_headers(self) -> dict[str, str]:
-        if self.rate_limit_info is None:
-            return {}
-        return rate_limit_headers(self.rate_limit_info)
+        return optional_rate_limit_headers(self.rate_limit_info)
 
     def apply_rate_limit_headers(self, response: Response) -> None:
         apply_rate_limit_headers(response, self.rate_limit_info)

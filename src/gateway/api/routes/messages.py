@@ -16,7 +16,7 @@ from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._message_models import MessagesRequest
-from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, optional_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
@@ -150,7 +150,7 @@ async def create_message(
                 )
 
             msg_stream = await amessages(**call_kwargs)
-            rl_headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
+            rl_headers = optional_rate_limit_headers(rate_limit_info)
             return StreamingResponse(
                 streaming_generator(
                     stream=msg_stream,  # type: ignore[arg-type]

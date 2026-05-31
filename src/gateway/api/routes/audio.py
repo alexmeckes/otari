@@ -167,8 +167,7 @@ async def create_speech(
 
     content_type = _SPEECH_CONTENT_TYPES.get(request.response_format, "audio/mpeg")
 
-    headers: dict[str, str] = {}
-    headers.update(context.rate_limit_headers())
+    headers = context.rate_limit_headers()
 
     return StreamingResponse(
         content=iter([audio_bytes]),

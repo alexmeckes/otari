@@ -23,10 +23,14 @@ def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
     }
 
 
-def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> None:
+def optional_rate_limit_headers(info: RateLimitInfo | None) -> dict[str, str]:
     if info is None:
-        return
-    for key, value in rate_limit_headers(info).items():
+        return {}
+    return rate_limit_headers(info)
+
+
+def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> None:
+    for key, value in optional_rate_limit_headers(info).items():
         response.headers[key] = value
 
 

@@ -7,7 +7,7 @@ from any_llm.types.completion import ChatCompletionChunk, CompletionUsage
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes._usage import log_usage, rate_limit_headers
+from gateway.api.routes._usage import log_usage, optional_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
@@ -98,11 +98,10 @@ def build_chat_streaming_response(
             error=error,
         )
 
-    rl_headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
     # StreamingResponse builds its own response object, so headers we want on
     # the wire have to be passed here rather than assigned to FastAPI's
     # dependency-injected Response object.
-    headers = dict(rl_headers)
+    headers = optional_rate_limit_headers(rate_limit_info)
     if platform_mode and correlation_id:
         headers["X-Correlation-ID"] = correlation_id
     if platform_mode and request_id:

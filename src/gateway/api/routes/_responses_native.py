@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._responses_transform import ResponsesRequest, served_metadata, usage_to_completion_usage
-from gateway.api.routes._usage import log_usage, rate_limit_headers
+from gateway.api.routes._usage import log_usage, optional_rate_limit_headers
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
@@ -132,7 +132,7 @@ def _response_stream_headers(
     provider_value: str,
     model: str,
 ) -> dict[str, str]:
-    headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
+    headers = optional_rate_limit_headers(rate_limit_info)
     metadata = served_metadata(provider_value, model)
     headers["X-Response-Model"] = metadata["model"]
     headers["X-Response-Vendor"] = metadata["vendor"]
