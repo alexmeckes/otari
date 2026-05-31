@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from any_llm import AnyLLM
 from any_llm.exceptions import AnyLLMError
 from fastapi import HTTPException, status
 from sqlalchemy import update
@@ -20,7 +19,7 @@ from gateway.services import budget_alerts as _budget_alerts
 from gateway.services import budget_periods as _budget_periods
 from gateway.services import budget_tags as _budget_tags
 from gateway.services.budget_reset_logs import new_budget_reset_log
-from gateway.services.pricing_service import find_model_pricing
+from gateway.services.pricing_service import find_model_pricing, split_pricing_model_ref
 
 TAG_BUDGET_SCOPE = _budget_tags.TAG_BUDGET_SCOPE
 BUDGET_ALERT_SCOPE_PROJECT = _budget_alerts.BUDGET_ALERT_SCOPE_PROJECT
@@ -228,7 +227,7 @@ async def validate_user_budget(
     Args:
         db: Database session
         user_id: User identifier
-        model: Optional model identifier (e.g., "provider/model") to check if it's a free model
+        model: Optional model identifier (e.g., "provider:model" or "provider/model") to check if it's a free model
 
     Returns:
         User object if validation passes
@@ -342,16 +341,15 @@ async def _is_model_free(db: AsyncSession, model: str) -> bool:
 
     Args:
         db: Database session
-        model: Model identifier (e.g., "provider/model" or "model")
+        model: Model identifier (e.g., "provider:model" or "provider/model")
 
     Returns:
         True if the model is free, False otherwise or if pricing not found
 
     """
     try:
-        provider, model_name = AnyLLM.split_model_provider(model)
-        provider_str = provider.value if provider else None
-        pricing = await find_model_pricing(db, provider_str, model_name)
+        provider, model_name = split_pricing_model_ref(model)
+        pricing = await find_model_pricing(db, provider, model_name)
         if pricing:
             return pricing.input_price_per_million == 0 and pricing.output_price_per_million == 0
     except (AnyLLMError, ValueError, SQLAlchemyError) as e:

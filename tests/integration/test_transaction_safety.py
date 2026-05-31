@@ -127,14 +127,14 @@ async def test_reset_user_budget_rollback_on_commit_failure(async_db: AsyncSessi
 
 @pytest.mark.asyncio
 async def test_is_model_free_catches_value_error(async_db: AsyncSession) -> None:
-    """_is_model_free returns False on ValueError from split_model_provider."""
+    """_is_model_free returns False on ValueError from model-ref parsing."""
     result = await _is_model_free(async_db, "completely-invalid-model-string-no-provider")
     assert result is False
 
 
 @pytest.mark.asyncio
 async def test_is_model_free_catches_unsupported_provider_error(async_db: AsyncSession) -> None:
-    """_is_model_free returns False on UnsupportedProviderError from split_model_provider."""
+    """_is_model_free returns False on UnsupportedProviderError from model-ref parsing."""
     result = await _is_model_free(async_db, "unknown:some-model")
     assert result is False
 
