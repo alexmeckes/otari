@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._embedding_models import EmbeddingRequest
 from gateway.api.routes._helpers import resolve_user_id
-from gateway.api.routes._usage import rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
@@ -134,8 +134,6 @@ async def create_embedding(
             detail="The request could not be completed by the provider",
         ) from e
 
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
+    apply_rate_limit_headers(response, rate_limit_info)
 
     return result

@@ -23,7 +23,7 @@ from gateway.api.routes._responses_transform import (
     set_served_headers,
     usage_to_completion_usage,
 )
-from gateway.api.routes._usage import rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.api.routes.chat import (
     chat_completions,
 )
@@ -172,9 +172,7 @@ async def create_response(
             detail="LLM provider error",
         ) from e
 
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
+    apply_rate_limit_headers(response, rate_limit_info)
 
     metadata = served_metadata(provider.value, model)
     set_served_headers(response, metadata)

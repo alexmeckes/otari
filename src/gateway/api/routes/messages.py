@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._message_models import MessagesRequest
-from gateway.api.routes._usage import log_usage, rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
@@ -202,8 +202,6 @@ async def create_message(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         ) from e
 
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
+    apply_rate_limit_headers(response, rate_limit_info)
 
     return result.model_dump(exclude_none=True)

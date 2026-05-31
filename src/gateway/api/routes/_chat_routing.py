@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_tools import ChatToolSelection
-from gateway.api.routes._usage import log_usage, rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
@@ -301,9 +301,7 @@ async def _record_routing_attempt_success(
         trace_id=trace_id,
         routed_model=attempt.candidate.model,
     )
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
+    apply_rate_limit_headers(response, rate_limit_info)
 
 
 async def _raise_final_routing_attempt_error(

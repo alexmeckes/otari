@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk, CompletionUsage
+from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
@@ -20,6 +21,13 @@ def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
         "X-RateLimit-Remaining": str(info.remaining),
         "X-RateLimit-Reset": str(int(info.reset)),
     }
+
+
+def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> None:
+    if info is None:
+        return
+    for key, value in rate_limit_headers(info).items():
+        response.headers[key] = value
 
 
 async def log_usage(

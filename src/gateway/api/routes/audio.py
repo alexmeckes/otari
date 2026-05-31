@@ -16,7 +16,7 @@ from gateway.api.routes._audio_helpers import (
     with_optional_kwargs,
 )
 from gateway.api.routes._audio_models import AudioSpeechRequest
-from gateway.api.routes._usage import rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
@@ -109,9 +109,7 @@ async def create_transcription(
             error=e,
         )
 
-    if context.rate_limit_info:
-        for key, value in rate_limit_headers(context.rate_limit_info).items():
-            response.headers[key] = value
+    apply_rate_limit_headers(response, context.rate_limit_info)
 
     return result.model_dump()
 

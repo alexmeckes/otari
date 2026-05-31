@@ -10,7 +10,7 @@ from fastapi import BackgroundTasks, HTTPException, Response, status
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_tools import ChatToolSelection
-from gateway.api.routes._usage import rate_limit_headers
+from gateway.api.routes._usage import apply_rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
@@ -167,9 +167,7 @@ async def run_platform_non_streaming_chat(
             None,
         )
         response.headers["X-Correlation-ID"] = attempt.attempt_id
-        if rate_limit_info:
-            for key, value in rate_limit_headers(rate_limit_info).items():
-                response.headers[key] = value
+        apply_rate_limit_headers(response, rate_limit_info)
         return completion
 
     logger.error(
