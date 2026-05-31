@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._embedding_models import EmbeddingRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import apply_rate_limit_headers
@@ -17,7 +18,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import check_rate_limit
-from gateway.services.budget_service import validate_user_budget
 from gateway.services.log_writer import LogWriter
 from gateway.services.pricing_service import find_model_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
@@ -65,9 +65,7 @@ async def create_embedding(
 
     rate_limit_info = check_rate_limit(raw_request, user_id)
 
-    _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
+    await validate_user_request_budget(db, user_id, request.model, strategy=config.budget_strategy)
 
     provider, model = AnyLLM.split_model_provider(request.model)
 

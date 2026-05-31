@@ -7,12 +7,12 @@ from any_llm import AnyLLM
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
-from gateway.services.budget_service import validate_user_budget
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 
@@ -100,9 +100,7 @@ async def audio_provider_call_context(
         auth_result=auth_result,
         user=user,
     )
-    _ = await validate_user_budget(db, context.user_id, model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
+    await validate_user_request_budget(db, context.user_id, model, strategy=config.budget_strategy)
 
     provider, model_name = AnyLLM.split_model_provider(model)
     return context, provider, model_name, get_provider_kwargs(config, provider)

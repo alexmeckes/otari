@@ -5,12 +5,12 @@ from fastapi import HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import verify_api_key_or_master_key
+from gateway.api.routes._budget_checks import validate_scoped_request_budgets
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
-from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
 from gateway.services.platform_gateway import (
     ResolvedRoute,
     extract_platform_user_token,
@@ -83,12 +83,14 @@ async def resolve_chat_request_context(
     )
 
     rate_limit_info = check_rate_limit(raw_request, user_id)
-    _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
-    if request.project_id is not None:
-        _ = await validate_project_budget(db, request.project_id, request.model, strategy=config.budget_strategy)
-    _ = await validate_tag_budgets(db, request.tags, request.model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
+    await validate_scoped_request_budgets(
+        db,
+        user_id=user_id,
+        model=request.model,
+        project_id=request.project_id,
+        tags=request.tags,
+        strategy=config.budget_strategy,
+    )
 
     return ChatRequestContext(
         api_key_id=api_key_id,

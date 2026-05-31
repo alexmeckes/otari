@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._budget_checks import validate_scoped_request_budgets
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._responses_native import (
     log_native_response_usage,
@@ -31,7 +32,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
 from gateway.rate_limit import check_rate_limit
-from gateway.services.budget_service import validate_project_budget, validate_tag_budgets, validate_user_budget
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL
@@ -101,17 +101,14 @@ async def create_response(
 
     rate_limit_info = check_rate_limit(raw_request, user_id)
 
-    _ = await validate_user_budget(db, user_id, request_body.model, strategy=config.budget_strategy)
-    if request_body.project_id is not None:
-        _ = await validate_project_budget(
-            db,
-            request_body.project_id,
-            request_body.model,
-            strategy=config.budget_strategy,
-        )
-    _ = await validate_tag_budgets(db, request_body.tags, request_body.model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
+    await validate_scoped_request_budgets(
+        db,
+        user_id=user_id,
+        model=request_body.model,
+        project_id=request_body.project_id,
+        tags=request_body.tags,
+        strategy=config.budget_strategy,
+    )
 
     provider, model = AnyLLM.split_model_provider(request_body.model)
     provider_class = AnyLLM.get_provider_class(provider)
