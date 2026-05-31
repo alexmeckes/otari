@@ -295,7 +295,7 @@ async def _matching_policy(db: AsyncSession, tags: Mapping[str, str]) -> _Policy
     policies = result.scalars().all()
     matches: list[_PolicyMatch] = []
     for policy in policies:
-        config = policy.config_ or {}
+        config = policy.config_dict()
         if not _routing_policy_match.matches_policy_match_config(config, tags):
             continue
         rollout = _routing_policy_match.policy_rollout_info(
@@ -313,7 +313,7 @@ async def _matching_policy(db: AsyncSession, tags: Mapping[str, str]) -> _Policy
     return sorted(
         matches,
         key=lambda match: (
-            _routing_policy_match.policy_match_priority(match.policy.config_ or {}),
+            _routing_policy_match.policy_match_priority(match.policy.config_dict()),
             match.policy.updated_at,
         ),
         reverse=True,
@@ -353,7 +353,7 @@ async def resolve_routing_plan(
         policy_source = "policy_override"
         policy_rollout = _routing_policy_match.policy_rollout_info(
             policy_id=policy.policy_id,
-            config=policy.config_ or {},
+            config=policy.config_dict(),
             request_tags=request_tags,
         )
 
@@ -377,7 +377,7 @@ async def resolve_routing_plan(
     if strategy not in ROUTING_STRATEGIES:
         raise RoutingPolicyError(422, f"Unsupported routing strategy '{strategy}'")
 
-    config = policy.config_ or {}
+    config = policy.config_dict()
     guardrails = await _evaluate_guardrails(config, request_body)
     if guardrails is not None and guardrails["status"] == "blocked":
         first_violation = guardrails["violations"][0] if guardrails["violations"] else {}

@@ -104,8 +104,9 @@ async def run_standalone_routing_plan(
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )
-    request_fields, _ = apply_guardrail_redactions(plan.policy.config_ or {}, request_fields)
-    request_fields, _ = apply_context_policy(plan.policy.config_ or {}, request_fields)
+    policy_config = plan.policy.config_dict()
+    request_fields, _ = apply_guardrail_redactions(policy_config, request_fields)
+    request_fields, _ = apply_context_policy(policy_config, request_fields)
 
     attempts: list[dict[str, Any]] = []
     last_exc: BaseException | None = None
