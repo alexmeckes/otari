@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
 
 DEFAULT_STRATEGY_TYPES = {"fallback", "intelligent", "weighted_score"}
 INTELLIGENT_AXES = {"cost", "performance", "intelligence"}
@@ -38,23 +38,8 @@ def _shape_error(detail: str) -> RoutingPolicyShapeError:
     return RoutingPolicyShapeError(detail)
 
 
-def number_value(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def score_value(value: Any) -> float | None:
-    parsed = number_value(value)
-    if parsed is None or parsed < 0:
-        return None
-    if parsed <= 1:
-        return parsed
-    if parsed <= 100:
-        return parsed / 100
-    return None
+number_value = float_or_none
+score_value = score_or_none
 
 
 def model_selector(provider: str | None, model: str) -> str:
