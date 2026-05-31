@@ -154,6 +154,23 @@ def test_provider_context_usage_log_includes_identity_fields() -> None:
     assert usage_log.tags == {"kind": "unit"}
 
 
+def test_provider_context_input_metered_usage_log_sets_zero_completion_tokens() -> None:
+    usage_log = _context().input_metered_usage_log(
+        endpoint="/v1/test",
+        prompt_tokens=5,
+        total_tokens=5,
+    )
+
+    assert usage_log.api_key_id == "key-1"
+    assert usage_log.user_id == "user-1"
+    assert usage_log.model == "gpt-4o-mini"
+    assert usage_log.provider == "openai"
+    assert usage_log.endpoint == "/v1/test"
+    assert usage_log.prompt_tokens == 5
+    assert usage_log.completion_tokens == 0
+    assert usage_log.total_tokens == 5
+
+
 @pytest.mark.asyncio
 async def test_resolve_provider_context_validates_scoped_budgets(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}

@@ -83,11 +83,24 @@ class OpenAIProviderRequestContext:
             tags=tags,
         )
 
+    def input_metered_usage_log(
+        self,
+        *,
+        endpoint: str,
+        prompt_tokens: int | None,
+        total_tokens: int | None,
+    ) -> UsageLog:
+        return self.usage_log(
+            endpoint=endpoint,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=0,
+            total_tokens=total_tokens,
+        )
+
     async def log_zero_token_usage(self, log_writer: LogWriter, *, endpoint: str) -> UsageLog:
-        usage_log = self.usage_log(
+        usage_log = self.input_metered_usage_log(
             endpoint=endpoint,
             prompt_tokens=0,
-            completion_tokens=0,
             total_tokens=0,
         )
         await log_writer.put(usage_log)
@@ -108,10 +121,9 @@ class OpenAIProviderRequestContext:
         missing_cost: float | None = None,
         warn_missing_pricing: bool = True,
     ) -> UsageLog:
-        usage_log = self.usage_log(
+        usage_log = self.input_metered_usage_log(
             endpoint=endpoint,
             prompt_tokens=prompt_tokens,
-            completion_tokens=0,
             total_tokens=total_tokens,
         )
         if apply_cost:
