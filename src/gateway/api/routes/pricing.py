@@ -34,15 +34,6 @@ def _candidate_model_keys(raw_key: str) -> list[str]:
     return candidates
 
 
-async def _first_pricing(
-    db: AsyncSession,
-    model_keys: list[str],
-    *criteria: Any,
-) -> ModelPricing | None:
-    rows = await _pricing_rows(db, model_keys, *criteria, limit=1)
-    return rows[0] if rows else None
-
-
 async def _pricing_rows(
     db: AsyncSession,
     model_keys: list[str],
@@ -61,6 +52,26 @@ async def _pricing_rows(
         if pricings:
             return pricings
     return []
+
+
+def _pricing_not_found(model_key: str, effective_at: datetime | None = None) -> HTTPException:
+    detail = f"Pricing for model '{model_key}' not found"
+    if effective_at is not None:
+        detail = f"Pricing for model '{model_key}' with effective_at {effective_at.isoformat()} not found"
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+
+
+async def _pricing_rows_or_404(
+    db: AsyncSession,
+    model_key: str,
+    *criteria: Any,
+    effective_at: datetime | None = None,
+    limit: int | None = None,
+) -> list[ModelPricing]:
+    rows = await _pricing_rows(db, _candidate_model_keys(model_key), *criteria, limit=limit)
+    if not rows:
+        raise _pricing_not_found(model_key, effective_at)
+    return rows
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -124,14 +135,7 @@ async def get_pricing_history(
 ) -> list[PricingResponse]:
     """Return the full pricing history for a model."""
 
-    candidates = _candidate_model_keys(model_key)
-    pricings = await _pricing_rows(db, candidates)
-    if not pricings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pricing for model '{model_key}' not found",
-        )
-
+    pricings = await _pricing_rows_or_404(db, model_key)
     return [PricingResponse.from_model(pricing) for pricing in pricings]
 
 
@@ -143,15 +147,14 @@ async def get_pricing(
 ) -> PricingResponse:
     """Get pricing for a specific model as of a timestamp."""
 
-    candidates = _candidate_model_keys(model_key)
-    pricing = await _first_pricing(db, candidates, ModelPricing.effective_at <= normalize_effective_at(as_of))
-
-    if not pricing:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pricing for model '{model_key}' not found",
+    pricing = (
+        await _pricing_rows_or_404(
+            db,
+            model_key,
+            ModelPricing.effective_at <= normalize_effective_at(as_of),
+            limit=1,
         )
-
+    )[0]
     return PricingResponse.from_model(pricing)
 
 
@@ -172,26 +175,17 @@ async def delete_pricing(
 ) -> None:
     """Delete pricing entries for a model."""
 
-    candidates = _candidate_model_keys(model_key)
-
     if effective_at is not None:
         normalized_effective_at = normalize_effective_at(effective_at)
-        pricing = await _first_pricing(db, candidates, ModelPricing.effective_at == normalized_effective_at)
-        if not pricing:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"Pricing for model '{model_key}' with effective_at {normalized_effective_at.isoformat()} not found"
-                ),
-            )
-        targets = [pricing]
+        targets = await _pricing_rows_or_404(
+            db,
+            model_key,
+            ModelPricing.effective_at == normalized_effective_at,
+            effective_at=normalized_effective_at,
+            limit=1,
+        )
     else:
-        targets = await _pricing_rows(db, candidates)
-        if not targets:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Pricing for model '{model_key}' not found",
-            )
+        targets = await _pricing_rows_or_404(db, model_key)
 
     for pricing in targets:
         await db.delete(pricing)
