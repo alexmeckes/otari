@@ -6,8 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
-from gateway.models.entities import Budget, BudgetAlert, Project
+from gateway.models.entities import Budget, BudgetAlert
 from gateway.repositories.budgets_repository import get_budget_by_id
+from gateway.repositories.projects_repository import get_project_by_id
 from gateway.repositories.users_repository import get_active_user
 
 BUDGET_ALERT_SCOPE_PROJECT = "project"
@@ -144,8 +145,7 @@ async def record_project_budget_alerts_after_spend(
     metadata: dict[str, Any] | None = None,
 ) -> list[BudgetAlert]:
     """Record alert events for a project's budget after usage spend increments."""
-    result = await db.execute(select(Project).where(Project.project_id == project_id))
-    project = result.scalar_one_or_none()
+    project = await get_project_by_id(db, project_id)
     if project is None or not project.budget_id:
         return []
     budget = await get_budget_by_id(db, project.budget_id)

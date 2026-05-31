@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
 from gateway.models.entities import Project, RouteTrace, RoutingPolicy
+from gateway.repositories.projects_repository import get_project_by_id
 from gateway.services import routing_candidate_specs as _routing_candidate_specs
 from gateway.services import routing_constraints as _routing_constraints
 from gateway.services import routing_guardrails as _routing_guardrails
@@ -336,7 +337,7 @@ async def resolve_routing_plan(
     policy_rollout: dict[str, Any] | None = None
 
     if project_id:
-        project = await db.get(Project, project_id)
+        project = await get_project_by_id(db, project_id)
         if project is None:
             raise RoutingPolicyError(404, f"Project '{project_id}' not found")
         if not project.is_active:

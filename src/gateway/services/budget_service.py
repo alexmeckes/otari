@@ -6,7 +6,7 @@ from typing import Any
 from any_llm import AnyLLM
 from any_llm.exceptions import AnyLLMError
 from fastapi import HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from gateway.log_config import logger
 from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog, Project, User
 from gateway.repositories.budgets_repository import get_budget_by_id
+from gateway.repositories.projects_repository import get_project_by_id
 from gateway.repositories.users_repository import get_active_user
 from gateway.services import budget_alerts as _budget_alerts
 from gateway.services import budget_periods as _budget_periods
@@ -174,7 +175,7 @@ async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: 
             await db.rollback()
             logger.error("Failed to commit CAS budget reset for project '%s': %s", project.project_id, e)
             raise
-        refreshed = await db.get(Project, project.project_id)
+        refreshed = await get_project_by_id(db, project.project_id)
         return refreshed or project
 
     await db.rollback()
@@ -296,11 +297,7 @@ async def validate_project_budget(
 
     normalized_strategy = _normalize_budget_strategy(strategy)
 
-    stmt = select(Project).where(Project.project_id == project_id)
-    if normalized_strategy == "for_update":
-        stmt = stmt.with_for_update()
-    result = await db.execute(stmt)
-    project = result.scalar_one_or_none()
+    project = await get_project_by_id(db, project_id, for_update=normalized_strategy == "for_update")
 
     if project is None:
         raise HTTPException(
