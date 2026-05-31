@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from gateway.api.routes._model_catalog import _canonical_model_id, _stored_model_key
-from gateway.api.routes._responses_transform import metadata_from_model_selector
+from gateway.api.routes._responses_transform import metadata_from_model_selector, served_metadata
 from gateway.core.config import GatewayConfig
 from gateway.services import platform_gateway
 from gateway.services.routing_policy_shape import split_model_selector
@@ -27,6 +27,10 @@ def test_split_model_selector_preserves_existing_selector_shapes(
 
 
 def test_responses_metadata_uses_shared_model_selector_splitter() -> None:
+    assert served_metadata("openai", "gpt-4o") == {
+        "model": "openai/gpt-4o",
+        "vendor": "openai",
+    }
     assert metadata_from_model_selector("openai:gpt-4o") == {
         "model": "openai/gpt-4o",
         "vendor": "openai",

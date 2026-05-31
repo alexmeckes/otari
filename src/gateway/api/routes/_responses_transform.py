@@ -13,6 +13,7 @@ from openresponses_types.types import Usage as OpenResponsesUsage
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.services.pricing_service import legacy_pricing_model_ref
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, require_routing_model_selector
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
@@ -121,7 +122,7 @@ def _chat_completion_text(completion: ChatCompletion) -> str:
 def served_metadata(provider: str, model: str) -> dict[str, str]:
     """Build served model/vendor metadata."""
     return {
-        "model": f"{provider}/{model}",
+        "model": legacy_pricing_model_ref(provider, model),
         "vendor": provider,
     }
 
