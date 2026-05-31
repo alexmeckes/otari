@@ -2,15 +2,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
-from gateway.services.routing_config_values import non_negative_float_or_none, score_or_none
+from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none, score_or_none
 
 
 def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     scoring = config.get("scoring")
     if isinstance(scoring, dict):
-        return scoring
-    score_weights = config.get("score_weights")
-    return score_weights if isinstance(score_weights, dict) else {}
+        return dict_or_empty(scoring)
+    return dict_or_empty(config.get("score_weights"))
 
 
 def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:

@@ -4,6 +4,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from gateway.services.routing_config_values import dict_or_empty
+
 _DEFAULT_OUTPUT_TOKENS = 700
 _REASONING_HINTS = (
     "prove",
@@ -102,8 +104,7 @@ def classify_request_tier(
     config: Mapping[str, Any],
 ) -> str:
     """Classify a request into a ClawSwitch-style complexity tier."""
-    thresholds = config.get("tier_thresholds")
-    threshold_map = thresholds if isinstance(thresholds, dict) else {}
+    threshold_map = dict_or_empty(config.get("tier_thresholds"))
     medium_threshold = int_config(threshold_map.get("medium"), 800)
     complex_threshold = int_config(threshold_map.get("complex"), 3000)
     reasoning_threshold = int_config(threshold_map.get("reasoning"), 9000)

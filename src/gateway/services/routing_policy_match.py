@@ -3,21 +3,16 @@ from collections.abc import Mapping
 from hashlib import sha256
 from typing import Any
 
+from gateway.services.routing_config_values import dict_or_empty
+
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
-    match_config = config.get("match")
-    if not isinstance(match_config, dict):
-        return {}
-    tags = match_config.get("tags")
-    if not isinstance(tags, dict):
-        return {}
+    tags = dict_or_empty(policy_match_config(config).get("tags"))
     return {str(key): str(value) for key, value in tags.items()}
 
 
 def policy_match_priority(config: Mapping[str, Any]) -> int:
-    match_config = config.get("match")
-    if not isinstance(match_config, dict):
-        return 0
+    match_config = policy_match_config(config)
     priority = match_config.get("priority")
     if isinstance(priority, int) and not isinstance(priority, bool):
         return priority
@@ -25,8 +20,7 @@ def policy_match_priority(config: Mapping[str, Any]) -> int:
 
 
 def policy_match_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    match_config = config.get("match")
-    return match_config if isinstance(match_config, dict) else {}
+    return dict_or_empty(config.get("match"))
 
 
 def policy_match_rollout_percentage(config: Mapping[str, Any]) -> float:

@@ -3,7 +3,7 @@ from typing import Any
 
 from any_llm import AnyLLM
 
-from gateway.services.routing_config_values import non_negative_float_or_none
+from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none
 
 
 def _bool_config(value: Any, default: bool) -> bool:
@@ -27,8 +27,7 @@ def _string_set(value: Any) -> set[str]:
 
 
 def _constraint_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    constraints = config.get("constraints")
-    return constraints if isinstance(constraints, dict) else {}
+    return dict_or_empty(config.get("constraints"))
 
 
 def _normalize_model_key_for_constraint(value: str) -> str:
@@ -48,7 +47,7 @@ def _region_set(value: Any) -> set[str]:
 
 
 def _candidate_regions(candidate: Any) -> set[str]:
-    metadata = candidate.metadata if isinstance(candidate.metadata, dict) else {}
+    metadata = dict_or_empty(candidate.metadata)
     regions = _region_set(metadata.get("regions"))
     region = metadata.get("region")
     if isinstance(region, str) and region.strip():

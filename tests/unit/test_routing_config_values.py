@@ -1,10 +1,30 @@
 import pytest
 
 from gateway.services.routing_config_values import (
+    dict_or_empty,
     float_or_none,
     non_negative_float_or_none,
     score_or_none,
 )
+
+
+def test_dict_or_empty_reuses_dict_by_default() -> None:
+    value = {"enabled": True}
+
+    assert dict_or_empty(value) is value
+
+
+def test_dict_or_empty_can_copy_dict() -> None:
+    value = {"enabled": True}
+    result = dict_or_empty(value, copy_value=True)
+
+    assert result == value
+    assert result is not value
+
+
+@pytest.mark.parametrize("value", [None, [], "enabled"])
+def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
+    assert dict_or_empty(value) == {}
 
 
 @pytest.mark.parametrize(

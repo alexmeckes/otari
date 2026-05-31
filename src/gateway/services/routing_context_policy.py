@@ -5,6 +5,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from gateway.services.routing_config_values import dict_or_empty
 from gateway.services.routing_request_analysis import (
     bool_config,
     estimate_prompt_tokens,
@@ -18,9 +19,9 @@ _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
 
 def _context_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     context = config.get("context")
-    if not isinstance(context, dict):
-        context = config.get("context_policy")
-    return context if isinstance(context, dict) else {}
+    if isinstance(context, dict):
+        return dict_or_empty(context)
+    return dict_or_empty(config.get("context_policy"))
 
 
 def _context_enabled(config: Mapping[str, Any]) -> bool:

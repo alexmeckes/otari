@@ -1,6 +1,8 @@
 from collections.abc import Mapping
 from typing import Any
 
+from gateway.services.routing_config_values import dict_or_empty
+
 DEFAULT_STRATEGY_TYPES = {"fallback", "intelligent", "weighted_score"}
 INTELLIGENT_AXES = {"cost", "performance", "intelligence"}
 AXIS_TIER_THRESHOLDS = {
@@ -155,8 +157,7 @@ def config_from_default_strategy(
         config["candidates"] = [
             _candidate_from_default_strategy_provider(provider_item) for provider_item in provider_items
         ]
-        scoring = default_strategy.get("scoring")
-        scoring_config = dict(scoring) if isinstance(scoring, dict) else {}
+        scoring_config = dict_or_empty(default_strategy.get("scoring"), copy_value=True)
         for key in _WEIGHTED_SCORE_KEYS:
             if key in default_strategy:
                 scoring_config[key] = default_strategy[key]
@@ -193,8 +194,7 @@ def _candidate_item_to_provider(item: Any, *, position: int, tier: str | None = 
         if not isinstance(model_value, str) or not model_value.strip():
             return None
         model_selector_value = model_value
-        metadata_value = item.get("metadata")
-        metadata = metadata_value if isinstance(metadata_value, dict) else {}
+        metadata = dict_or_empty(item.get("metadata"))
         input_price = item.get("input_price_per_million")
         output_price = item.get("output_price_per_million")
         candidate_tier = item.get("tier") if isinstance(item.get("tier"), str) else tier
@@ -264,7 +264,7 @@ def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> 
         }
         scoring = config.get("scoring")
         if isinstance(scoring, dict):
-            response["scoring"] = dict(scoring)
+            response["scoring"] = dict_or_empty(scoring, copy_value=True)
         return response
     return {
         "type": strategy,

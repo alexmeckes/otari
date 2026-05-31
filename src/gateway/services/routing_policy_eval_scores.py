@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from gateway.services import routing_policy_shape
+from gateway.services.routing_config_values import dict_or_empty
 
 
 class RoutingPolicyEvalScoreError(ValueError):
@@ -122,8 +123,7 @@ def _apply_eval_score_to_candidate(
     aggregate = scores_by_model[model_key]
     previous_quality_score = _candidate_quality_score(candidate)
     updated_candidate = {"model": candidate} if isinstance(candidate, str) else dict(candidate)
-    metadata_value = updated_candidate.get("metadata")
-    metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
+    metadata = dict_or_empty(updated_candidate.get("metadata"), copy_value=True)
     metadata["eval_score"] = {
         "quality_score": aggregate.quality_score,
         "sample_count": aggregate.sample_count,

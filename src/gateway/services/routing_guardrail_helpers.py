@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from gateway.log_config import logger
+from gateway.services.routing_config_values import dict_or_empty
 
 
 def string_list(value: Any) -> list[str]:
@@ -16,8 +17,7 @@ def string_list(value: Any) -> list[str]:
 
 
 def guardrails_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    guardrails = config.get("guardrails")
-    return guardrails if isinstance(guardrails, dict) else {}
+    return dict_or_empty(config.get("guardrails"))
 
 
 def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:

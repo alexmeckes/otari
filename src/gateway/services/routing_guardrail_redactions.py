@@ -5,6 +5,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from gateway.services.routing_config_values import dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, string_list
 from gateway.services.routing_request_analysis import bool_config
 
@@ -16,8 +17,7 @@ _PII_PATTERNS = {
 
 
 def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    redactions = guardrails_config(config).get("redactions")
-    return redactions if isinstance(redactions, dict) else {}
+    return dict_or_empty(guardrails_config(config).get("redactions"))
 
 
 def _redactions_enabled(config: Mapping[str, Any]) -> bool:

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import RouteTrace
 from gateway.services import routing_request_analysis as _routing_request_analysis
-from gateway.services.routing_config_values import non_negative_float_or_none
+from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none
 from gateway.services.routing_trace_attempts import attempt_outcome, attempt_provider
 
 _HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
@@ -42,8 +42,7 @@ class ProviderHealth:
 
 
 def _provider_health_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    health = config.get("health")
-    return health if isinstance(health, dict) else {}
+    return dict_or_empty(config.get("health"))
 
 
 def _provider_health_enabled(config: Mapping[str, Any]) -> bool:

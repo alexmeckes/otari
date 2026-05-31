@@ -4,7 +4,7 @@ from typing import Any
 
 from any_llm import AnyLLM
 
-from gateway.services.routing_config_values import float_or_none, score_or_none
+from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
 _INFERRED_TIER_BY_OUTPUT_PRICE = (
@@ -52,8 +52,7 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
     if not isinstance(model_value, str) or not model_value.strip():
         return None
 
-    metadata_value = item.get("metadata")
-    metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
+    metadata = dict_or_empty(item.get("metadata"), copy_value=True)
     for key in ("region", "regions"):
         if key in item and key not in metadata:
             metadata[key] = item[key]
