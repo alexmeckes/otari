@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from hashlib import sha256
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_config_values import dict_or_empty, float_or_none
 
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
@@ -26,11 +26,8 @@ def policy_match_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
 def policy_match_rollout_percentage(config: Mapping[str, Any]) -> float:
     match_config = policy_match_config(config)
     value = match_config.get("rollout_percentage", match_config.get("percentage"))
-    if isinstance(value, bool):
-        return 100.0
-    if isinstance(value, int | float):
-        return min(max(float(value), 0.0), 100.0)
-    return 100.0
+    parsed = float_or_none(value)
+    return 100.0 if parsed is None else min(max(parsed, 0.0), 100.0)
 
 
 def policy_match_bucket_key(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> str:
@@ -81,16 +78,7 @@ def _condition_tag_key(condition: Mapping[str, Any]) -> str | None:
 
 
 def _numeric_value(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
+    return float_or_none(value, coerce_strings=True)
 
 
 def _tag_values(value: Any) -> set[str]:

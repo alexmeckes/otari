@@ -6,6 +6,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from gateway.services.routing_config_values import float_or_none
+
 _ROW_LIST_KEYS = ("scores", "results", "items", "rows", "evals")
 _MODEL_KEYS = ("model", "model_key", "candidate_model")
 _PROVIDER_KEYS = ("provider", "vendor")
@@ -46,21 +48,7 @@ def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
 
 
 def _coerce_float(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    if not normalized:
-        return None
-    if normalized.endswith("%"):
-        normalized = normalized[:-1].strip()
-    try:
-        return float(normalized)
-    except ValueError:
-        return None
+    return float_or_none(value, coerce_strings=True, allow_percent=True)
 
 
 def _coerce_int(value: Any) -> int | None:

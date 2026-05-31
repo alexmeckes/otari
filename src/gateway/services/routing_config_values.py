@@ -43,11 +43,21 @@ def bool_config(value: Any, default: bool, *, coerce_strings: bool = False) -> b
     return default
 
 
-def float_or_none(value: Any) -> float | None:
+def float_or_none(value: Any, *, coerce_strings: bool = False, allow_percent: bool = False) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int | float):
         return float(value)
+    if coerce_strings and isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if allow_percent and normalized.endswith("%"):
+            normalized = normalized[:-1].strip()
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
     return None
 
 

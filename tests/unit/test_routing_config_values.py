@@ -118,6 +118,24 @@ def test_float_or_none(value: object, expected: float | None) -> None:
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
+        ("1.25", 1.25),
+        (" 72% ", 72.0),
+        ("", None),
+        ("not-number", None),
+        (True, None),
+    ],
+)
+def test_float_or_none_can_coerce_strings(value: object, expected: float | None) -> None:
+    assert float_or_none(value, coerce_strings=True, allow_percent=True) == expected
+
+
+def test_float_or_none_requires_percent_opt_in() -> None:
+    assert float_or_none("72%", coerce_strings=True) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
         (1, 1.0),
         (0, 0.0),
         (-1, None),
