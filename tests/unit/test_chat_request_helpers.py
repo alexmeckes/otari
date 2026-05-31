@@ -11,6 +11,8 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
+from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.models.mcp import McpServerConfig
 from gateway.services.chat_tool_config import extract_code_execution_tool, extract_web_search_tool
@@ -205,3 +207,29 @@ def test_resolve_chat_tool_selection_allows_web_search_and_preserves_user_tools(
     assert selection.web_search_url == "http://search.local"
     assert selection.remaining_user_tools == [user_tool]
     assert selection.tools_extracted is True
+
+
+def test_chat_provider_request_fields_strip_gateway_metadata_and_preserve_user_tools() -> None:
+    user_tool = {"type": "function", "function": {"name": "get_weather"}}
+    request = ChatCompletionRequest(
+        model="openai:gpt-4o-mini",
+        messages=[{"role": "user", "content": "hi"}],
+        user="user-1",
+        project_id="project-1",
+        tags={"team": "platform"},
+        tools=[{"type": "web_search"}, user_tool],
+        tools_header="prefer external tools",
+        max_tool_iterations=3,
+    )
+
+    fields = chat_provider_request_fields(
+        request,
+        tools_extracted=True,
+        remaining_user_tools=[user_tool],
+    )
+
+    assert fields == {
+        "model": "openai:gpt-4o-mini",
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": [user_tool],
+    }

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_provider_errors import is_provider_timeout
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure, chat_tool_iteration_cap_failure
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
@@ -18,7 +19,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
 from gateway.rate_limit import RateLimitInfo
-from gateway.services.chat_tool_config import strip_gateway_fields
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.platform_gateway import classify_upstream_error
@@ -99,8 +99,8 @@ async def run_standalone_routing_plan(
     mcp_client_pool_factory: Callable[[list[McpServerConfig]], Any],
 ) -> ChatCompletion:
     """Execute a standalone routing plan with pre-response fallback."""
-    request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
+    request_fields = chat_provider_request_fields(
+        request,
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )

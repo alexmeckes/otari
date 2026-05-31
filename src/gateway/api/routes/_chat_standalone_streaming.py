@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
@@ -22,7 +23,6 @@ from gateway.rate_limit import RateLimitInfo
 from gateway.services.chat_tool_config import (
     build_web_search_backend,
     resolve_sandbox_purpose_hint,
-    strip_gateway_fields,
 )
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import (
@@ -53,8 +53,8 @@ async def run_standalone_streaming_chat(
     provider_kwargs = get_provider_kwargs(config, provider)
     max_tool_iterations = resolve_max_tool_iterations(request.max_tool_iterations)
 
-    request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
+    request_fields = chat_provider_request_fields(
+        request,
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )

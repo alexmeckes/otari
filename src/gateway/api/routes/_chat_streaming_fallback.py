@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.core.config import GatewayConfig
@@ -17,7 +18,6 @@ from gateway.rate_limit import RateLimitInfo
 from gateway.services.chat_tool_config import (
     build_web_search_backend,
     resolve_sandbox_purpose_hint,
-    strip_gateway_fields,
 )
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, mcp_tool_loop_stream, tool_loop_completion_kwargs
@@ -72,8 +72,8 @@ async def run_streaming_with_fallback(
     tool_mode = bool(mcp_server_configs) or use_sandbox or use_web_search
     first_chunk_timeout_seconds = _first_chunk_timeout_seconds(config, tool_mode=tool_mode)
 
-    base_request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
+    base_request_fields = chat_provider_request_fields(
+        request,
         tools_extracted=tools_extracted,
         remaining_user_tools=remaining_user_tools,
     )

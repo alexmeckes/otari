@@ -7,6 +7,7 @@ from fastapi import BackgroundTasks, HTTPException, Response, status
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_platform_errors import platform_attempt_failure_exception
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_iteration_cap_exception
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers
@@ -14,7 +15,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
 from gateway.rate_limit import RateLimitInfo
-from gateway.services.chat_tool_config import strip_gateway_fields
 from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.platform_gateway import (
     ResolvedRoute,
@@ -61,8 +61,8 @@ async def run_platform_non_streaming_chat(
 
     failures: list[_AttemptFailure] = []
     last_exc: BaseException | None = None
-    base_request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
+    base_request_fields = chat_provider_request_fields(
+        request,
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )

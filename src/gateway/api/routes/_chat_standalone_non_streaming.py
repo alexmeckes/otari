@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_request_fields import chat_provider_request_fields
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_tool_backend_errors import (
     chat_tool_backend_failure_exception,
@@ -19,7 +20,6 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
 from gateway.rate_limit import RateLimitInfo
-from gateway.services.chat_tool_config import strip_gateway_fields
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.provider_kwargs import get_provider_kwargs
@@ -77,8 +77,8 @@ async def run_standalone_non_streaming_chat(
     provider, model = AnyLLM.split_model_provider(request.model)
     provider_label = provider_model_label(provider, model)
     provider_kwargs = get_provider_kwargs(config, provider)
-    request_fields = strip_gateway_fields(
-        request.model_dump(exclude_unset=True),
+    request_fields = chat_provider_request_fields(
+        request,
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )
