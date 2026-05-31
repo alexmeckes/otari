@@ -247,6 +247,68 @@ async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_log_and_raise_message_provider_error_preserves_logging_and_error_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_calls: list[dict[str, Any]] = []
+    logger_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    db = cast(AsyncSession, object())
+    log_writer = cast(LogWriter, object())
+    provider_error = RuntimeError("provider down")
+
+    async def fake_log_usage(**kwargs: Any) -> None:
+        usage_calls.append(kwargs)
+
+    def fake_logger_error(*args: Any, **kwargs: Any) -> None:
+        logger_calls.append((args, kwargs))
+
+    monkeypatch.setattr(messages, "log_usage", fake_log_usage)
+    monkeypatch.setattr(messages.logger, "error", fake_logger_error)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await messages._log_and_raise_message_provider_error(
+            db=db,
+            log_writer=log_writer,
+            message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+            provider_call_context=messages.MessageProviderCallContext(
+                provider="anthropic",
+                model="claude-3-5-sonnet",
+                call_kwargs={},
+            ),
+            error=provider_error,
+        )
+
+    assert exc_info.value.__cause__ is provider_error
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == {
+        "type": "error",
+        "error": {
+            "type": "api_error",
+            "message": "The request could not be completed by the provider",
+        },
+    }
+    assert usage_calls == [
+        {
+            "db": db,
+            "log_writer": log_writer,
+            "api_key_id": "key-1",
+            "model": "claude-3-5-sonnet",
+            "provider": "anthropic",
+            "endpoint": "/v1/messages",
+            "user_id": "user-1",
+            "usage_override": None,
+            "error": "provider down",
+        }
+    ]
+    assert logger_calls == [
+        (
+            ("Provider call failed for %s:%s: %s", "anthropic", "claude-3-5-sonnet", provider_error),
+            {},
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_message_streaming_response_logs_usage_and_sets_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
     db = cast(AsyncSession, object())

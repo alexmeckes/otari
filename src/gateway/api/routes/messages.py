@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 
 from any_llm import AnyLLM, amessages
 from any_llm.types.completion import CompletionUsage
@@ -226,6 +226,35 @@ async def _message_response_payload(
     return result.model_dump(exclude_none=True)
 
 
+async def _log_and_raise_message_provider_error(
+    *,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    message_context: MessageRequestContext,
+    provider_call_context: MessageProviderCallContext,
+    error: BaseException,
+) -> NoReturn:
+    await _log_message_usage(
+        db=db,
+        log_writer=log_writer,
+        message_context=message_context,
+        model=provider_call_context.model,
+        provider=provider_call_context.provider,
+        error=str(error),
+    )
+    logger.error(
+        "Provider call failed for %s:%s: %s",
+        provider_call_context.provider,
+        provider_call_context.model,
+        error,
+    )
+    raise _anthropic_error(
+        _ERR_API,
+        _PROVIDER_ERROR,
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ) from error
+
+
 @router.post("/messages", response_model=None)
 async def create_message(
     raw_request: Request,
@@ -275,22 +304,10 @@ async def create_message(
     except HTTPException:
         raise
     except Exception as e:
-        await _log_message_usage(
+        await _log_and_raise_message_provider_error(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=provider_call_context.model,
-            provider=provider_call_context.provider,
-            error=str(e),
+            provider_call_context=provider_call_context,
+            error=e,
         )
-        logger.error(
-            "Provider call failed for %s:%s: %s",
-            provider_call_context.provider,
-            provider_call_context.model,
-            e,
-        )
-        raise _anthropic_error(
-            _ERR_API,
-            _PROVIDER_ERROR,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ) from e
