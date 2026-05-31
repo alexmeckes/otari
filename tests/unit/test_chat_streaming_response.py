@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Any, cast
 
 import pytest
@@ -155,3 +156,40 @@ async def test_log_standalone_streaming_usage_skips_without_database_or_writer(
     )
 
     assert calls == []
+
+
+def test_build_chat_streaming_response_uses_provider_model_label(monkeypatch: pytest.MonkeyPatch) -> None:
+    labels: list[str] = []
+
+    def fake_streaming_generator(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        labels.append(kwargs["label"])
+
+        async def _events() -> AsyncIterator[str]:
+            yield "data: [DONE]\n\n"
+
+        return _events()
+
+    async def empty_stream() -> AsyncIterator[Any]:
+        return
+        yield
+
+    monkeypatch.setattr(streaming_response, "streaming_generator", fake_streaming_generator)
+
+    streaming_response.build_chat_streaming_response(
+        stream=empty_stream(),
+        provider=LLMProvider.OPENAI,
+        model="gpt-4o-mini",
+        platform_mode=False,
+        correlation_id=None,
+        request_id=None,
+        config=GatewayConfig(),
+        db=None,
+        log_writer=None,
+        api_key_id=None,
+        user_id=None,
+        project_id=None,
+        tags=None,
+        rate_limit_info=None,
+    )
+
+    assert labels == ["openai:gpt-4o-mini"]

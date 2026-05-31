@@ -14,7 +14,7 @@ from gateway.api.routes._chat_streaming_response import build_chat_streaming_res
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
 from gateway.api.routes._chat_tool_iterations import resolve_max_tool_iterations
 from gateway.api.routes._chat_tools import ChatToolSelection
-from gateway.api.routes._usage import log_usage
+from gateway.api.routes._usage import log_usage, provider_model_label
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.mcp import McpServerConfig
@@ -49,6 +49,7 @@ async def run_standalone_streaming_chat(
 ) -> StreamingResponse:
     """Create a standalone streaming chat response for one provider attempt."""
     provider, model = AnyLLM.split_model_provider(request.model)
+    provider_label = provider_model_label(provider, model)
     provider_kwargs = get_provider_kwargs(config, provider)
     max_tool_iterations = resolve_max_tool_iterations(request.max_tool_iterations)
 
@@ -72,10 +73,10 @@ async def run_standalone_streaming_chat(
     except HTTPException:
         raise
     except SandboxNotReachableError as exc:
-        logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
+        logger.error("Sandbox unreachable for %s: %s", provider_label, exc)
         raise chat_tool_backend_failure_exception(exc) from exc
     except WebSearchNotReachableError as exc:
-        logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
+        logger.error("Web search backend unreachable for %s: %s", provider_label, exc)
         raise chat_tool_backend_failure_exception(exc) from exc
     except Exception as exc:
         if db is not None:
@@ -91,7 +92,7 @@ async def run_standalone_streaming_chat(
                 tags=request.tags,
                 error=str(exc),
             )
-        logger.error("Stream creation failed for %s:%s: %s", provider, model, exc)
+        logger.error("Stream creation failed for %s: %s", provider_label, exc)
         raise standalone_provider_failure_exception(exc) from exc
 
     return build_chat_streaming_response(

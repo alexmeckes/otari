@@ -7,7 +7,7 @@ from any_llm.types.completion import ChatCompletionChunk, CompletionUsage
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes._usage import log_usage, optional_rate_limit_headers
+from gateway.api.routes._usage import log_usage, optional_rate_limit_headers, provider_model_label
 from gateway.core.config import GatewayConfig
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
@@ -153,7 +153,7 @@ def build_chat_streaming_response(
             fmt=OPENAI_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
-            label=f"{provider}:{model}",
+            label=provider_model_label(provider, model),
         ),
         media_type="text/event-stream",
         headers=headers,
