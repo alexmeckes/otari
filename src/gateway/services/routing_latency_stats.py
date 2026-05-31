@@ -7,27 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import RouteTrace
 from gateway.services.routing_request_analysis import int_config
-
-
-def _attempt_model_key(attempt: Mapping[str, Any]) -> str | None:
-    model_key = attempt.get("model_key")
-    if isinstance(model_key, str) and model_key:
-        return model_key
-
-    provider = attempt.get("provider")
-    model = attempt.get("model")
-    if isinstance(provider, str) and provider and isinstance(model, str) and model:
-        return f"{provider}:{model}"
-    return None
-
-
-def _attempt_duration_ms(attempt: Mapping[str, Any]) -> float | None:
-    duration = attempt.get("duration_ms")
-    if isinstance(duration, bool):
-        return None
-    if isinstance(duration, int | float) and duration >= 0:
-        return float(duration)
-    return None
+from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_model_key
 
 
 async def attach_latency_stats(
@@ -55,8 +35,8 @@ async def attach_latency_stats(
         for attempt in attempts:
             if not isinstance(attempt, dict) or attempt.get("status") != "success":
                 continue
-            model_key = _attempt_model_key(attempt)
-            duration_ms = _attempt_duration_ms(attempt)
+            model_key = attempt_model_key(attempt)
+            duration_ms = attempt_duration_ms(attempt)
             if model_key in durations_by_model and duration_ms is not None:
                 durations_by_model[model_key].append(duration_ms)
 

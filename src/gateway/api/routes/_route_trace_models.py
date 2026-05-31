@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from gateway.models.entities import RouteTrace
+from gateway.services.routing_trace_attempts import attempt_duration_ms
 
 
 class RouteTraceResponse(BaseModel):
@@ -93,21 +94,12 @@ class RouteTraceSummaryResponse(BaseModel):
     by_strategy: list[RouteTraceSummaryBucket]
 
 
-def _attempt_duration_ms(attempt: dict[str, Any]) -> float | None:
-    duration = attempt.get("duration_ms")
-    if isinstance(duration, bool):
-        return None
-    if isinstance(duration, int | float) and duration >= 0:
-        return float(duration)
-    return None
-
-
 def _trace_latency_ms(trace: RouteTrace) -> float | None:
     attempts = trace.attempts if isinstance(trace.attempts, list) else []
     for attempt in attempts:
         if not isinstance(attempt, dict) or attempt.get("status") != "success":
             continue
-        duration = _attempt_duration_ms(attempt)
+        duration = attempt_duration_ms(attempt)
         if duration is not None:
             return duration
     return None

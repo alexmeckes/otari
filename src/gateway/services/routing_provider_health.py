@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.models.entities import RouteTrace
 from gateway.services import routing_request_analysis as _routing_request_analysis
 from gateway.services.routing_config_values import non_negative_float_or_none
+from gateway.services.routing_trace_attempts import attempt_outcome, attempt_provider
 
 _HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
 _HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
@@ -115,18 +116,6 @@ def _provider_health_from_counts(
     )
 
 
-def _attempt_provider(attempt: Mapping[str, Any]) -> str | None:
-    provider = attempt.get("provider")
-    return provider if isinstance(provider, str) and provider else None
-
-
-def _attempt_outcome(attempt: Mapping[str, Any]) -> str | None:
-    status = attempt.get("status")
-    if status in {"success", "error"}:
-        return str(status)
-    return None
-
-
 async def attach_provider_health(
     db: AsyncSession,
     candidates: Sequence[Any],
@@ -152,8 +141,8 @@ async def attach_provider_health(
             for attempt in attempts:
                 if not isinstance(attempt, dict):
                     continue
-                provider = _attempt_provider(attempt)
-                outcome = _attempt_outcome(attempt)
+                provider = attempt_provider(attempt)
+                outcome = attempt_outcome(attempt)
                 if provider in counts_by_provider and outcome is not None:
                     counts_by_provider[provider][outcome] += 1
             continue
