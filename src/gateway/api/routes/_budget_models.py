@@ -14,6 +14,26 @@ from gateway.services.budget_service import (
 )
 
 
+def _budget_match_tags(budget: Budget) -> dict[str, Any]:
+    match_tag_dict = getattr(budget, "match_tag_dict", None)
+    if callable(match_tag_dict):
+        match_tags = match_tag_dict()
+        if isinstance(match_tags, dict):
+            return match_tags
+    match_tags = getattr(budget, "match_tags", {})
+    return match_tags if isinstance(match_tags, dict) else {}
+
+
+def _budget_alert_thresholds(budget: Budget) -> list[float]:
+    alert_threshold_list = getattr(budget, "alert_threshold_list", None)
+    if callable(alert_threshold_list):
+        alert_thresholds = alert_threshold_list()
+        if isinstance(alert_thresholds, list):
+            return alert_thresholds
+    alert_thresholds = getattr(budget, "alert_thresholds", [])
+    return alert_thresholds if isinstance(alert_thresholds, list) else []
+
+
 class CreateBudgetRequest(BaseModel):
     """Request model for creating a new budget."""
 
@@ -83,11 +103,6 @@ class BudgetResponse(BaseModel):
     def from_model(cls, budget: Budget) -> "BudgetResponse":
         """Create a BudgetResponse from a Budget ORM model."""
         scope_type = getattr(budget, "scope_type", "entity")
-        match_tags = getattr(budget, "match_tags", {})
-        match_tag_dict = getattr(budget, "match_tag_dict", None)
-        if callable(match_tag_dict):
-            match_tags = match_tag_dict()
-        alert_thresholds = getattr(budget, "alert_thresholds", [])
         alert_webhook_url = getattr(budget, "alert_webhook_url", None)
         spend = getattr(budget, "spend", 0.0)
         budget_started_at = getattr(budget, "budget_started_at", None)
@@ -99,8 +114,8 @@ class BudgetResponse(BaseModel):
             max_budget=budget.max_budget,
             budget_duration_sec=budget.budget_duration_sec,
             scope_type=scope_type if isinstance(scope_type, str) else "entity",
-            match_tags=match_tags if isinstance(match_tags, dict) else {},
-            alert_thresholds=alert_thresholds if isinstance(alert_thresholds, list) else [],
+            match_tags=_budget_match_tags(budget),
+            alert_thresholds=_budget_alert_thresholds(budget),
             alert_webhook_url=alert_webhook_url if isinstance(alert_webhook_url, str) else None,
             spend=float(spend) if isinstance(spend, int | float) else 0.0,
             budget_started_at=budget_started_at.isoformat() if isinstance(budget_started_at, datetime) else None,

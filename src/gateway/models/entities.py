@@ -24,6 +24,12 @@ def _list_or_empty(value: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _float_list_or_empty(value: Any) -> list[float]:
+    if isinstance(value, list):
+        return value
+    return []
+
+
 class APIKey(Base):
     """API Key model for authentication and authorization."""
 
@@ -93,6 +99,9 @@ class Budget(Base):
     def match_tag_dict(self) -> dict[str, Any]:
         return _dict_or_empty(self.match_tags)
 
+    def alert_threshold_list(self) -> list[float]:
+        return _float_list_or_empty(self.alert_thresholds)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -101,7 +110,7 @@ class Budget(Base):
             "budget_duration_sec": self.budget_duration_sec,
             "scope_type": self.scope_type,
             "match_tags": self.match_tag_dict(),
-            "alert_thresholds": self.alert_thresholds or [],
+            "alert_thresholds": self.alert_threshold_list(),
             "alert_webhook_url": self.alert_webhook_url,
             "spend": self.spend,
             "budget_started_at": self.budget_started_at.isoformat() if self.budget_started_at else None,
