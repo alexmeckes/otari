@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import APIKey, Budget, Project
 from gateway.repositories.api_keys_repository import get_api_key_by_id
+from gateway.repositories.budgets_repository import get_budget_by_id
+from gateway.repositories.projects_repository import get_project_by_id
 
 
 async def commit_or_database_error(db: AsyncSession) -> None:
@@ -18,7 +20,7 @@ async def commit_or_database_error(db: AsyncSession) -> None:
 
 
 async def get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
-    budget = await db.get(Budget, budget_id)
+    budget = await get_budget_by_id(db, budget_id)
     if budget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -28,7 +30,7 @@ async def get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
 
 
 async def get_project_or_404(db: AsyncSession, project_id: str) -> Project:
-    project = await db.get(Project, project_id)
+    project = await get_project_by_id(db, project_id)
     if project is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
