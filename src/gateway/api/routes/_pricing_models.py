@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.models.entities import ModelPricing
 from gateway.services.pricing_service import normalize_effective_at
 
@@ -33,9 +34,9 @@ class PricingResponse(BaseModel):
         """Create a PricingResponse from a ModelPricing ORM model."""
         return cls(
             model_key=pricing.model_key,
-            effective_at=normalize_effective_at(pricing.effective_at).isoformat(),
+            effective_at=datetime_isoformat(normalize_effective_at(pricing.effective_at)),
             input_price_per_million=pricing.input_price_per_million,
             output_price_per_million=pricing.output_price_per_million,
-            created_at=pricing.created_at.isoformat(),
-            updated_at=pricing.updated_at.isoformat(),
+            created_at=datetime_isoformat(pricing.created_at),
+            updated_at=datetime_isoformat(pricing.updated_at),
         )

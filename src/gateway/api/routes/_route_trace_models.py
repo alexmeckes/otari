@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.models.entities import RouteTrace
 from gateway.services.routing_trace_attempts import attempt_duration_ms
 
@@ -41,7 +42,7 @@ class RouteTraceResponse(BaseModel):
         """Create a response from an ORM model."""
         return cls(
             trace_id=trace.trace_id,
-            timestamp=trace.timestamp.isoformat(),
+            timestamp=datetime_isoformat(trace.timestamp),
             api_key_id=trace.api_key_id,
             user_id=trace.user_id,
             project_id=trace.project_id,

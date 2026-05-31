@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
-from gateway.api.routes._response_datetime import optional_datetime_isoformat
+from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_service import (
     TAG_BUDGET_SCOPE,
@@ -122,8 +122,8 @@ class BudgetResponse(BaseModel):
             next_budget_reset_at=optional_datetime_isoformat(next_budget_reset_at),
             blocked=blocked if isinstance(blocked, bool) else False,
             is_active=is_active if isinstance(is_active, bool) else True,
-            created_at=budget.created_at.isoformat(),
-            updated_at=budget.updated_at.isoformat(),
+            created_at=datetime_isoformat(budget.created_at),
+            updated_at=datetime_isoformat(budget.updated_at),
         )
 
 
@@ -208,7 +208,7 @@ class BudgetAlertResponse(BaseModel):
             next_delivery_attempt_at=optional_datetime_isoformat(alert.next_delivery_attempt_at),
             delivered_at=optional_datetime_isoformat(alert.delivered_at),
             dead_lettered_at=optional_datetime_isoformat(alert.dead_lettered_at),
-            created_at=alert.created_at.isoformat(),
+            created_at=datetime_isoformat(alert.created_at),
             metadata=alert.metadata_dict(),
         )
 

@@ -2,9 +2,15 @@ from datetime import UTC, datetime
 
 from gateway.api.routes._key_models import KeyInfo
 from gateway.api.routes._project_models import ProjectResponse
-from gateway.api.routes._response_datetime import optional_datetime_isoformat
+from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.api.routes._user_models import UserResponse
 from gateway.models.entities import APIKey, Project, User
+
+
+def test_datetime_isoformat_formats_datetime() -> None:
+    timestamp = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+
+    assert datetime_isoformat(timestamp) == timestamp.isoformat()
 
 
 def test_optional_datetime_isoformat_formats_datetimes_only() -> None:

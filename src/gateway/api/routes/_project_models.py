@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from gateway.api.routes._response_datetime import optional_datetime_isoformat
+from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.models.entities import Project
 
 
@@ -61,6 +61,6 @@ class ProjectResponse(BaseModel):
             blocked=bool(project.blocked),
             is_active=bool(project.is_active),
             metadata=project.metadata_dict(),
-            created_at=project.created_at.isoformat(),
-            updated_at=project.updated_at.isoformat(),
+            created_at=datetime_isoformat(project.created_at),
+            updated_at=datetime_isoformat(project.updated_at),
         )

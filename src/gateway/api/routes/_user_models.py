@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from gateway.api.routes._response_datetime import optional_datetime_isoformat
+from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.models.entities import UsageLog, User
 
 
@@ -42,8 +42,8 @@ class UserResponse(BaseModel):
             budget_started_at=optional_datetime_isoformat(user.budget_started_at),
             next_budget_reset_at=optional_datetime_isoformat(user.next_budget_reset_at),
             blocked=bool(user.blocked),
-            created_at=user.created_at.isoformat(),
-            updated_at=user.updated_at.isoformat(),
+            created_at=datetime_isoformat(user.created_at),
+            updated_at=datetime_isoformat(user.updated_at),
             metadata=user.metadata_dict(),
         )
 
@@ -83,7 +83,7 @@ class UsageLogResponse(BaseModel):
             user_id=log.user_id,
             api_key_id=log.api_key_id,
             project_id=log.project_id,
-            timestamp=log.timestamp.isoformat(),
+            timestamp=datetime_isoformat(log.timestamp),
             model=log.model,
             provider=log.provider,
             endpoint=log.endpoint,

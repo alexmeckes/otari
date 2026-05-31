@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.models.entities import RoutingPolicy, RoutingPolicyRevision
 from gateway.services import routing_policy_eval_scores, routing_policy_shape
 from gateway.services.routing_policy_service import ACTIVE_ROUTING_POLICY_STATUS
@@ -91,8 +92,8 @@ class RoutingPolicyResponse(BaseModel):
             is_default=bool(policy.is_default),
             revision=int(policy.revision or 0),
             status=policy.status,
-            created_at=policy.created_at.isoformat(),
-            updated_at=policy.updated_at.isoformat(),
+            created_at=datetime_isoformat(policy.created_at),
+            updated_at=datetime_isoformat(policy.updated_at),
         )
 
 
@@ -128,7 +129,7 @@ class RoutingPolicyRevisionResponse(BaseModel):
             is_default=bool(revision.is_default),
             status=revision.status,
             change_note=revision.change_note,
-            created_at=revision.created_at.isoformat(),
+            created_at=datetime_isoformat(revision.created_at),
         )
 
 
