@@ -372,7 +372,9 @@ async def test_message_provider_response_calls_streaming_provider_and_response_h
 
 
 @pytest.mark.asyncio
-async def test_log_message_usage_forwards_success_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_message_execution_context_log_usage_forwards_success_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[dict[str, Any]] = []
     db = cast(AsyncSession, object())
     log_writer = cast(LogWriter, object())
@@ -383,10 +385,9 @@ async def test_log_message_usage_forwards_success_fields(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(messages, "log_usage", fake_log_usage)
 
-    await messages._log_message_usage(
+    await _execution_context().log_usage(
         db=db,
         log_writer=log_writer,
-        execution_context=_execution_context(),
         usage_data=usage,
     )
 
@@ -455,7 +456,7 @@ async def test_message_response_payload_logs_usage_sets_headers_and_serializes(
 
 
 @pytest.mark.asyncio
-async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_message_execution_context_log_usage_forwards_error_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
     db = cast(AsyncSession, object())
     log_writer = cast(LogWriter, object())
@@ -465,12 +466,11 @@ async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(messages, "log_usage", fake_log_usage)
 
-    await messages._log_message_usage(
+    await _execution_context(
+        message_context=messages.MessageRequestContext(api_key_id=None, user_id="user-1"),
+    ).log_usage(
         db=db,
         log_writer=log_writer,
-        execution_context=_execution_context(
-            message_context=messages.MessageRequestContext(api_key_id=None, user_id="user-1"),
-        ),
         error="provider down",
     )
 

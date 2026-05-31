@@ -81,6 +81,26 @@ class MessageExecutionContext:
     def apply_rate_limit_headers(self, response: Response) -> None:
         apply_rate_limit_headers(response, self.rate_limit_info)
 
+    async def log_usage(
+        self,
+        *,
+        db: AsyncSession,
+        log_writer: LogWriter,
+        usage_data: CompletionUsage | None = None,
+        error: str | None = None,
+    ) -> None:
+        await log_usage(
+            db=db,
+            log_writer=log_writer,
+            api_key_id=self.message_context.api_key_id,
+            model=self.provider_call_context.model,
+            provider=self.provider_call_context.provider,
+            endpoint=_MESSAGES_ENDPOINT,
+            user_id=self.message_context.user_id,
+            usage_override=usage_data,
+            error=error,
+        )
+
 
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
     prompt_tokens = input_tokens or 0
@@ -161,30 +181,6 @@ async def _message_execution_context(
     )
 
 
-async def _log_message_usage(
-    *,
-    db: AsyncSession,
-    log_writer: LogWriter,
-    execution_context: MessageExecutionContext,
-    usage_data: CompletionUsage | None = None,
-    error: str | None = None,
-) -> None:
-    message_context = execution_context.message_context
-    provider_call_context = execution_context.provider_call_context
-
-    await log_usage(
-        db=db,
-        log_writer=log_writer,
-        api_key_id=message_context.api_key_id,
-        model=provider_call_context.model,
-        provider=provider_call_context.provider,
-        endpoint=_MESSAGES_ENDPOINT,
-        user_id=message_context.user_id,
-        usage_override=usage_data,
-        error=error,
-    )
-
-
 def _format_message_stream_chunk(event: MessageStreamEvent) -> str:
     return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
 
@@ -207,18 +203,16 @@ def _message_streaming_response(
     execution_context: MessageExecutionContext,
 ) -> StreamingResponse:
     async def _on_complete(usage_data: CompletionUsage) -> None:
-        await _log_message_usage(
+        await execution_context.log_usage(
             db=db,
             log_writer=log_writer,
-            execution_context=execution_context,
             usage_data=usage_data,
         )
 
     async def _on_error(error: str) -> None:
-        await _log_message_usage(
+        await execution_context.log_usage(
             db=db,
             log_writer=log_writer,
-            execution_context=execution_context,
             error=error,
         )
 
@@ -247,10 +241,9 @@ async def _message_response_payload(
 ) -> dict[str, Any]:
     usage_data = _message_response_usage(result)
     if usage_data:
-        await _log_message_usage(
+        await execution_context.log_usage(
             db=db,
             log_writer=log_writer,
-            execution_context=execution_context,
             usage_data=usage_data,
         )
 
@@ -267,10 +260,9 @@ async def _log_and_raise_message_provider_error(
 ) -> NoReturn:
     provider_call_context = execution_context.provider_call_context
 
-    await _log_message_usage(
+    await execution_context.log_usage(
         db=db,
         log_writer=log_writer,
-        execution_context=execution_context,
         error=str(error),
     )
     logger.error(
