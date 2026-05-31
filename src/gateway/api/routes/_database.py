@@ -3,6 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import APIKey, Budget, Project
+from gateway.repositories.api_keys_repository import get_api_key_by_id
 
 
 async def commit_or_database_error(db: AsyncSession) -> None:
@@ -37,7 +38,7 @@ async def get_project_or_404(db: AsyncSession, project_id: str) -> Project:
 
 
 async def get_api_key_or_404(db: AsyncSession, key_id: str) -> APIKey:
-    key = await db.get(APIKey, key_id)
+    key = await get_api_key_by_id(db, key_id)
     if key is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

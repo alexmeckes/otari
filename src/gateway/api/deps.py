@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +12,7 @@ from gateway.core.config import API_KEY_HEADER, LEGACY_API_KEY_HEADERS, GatewayC
 from gateway.core.database import get_db
 from gateway.metrics import record_auth_failure
 from gateway.models.entities import APIKey
+from gateway.repositories.api_keys_repository import get_api_key_by_hash
 from gateway.services.log_writer import LogWriter
 
 _config: GatewayConfig | None = None
@@ -96,8 +96,7 @@ async def _verify_and_update_api_key(db: AsyncSession, token: str) -> APIKey:
             detail=f"Invalid API key format: {e}",
         ) from e
 
-    result = await db.execute(select(APIKey).where(APIKey.key_hash == key_hash))
-    api_key = result.scalar_one_or_none()
+    api_key = await get_api_key_by_hash(db, key_hash)
 
     if not api_key:
         record_auth_failure("invalid_key")
