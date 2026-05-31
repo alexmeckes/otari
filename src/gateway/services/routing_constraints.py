@@ -1,8 +1,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from any_llm import AnyLLM
-
+from gateway.services.routing_candidate_specs import split_model_selector
 from gateway.services.routing_config_values import bool_config, dict_or_empty, non_negative_float_or_none, string_list
 
 
@@ -16,10 +15,10 @@ def _constraint_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
 
 def _normalize_model_key_for_constraint(value: str) -> str:
     try:
-        provider, model_name = AnyLLM.split_model_provider(value)
+        _provider, _model_name, normalized = split_model_selector(value)
     except ValueError:
         return value
-    return f"{provider.value}:{model_name}"
+    return normalized
 
 
 def _constraint_model_set(value: Any) -> set[str]:
