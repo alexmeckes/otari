@@ -21,7 +21,7 @@ from gateway.api.routes._usage import apply_rate_limit_headers, log_usage, optio
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
-from gateway.rate_limit import check_rate_limit
+from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.streaming import ANTHROPIC_STREAM_FORMAT, streaming_generator
@@ -137,6 +137,51 @@ def _message_stream_event_usage(event: MessageStreamEvent) -> CompletionUsage | 
     return None
 
 
+def _message_streaming_response(
+    *,
+    stream_result: Any,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    message_context: MessageRequestContext,
+    model: str,
+    provider: Any,
+    rate_limit_info: RateLimitInfo | None,
+) -> StreamingResponse:
+    async def _on_complete(usage_data: CompletionUsage) -> None:
+        await _log_message_usage(
+            db=db,
+            log_writer=log_writer,
+            message_context=message_context,
+            model=model,
+            provider=provider,
+            usage_data=usage_data,
+        )
+
+    async def _on_error(error: str) -> None:
+        await _log_message_usage(
+            db=db,
+            log_writer=log_writer,
+            message_context=message_context,
+            model=model,
+            provider=provider,
+            error=error,
+        )
+
+    return StreamingResponse(
+        streaming_generator(
+            stream=stream_result,
+            format_chunk=_format_message_stream_chunk,
+            extract_usage=_message_stream_event_usage,
+            fmt=ANTHROPIC_STREAM_FORMAT,
+            on_complete=_on_complete,
+            on_error=_on_error,
+            label=f"{provider}:{model}",
+        ),
+        media_type="text/event-stream",
+        headers=optional_rate_limit_headers(rate_limit_info),
+    )
+
+
 @router.post("/messages", response_model=None)
 async def create_message(
     raw_request: Request,
@@ -165,41 +210,15 @@ async def create_message(
     try:
         if request.stream:
             call_kwargs["stream"] = True
-
-            async def _on_complete(usage_data: CompletionUsage) -> None:
-                await _log_message_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    message_context=message_context,
-                    model=model,
-                    provider=provider,
-                    usage_data=usage_data,
-                )
-
-            async def _on_error(error: str) -> None:
-                await _log_message_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    message_context=message_context,
-                    model=model,
-                    provider=provider,
-                    error=error,
-                )
-
             msg_stream = await amessages(**call_kwargs)
-            rl_headers = optional_rate_limit_headers(rate_limit_info)
-            return StreamingResponse(
-                streaming_generator(
-                    stream=msg_stream,  # type: ignore[arg-type]
-                    format_chunk=_format_message_stream_chunk,
-                    extract_usage=_message_stream_event_usage,
-                    fmt=ANTHROPIC_STREAM_FORMAT,
-                    on_complete=_on_complete,
-                    on_error=_on_error,
-                    label=f"{provider}:{model}",
-                ),
-                media_type="text/event-stream",
-                headers=rl_headers,
+            return _message_streaming_response(
+                stream_result=msg_stream,
+                db=db,
+                log_writer=log_writer,
+                message_context=message_context,
+                model=model,
+                provider=provider,
+                rate_limit_info=rate_limit_info,
             )
 
         result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]

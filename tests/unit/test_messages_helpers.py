@@ -3,12 +3,14 @@ from typing import Any, cast
 
 import pytest
 from any_llm.types.completion import CompletionUsage
+from any_llm.types.messages import MessageDelta, MessageDeltaEvent, MessageDeltaUsage
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
 from gateway.api.routes._message_models import MessagesRequest
 from gateway.models.entities import APIKey
+from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
 
 
@@ -136,5 +138,55 @@ async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.Monke
             "user_id": "user-1",
             "usage_override": None,
             "error": "provider down",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_message_streaming_response_logs_usage_and_sets_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+    db = cast(AsyncSession, object())
+    log_writer = cast(LogWriter, object())
+    message_context = messages.MessageRequestContext(api_key_id="key-1", user_id="user-1")
+
+    async def fake_log_usage(**kwargs: Any) -> None:
+        calls.append(kwargs)
+
+    async def fake_stream() -> Any:
+        yield MessageDeltaEvent(
+            type="message_delta",
+            delta=MessageDelta(),
+            usage=MessageDeltaUsage(input_tokens=2, output_tokens=5),
+        )
+
+    monkeypatch.setattr(messages, "log_usage", fake_log_usage)
+
+    response = messages._message_streaming_response(
+        stream_result=fake_stream(),
+        db=db,
+        log_writer=log_writer,
+        message_context=message_context,
+        model="claude-3-5-sonnet",
+        provider="anthropic",
+        rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
+    )
+
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert response.headers["X-RateLimit-Limit"] == "10"
+    assert response.headers["X-RateLimit-Remaining"] == "8"
+    assert response.headers["X-RateLimit-Reset"] == "123"
+    assert chunks[-1] == "event: done\ndata: {}\n\n"
+    assert calls == [
+        {
+            "db": db,
+            "log_writer": log_writer,
+            "api_key_id": "key-1",
+            "model": "claude-3-5-sonnet",
+            "provider": "anthropic",
+            "endpoint": "/v1/messages",
+            "user_id": "user-1",
+            "usage_override": CompletionUsage(prompt_tokens=2, completion_tokens=5, total_tokens=7),
+            "error": None,
         }
     ]
