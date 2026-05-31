@@ -1,10 +1,15 @@
 from unittest.mock import patch
 
+import pytest
+
 from gateway.models.entities import ModelPricing
 from gateway.services.pricing_service import (
     input_metered_cost,
+    legacy_pricing_model_ref,
     log_missing_pricing,
+    normalized_pricing_model_ref,
     pricing_model_ref,
+    split_pricing_model_ref,
     token_usage_cost,
 )
 
@@ -23,6 +28,20 @@ def test_pricing_model_ref_uses_provider_prefix() -> None:
 
 def test_pricing_model_ref_uses_model_without_provider() -> None:
     assert pricing_model_ref(None, "gpt-4o") == "gpt-4o"
+
+
+def test_legacy_pricing_model_ref_uses_slash_separator() -> None:
+    assert legacy_pricing_model_ref("openai", "gpt-4o") == "openai/gpt-4o"
+
+
+def test_split_pricing_model_ref_returns_provider_value_and_model() -> None:
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        assert split_pricing_model_ref("openai/gpt-4o") == ("openai", "gpt-4o")
+
+
+def test_normalized_pricing_model_ref_uses_colon_separator() -> None:
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        assert normalized_pricing_model_ref("openai/gpt-4o") == "openai:gpt-4o"
 
 
 def test_log_missing_pricing_uses_standard_warning() -> None:

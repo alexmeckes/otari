@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from any_llm import AnyLLM
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +9,13 @@ from gateway.api.deps import get_db, verify_api_key_or_master_key, verify_master
 from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._pricing_models import PricingResponse, SetPricingRequest
 from gateway.models.entities import ModelPricing
-from gateway.services.pricing_service import normalize_effective_at
+from gateway.services.pricing_service import (
+    legacy_pricing_model_ref,
+    normalize_effective_at,
+    normalized_pricing_model_ref,
+    pricing_model_ref,
+    split_pricing_model_ref,
+)
 
 router = APIRouter(prefix="/v1/pricing", tags=["pricing"])
 
@@ -20,15 +25,11 @@ def _candidate_model_keys(raw_key: str) -> list[str]:
 
     candidates = [raw_key]
     try:
-        provider, model_name = AnyLLM.split_model_provider(raw_key)
+        provider, model_name = split_pricing_model_ref(raw_key)
     except ValueError:
         return candidates
 
-    provider_value = provider.value if provider else None
-    if not provider_value:
-        return candidates
-
-    for key in (f"{provider_value}:{model_name}", f"{provider_value}/{model_name}"):
+    for key in (pricing_model_ref(provider, model_name), legacy_pricing_model_ref(provider, model_name)):
         if key not in candidates:
             candidates.append(key)
     return candidates
@@ -80,8 +81,7 @@ async def set_pricing(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PricingResponse:
     """Set or update pricing for a model."""
-    provider, model_name = AnyLLM.split_model_provider(request.model_key)
-    normalized_key = f"{provider.value}:{model_name}"
+    normalized_key = normalized_pricing_model_ref(request.model_key)
     effective_at = normalize_effective_at(request.effective_at)
     result = await db.execute(
         select(ModelPricing).where(

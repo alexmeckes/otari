@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from any_llm import AnyLLM
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,20 @@ _PRICE_UNIT = 1_000_000
 
 def pricing_model_ref(provider: str | None, model: str) -> str:
     return f"{provider}:{model}" if provider else model
+
+
+def legacy_pricing_model_ref(provider: str | None, model: str) -> str:
+    return f"{provider}/{model}" if provider else model
+
+
+def split_pricing_model_ref(model_ref: str) -> tuple[str, str]:
+    provider, model = AnyLLM.split_model_provider(model_ref)
+    return provider.value, model
+
+
+def normalized_pricing_model_ref(model_ref: str) -> str:
+    provider, model = split_pricing_model_ref(model_ref)
+    return pricing_model_ref(provider, model)
 
 
 def input_metered_cost(
@@ -80,5 +95,5 @@ async def find_model_pricing(
     if pricing or not provider:
         return pricing
 
-    legacy_key = f"{provider}/{model}"
+    legacy_key = legacy_pricing_model_ref(provider, model)
     return await _find_by_model_key(db, legacy_key, lookup_time)
