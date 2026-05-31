@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
+from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
 from gateway.core.config import GatewayConfig
@@ -83,16 +84,10 @@ async def run_standalone_non_streaming_chat(
         # so operators don't chase a provider outage that's really the
         # sandbox container being down.
         logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except WebSearchNotReachableError as exc:
         logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except MaxToolIterationsExceeded as exc:
         # Gateway-owned cap, not an upstream provider failure. 422 lets
         # callers distinguish a runaway tool loop from a real outage.

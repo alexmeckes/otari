@@ -3,13 +3,14 @@ from typing import Any
 
 from any_llm import AnyLLM
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
+from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import log_usage
 from gateway.core.config import GatewayConfig
@@ -76,16 +77,10 @@ async def run_standalone_streaming_chat(
         raise
     except SandboxNotReachableError as exc:
         logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except WebSearchNotReachableError as exc:
         logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except Exception as exc:
         if db is not None:
             await log_usage(

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
 from gateway.core.config import GatewayConfig
@@ -153,25 +154,27 @@ async def run_standalone_routing_plan(
         except HTTPException:
             raise
         except SandboxNotReachableError as exc:
+            failure = chat_tool_backend_failure(exc)
             await _raise_final_routing_attempt_error(
                 execution=execution,
                 attempt=attempt,
                 exc=exc,
-                error_class="sandbox_unreachable",
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
+                error_class=failure.error_class,
+                status_code=failure.status_code,
+                detail=failure.detail,
                 log=logger.error,
                 log_message="Sandbox unreachable for routed model %s: %s",
                 log_args=(candidate.model, exc),
             )
         except WebSearchNotReachableError as exc:
+            failure = chat_tool_backend_failure(exc)
             await _raise_final_routing_attempt_error(
                 execution=execution,
                 attempt=attempt,
                 exc=exc,
-                error_class="web_search_unreachable",
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
+                error_class=failure.error_class,
+                status_code=failure.status_code,
+                detail=failure.detail,
                 log=logger.error,
                 log_message="Web search backend unreachable for routed model %s: %s",
                 log_args=(candidate.model, exc),

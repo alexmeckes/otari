@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from gateway.api.routes._chat_platform_errors import platform_attempt_failure_exception
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
+from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -61,16 +62,10 @@ async def run_platform_streaming_chat(
         raise
     except SandboxNotReachableError as exc:
         logger.error("Sandbox unreachable request_id=%s: %s", route.request_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except WebSearchNotReachableError as exc:
         logger.error("Web search backend unreachable request_id=%s: %s", route.request_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-        ) from exc
+        raise chat_tool_backend_failure_exception(exc) from exc
     except Exception as exc:
         # Every attempt failed before any bytes were flushed.
         logger.error(
