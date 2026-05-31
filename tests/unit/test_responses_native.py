@@ -29,6 +29,7 @@ def _context(rate_limit_info: RateLimitInfo | None = None) -> OpenAIProviderRequ
 
 
 def test_native_response_call_kwargs_uses_provider_context() -> None:
+    context = _context()
     request_body = ResponsesRequest(
         model="openai:gpt-4o",
         input="Hello",
@@ -37,18 +38,20 @@ def test_native_response_call_kwargs_uses_provider_context() -> None:
         project_id="proj-1",
         tags={"team": "platform"},
         temperature=0.2,
+        metadata={"trace": "native"},
     )
 
-    call_kwargs, stream = native_response_call_kwargs(request_body, _context())
+    call_kwargs, stream = native_response_call_kwargs(request_body, context)
 
     assert stream is True
     assert call_kwargs == {
         "api_key": "sk-test",
         "timeout": 30,
         "temperature": 0.2,
+        "metadata": {"trace": "native"},
         "user": "resolved-user",
         "model": "gpt-4o-mini",
-        "provider": _context().provider,
+        "provider": context.provider,
         "input_data": "Hello",
     }
 

@@ -20,20 +20,14 @@ from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
 
 RESPONSES_ENDPOINT = "/v1/responses"
+_GATEWAY_ONLY_RESPONSE_FIELDS = ("model", "user", "project_id", "tags")
 
 
 def native_response_call_kwargs(
     request_body: ResponsesRequest,
     context: OpenAIProviderRequestContext,
 ) -> tuple[dict[str, Any], bool]:
-    request_fields = request_body.model_dump(exclude_none=True)
-    input_payload = request_fields.pop("input")
-    stream = bool(request_fields.pop("stream", False))
-    request_fields.pop("model", None)
-    request_fields.pop("user", None)
-    request_fields.pop("project_id", None)
-    request_fields.pop("tags", None)
-    request_fields["user"] = context.user_id
+    request_fields, input_payload, stream = _native_response_request_fields(request_body, context)
 
     call_kwargs: dict[str, Any] = {**context.provider_kwargs}
     call_kwargs.update(request_fields)
@@ -41,6 +35,19 @@ def native_response_call_kwargs(
     call_kwargs["provider"] = context.provider
     call_kwargs["input_data"] = input_payload
     return call_kwargs, stream
+
+
+def _native_response_request_fields(
+    request_body: ResponsesRequest,
+    context: OpenAIProviderRequestContext,
+) -> tuple[dict[str, Any], Any, bool]:
+    request_fields = request_body.model_dump(exclude_none=True)
+    input_payload = request_fields.pop("input")
+    stream = bool(request_fields.pop("stream", False))
+    for field in _GATEWAY_ONLY_RESPONSE_FIELDS:
+        request_fields.pop(field, None)
+    request_fields["user"] = context.user_id
+    return request_fields, input_payload, stream
 
 
 async def log_native_response_usage(
