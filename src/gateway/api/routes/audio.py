@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._audio_helpers import (
-    audio_provider_call_context,
     log_audio_usage,
     raise_audio_provider_error,
 )
 from gateway.api.routes._audio_models import AudioSpeechRequest
 from gateway.api.routes._helpers import with_optional_kwargs
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._usage import apply_rate_limit_headers, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
@@ -63,7 +63,7 @@ async def create_transcription(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    context, provider, model_name, provider_kwargs = await audio_provider_call_context(
+    context = await resolve_openai_provider_request_context(
         raw_request=raw_request,
         auth_result=auth_result,
         user=user,
@@ -80,7 +80,12 @@ async def create_transcription(
         )
 
     transcription_kwargs = with_optional_kwargs(
-        {"model": model_name, "file": file_bytes, "provider": provider, **provider_kwargs},
+        {
+            "model": context.model,
+            "file": file_bytes,
+            "provider": context.provider,
+            **context.provider_kwargs,
+        },
         language=language,
         prompt=prompt,
         response_format=response_format,
@@ -92,8 +97,6 @@ async def create_transcription(
         await log_audio_usage(
             log_writer=log_writer,
             context=context,
-            model=model_name,
-            provider=provider,
             endpoint=_TRANSCRIPTIONS_ENDPOINT,
         )
 
@@ -103,8 +106,6 @@ async def create_transcription(
         await raise_audio_provider_error(
             log_writer=log_writer,
             context=context,
-            model=model_name,
-            provider=provider,
             endpoint=_TRANSCRIPTIONS_ENDPOINT,
             error=e,
         )
@@ -146,7 +147,7 @@ async def create_speech(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    context, provider, model_name, provider_kwargs = await audio_provider_call_context(
+    context = await resolve_openai_provider_request_context(
         raw_request=raw_request,
         auth_result=auth_result,
         user=request.user,
@@ -156,7 +157,13 @@ async def create_speech(
     )
 
     speech_kwargs = with_optional_kwargs(
-        {"model": model_name, "input": request.input, "voice": request.voice, "provider": provider, **provider_kwargs},
+        {
+            "model": context.model,
+            "input": request.input,
+            "voice": request.voice,
+            "provider": context.provider,
+            **context.provider_kwargs,
+        },
         instructions=request.instructions,
         response_format=request.response_format,
         speed=request.speed,
@@ -167,8 +174,6 @@ async def create_speech(
         await log_audio_usage(
             log_writer=log_writer,
             context=context,
-            model=model_name,
-            provider=provider,
             endpoint=_SPEECH_ENDPOINT,
         )
 
@@ -178,8 +183,6 @@ async def create_speech(
         await raise_audio_provider_error(
             log_writer=log_writer,
             context=context,
-            model=model_name,
-            provider=provider,
             endpoint=_SPEECH_ENDPOINT,
             error=e,
         )
