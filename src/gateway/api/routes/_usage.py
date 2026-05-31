@@ -12,7 +12,12 @@ from gateway.metrics import record_cost, record_tokens
 from gateway.models.entities import UsageLog
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing, token_usage_cost
+from gateway.services.pricing_service import (
+    find_model_pricing,
+    log_missing_pricing,
+    pricing_model_ref,
+    token_usage_cost,
+)
 
 
 def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
@@ -35,7 +40,7 @@ def apply_rate_limit_headers(response: Response, info: RateLimitInfo | None) -> 
 
 
 def provider_model_label(provider: Any, model: str) -> str:
-    return f"{provider}:{model}"
+    return pricing_model_ref(str(provider), model)
 
 
 def make_usage_log(
