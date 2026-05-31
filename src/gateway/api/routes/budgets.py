@@ -13,7 +13,7 @@ from gateway.api.routes._budget_models import (
     UpdateBudgetRequest,
     validate_tag_budget_shape,
 )
-from gateway.api.routes._database import commit_or_database_error
+from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhook
 from gateway.services.budget_service import (
@@ -30,16 +30,6 @@ def _budget_window_start(duration_sec: int | None) -> tuple[datetime, datetime |
     now = datetime.now(UTC)
     next_reset_at = calculate_next_reset(now, duration_sec) if duration_sec else None
     return now, next_reset_at
-
-
-async def _get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
-    budget = await db.get(Budget, budget_id)
-    if budget is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
-    return budget
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -140,7 +130,7 @@ async def list_alerts_for_budget(
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> list[BudgetAlertResponse]:
     """List alert events for a specific budget."""
-    await _get_budget_or_404(db, budget_id)
+    await get_budget_or_404(db, budget_id)
     stmt = (
         select(BudgetAlert)
         .where(BudgetAlert.budget_id == budget_id)
@@ -158,7 +148,7 @@ async def get_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Get details of a specific budget."""
-    budget = await _get_budget_or_404(db, budget_id)
+    budget = await get_budget_or_404(db, budget_id)
     return BudgetResponse.from_model(budget)
 
 
@@ -169,7 +159,7 @@ async def update_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Update a budget."""
-    budget = await _get_budget_or_404(db, budget_id)
+    budget = await get_budget_or_404(db, budget_id)
 
     if request.max_budget is not None:
         budget.max_budget = request.max_budget
@@ -205,7 +195,7 @@ async def delete_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a budget."""
-    budget = await _get_budget_or_404(db, budget_id)
+    budget = await get_budget_or_404(db, budget_id)
 
     await db.delete(budget)
     await commit_or_database_error(db)

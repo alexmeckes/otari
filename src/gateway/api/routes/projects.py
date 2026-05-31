@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
-from gateway.api.routes._database import commit_or_database_error
+from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
 from gateway.api.routes._project_models import CreateProjectRequest, ProjectResponse, UpdateProjectRequest
 from gateway.models.entities import Budget, Project, RoutingPolicy
 from gateway.services.budget_service import start_budget_period
@@ -29,16 +29,6 @@ async def _ensure_policy_exists(db: AsyncSession, policy_id: str) -> None:
         )
 
 
-async def _get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
-    budget = await db.get(Budget, budget_id)
-    if budget is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
-    return budget
-
-
 @router.post("", dependencies=[Depends(verify_master_key)])
 async def create_project(
     request: CreateProjectRequest,
@@ -56,7 +46,7 @@ async def create_project(
         await _ensure_policy_exists(db, request.routing_policy_id)
     budget: Budget | None = None
     if request.budget_id:
-        budget = await _get_budget_or_404(db, request.budget_id)
+        budget = await get_budget_or_404(db, request.budget_id)
 
     project_kwargs: dict[str, Any] = {
         "name": request.name,
@@ -125,7 +115,7 @@ async def update_project(
     elif "routing_policy_id" in payload:
         project.routing_policy_id = None
     if "budget_id" in payload and payload["budget_id"] is not None:
-        budget = await _get_budget_or_404(db, str(payload["budget_id"]))
+        budget = await get_budget_or_404(db, str(payload["budget_id"]))
         project.budget_id = str(payload["budget_id"])
         start_budget_period(project, budget, datetime.now(UTC))
     elif "budget_id" in payload:

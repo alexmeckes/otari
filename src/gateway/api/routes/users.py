@@ -6,9 +6,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
-from gateway.api.routes._database import commit_or_database_error
+from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
 from gateway.api.routes._user_models import CreateUserRequest, UpdateUserRequest, UsageLogResponse, UserResponse
-from gateway.models.entities import APIKey, Budget, UsageLog, User
+from gateway.models.entities import APIKey, UsageLog, User
 from gateway.repositories.users_repository import get_active_user
 from gateway.services.budget_service import start_budget_period
 
@@ -29,15 +29,7 @@ async def create_user(
             detail=f"User with id '{request.user_id}' already exists",
         )
 
-    budget: Budget | None = None
-    if request.budget_id:
-        budget_result = await db.execute(select(Budget).where(Budget.budget_id == request.budget_id))
-        budget = budget_result.scalar_one_or_none()
-        if not budget:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Budget with id '{request.budget_id}' not found",
-            )
+    budget = await get_budget_or_404(db, request.budget_id) if request.budget_id else None
 
     if existing_user and existing_user.deleted_at is not None:
         user = existing_user
@@ -116,14 +108,7 @@ async def update_user(
     if request.alias is not None:
         user.alias = request.alias
     if request.budget_id is not None:
-        budget_result = await db.execute(select(Budget).where(Budget.budget_id == request.budget_id))
-        budget = budget_result.scalar_one_or_none()
-        if not budget:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Budget with id '{request.budget_id}' not found",
-            )
-
+        budget = await get_budget_or_404(db, request.budget_id)
         user.budget_id = request.budget_id
         start_budget_period(user, budget, datetime.now(UTC))
     if request.blocked is not None:
