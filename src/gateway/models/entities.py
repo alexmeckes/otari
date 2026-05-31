@@ -30,6 +30,12 @@ def _float_list_or_empty(value: Any) -> list[float]:
     return []
 
 
+def _isoformat_or_none(value: datetime | None) -> str | None:
+    if value:
+        return value.isoformat()
+    return None
+
+
 class APIKey(Base):
     """API Key model for authentication and authorization."""
 
@@ -59,9 +65,9 @@ class APIKey(Base):
             "id": self.id,
             "key_name": self.key_name,
             "user_id": self.user_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
-            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "last_used_at": _isoformat_or_none(self.last_used_at),
+            "expires_at": _isoformat_or_none(self.expires_at),
             "is_active": self.is_active,
             "metadata": self.metadata_dict(),
         }
@@ -113,12 +119,12 @@ class Budget(Base):
             "alert_thresholds": self.alert_threshold_list(),
             "alert_webhook_url": self.alert_webhook_url,
             "spend": self.spend,
-            "budget_started_at": self.budget_started_at.isoformat() if self.budget_started_at else None,
-            "next_budget_reset_at": self.next_budget_reset_at.isoformat() if self.next_budget_reset_at else None,
+            "budget_started_at": _isoformat_or_none(self.budget_started_at),
+            "next_budget_reset_at": _isoformat_or_none(self.next_budget_reset_at),
             "blocked": self.blocked,
             "is_active": self.is_active,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "updated_at": _isoformat_or_none(self.updated_at),
         }
 
 
@@ -159,11 +165,11 @@ class User(Base):
             "alias": self.alias,
             "spend": self.spend,
             "budget_id": self.budget_id,
-            "budget_started_at": self.budget_started_at.isoformat() if self.budget_started_at else None,
-            "next_budget_reset_at": self.next_budget_reset_at.isoformat() if self.next_budget_reset_at else None,
+            "budget_started_at": _isoformat_or_none(self.budget_started_at),
+            "next_budget_reset_at": _isoformat_or_none(self.next_budget_reset_at),
             "blocked": self.blocked,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "updated_at": _isoformat_or_none(self.updated_at),
             "metadata": self.metadata_dict(),
         }
 
@@ -192,11 +198,11 @@ class ModelPricing(Base):
         """Convert model to dictionary."""
         return {
             "model_key": self.model_key,
-            "effective_at": self.effective_at.isoformat() if self.effective_at else None,
+            "effective_at": _isoformat_or_none(self.effective_at),
             "input_price_per_million": self.input_price_per_million,
             "output_price_per_million": self.output_price_per_million,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "updated_at": _isoformat_or_none(self.updated_at),
         }
 
 
@@ -235,8 +241,8 @@ class RoutingPolicy(Base):
             "is_default": self.is_default,
             "revision": self.revision,
             "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "updated_at": _isoformat_or_none(self.updated_at),
         }
 
 
@@ -277,7 +283,7 @@ class RoutingPolicyRevision(Base):
             "is_default": self.is_default,
             "status": self.status,
             "change_note": self.change_note,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
         }
 
 
@@ -323,13 +329,13 @@ class Project(Base):
             "routing_policy_id": self.routing_policy_id,
             "spend": self.spend,
             "budget_id": self.budget_id,
-            "budget_started_at": self.budget_started_at.isoformat() if self.budget_started_at else None,
-            "next_budget_reset_at": self.next_budget_reset_at.isoformat() if self.next_budget_reset_at else None,
+            "budget_started_at": _isoformat_or_none(self.budget_started_at),
+            "next_budget_reset_at": _isoformat_or_none(self.next_budget_reset_at),
             "blocked": self.blocked,
             "is_active": self.is_active,
             "metadata": self.metadata_dict(),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _isoformat_or_none(self.created_at),
+            "updated_at": _isoformat_or_none(self.updated_at),
         }
 
 
@@ -378,7 +384,7 @@ class UsageLog(Base):
             "api_key_id": self.api_key_id,
             "user_id": self.user_id,
             "project_id": self.project_id,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": _isoformat_or_none(self.timestamp),
             "model": self.model,
             "provider": self.provider,
             "endpoint": self.endpoint,
@@ -458,7 +464,7 @@ class RouteTrace(Base):
         """Convert model to dictionary."""
         return {
             "trace_id": self.trace_id,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": _isoformat_or_none(self.timestamp),
             "api_key_id": self.api_key_id,
             "user_id": self.user_id,
             "project_id": self.project_id,
@@ -509,8 +515,8 @@ class BudgetResetLog(Base):
             "project_id": self.project_id,
             "budget_id": self.budget_id,
             "previous_spend": self.previous_spend,
-            "reset_at": self.reset_at.isoformat() if self.reset_at else None,
-            "next_reset_at": self.next_reset_at.isoformat() if self.next_reset_at else None,
+            "reset_at": _isoformat_or_none(self.reset_at),
+            "next_reset_at": _isoformat_or_none(self.next_reset_at),
         }
 
 
@@ -558,24 +564,16 @@ class BudgetAlert(Base):
             "threshold": self.threshold,
             "spend": self.spend,
             "max_budget": self.max_budget,
-            "budget_period_start": self.budget_period_start.isoformat() if self.budget_period_start else None,
+            "budget_period_start": _isoformat_or_none(self.budget_period_start),
             "webhook_url": self.webhook_url,
             "delivery_status": self.delivery_status,
             "delivery_attempts": self.delivery_attempts,
             "last_delivery_status_code": self.last_delivery_status_code,
             "last_delivery_error": self.last_delivery_error,
-            "last_delivery_attempt_at": (
-                self.last_delivery_attempt_at.isoformat()
-                if self.last_delivery_attempt_at
-                else None
-            ),
-            "next_delivery_attempt_at": (
-                self.next_delivery_attempt_at.isoformat()
-                if self.next_delivery_attempt_at
-                else None
-            ),
-            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
-            "dead_lettered_at": self.dead_lettered_at.isoformat() if self.dead_lettered_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_delivery_attempt_at": _isoformat_or_none(self.last_delivery_attempt_at),
+            "next_delivery_attempt_at": _isoformat_or_none(self.next_delivery_attempt_at),
+            "delivered_at": _isoformat_or_none(self.delivered_at),
+            "dead_lettered_at": _isoformat_or_none(self.dead_lettered_at),
+            "created_at": _isoformat_or_none(self.created_at),
             "metadata": self.metadata_dict(),
         }
