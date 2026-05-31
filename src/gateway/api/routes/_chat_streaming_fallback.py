@@ -36,6 +36,20 @@ _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY = "streaming_first_chunk_timeout_ms"
 _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms_tool_loop"
 
 
+def _first_chunk_timeout_seconds(config: GatewayConfig, *, tool_mode: bool) -> float:
+    if tool_mode:
+        timeout_ms = config.platform.get(
+            _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY,
+            _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP,
+        )
+    else:
+        timeout_ms = config.platform.get(
+            _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY,
+            _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS,
+        )
+    return int(timeout_ms) / 1000
+
+
 async def run_streaming_with_fallback(
     *,
     route: ResolvedRoute,
@@ -56,33 +70,13 @@ async def run_streaming_with_fallback(
 ) -> StreamingResponse:
     """Run a platform streaming request with pre-first-chunk attempt fallback."""
     tool_mode = bool(mcp_server_configs) or use_sandbox or use_web_search
+    first_chunk_timeout_seconds = _first_chunk_timeout_seconds(config, tool_mode=tool_mode)
 
     base_request_fields = strip_gateway_fields(
         request.model_dump(exclude_unset=True),
         tools_extracted=tools_extracted,
         remaining_user_tools=remaining_user_tools,
     )
-
-    if tool_mode:
-        first_chunk_timeout_seconds = (
-            int(
-                config.platform.get(
-                    _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY,
-                    _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP,
-                )
-            )
-            / 1000
-        )
-    else:
-        first_chunk_timeout_seconds = (
-            int(
-                config.platform.get(
-                    _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY,
-                    _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS,
-                )
-            )
-            / 1000
-        )
 
     backend_stack = AsyncExitStack()
     pool_for_loop: Any = None
