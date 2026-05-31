@@ -72,29 +72,16 @@ async def _run_default_routing_response(
     return chat_completion_to_response_payload(chat_result)
 
 
-@router.post("/responses", response_model=None)
-async def create_response(
+async def _run_provider_native_response(
+    *,
     raw_request: Request,
     response: FastAPIResponse,
-    background_tasks: BackgroundTasks,
     request_body: ResponsesRequest,
-    auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    config: Annotated[GatewayConfig, Depends(get_config)],
-    log_writer: Annotated[LogWriter, Depends(get_log_writer)],
+    auth_result: tuple[APIKey | None, bool],
+    db: AsyncSession,
+    config: GatewayConfig,
+    log_writer: LogWriter,
 ) -> dict[str, Any] | StreamingResponse:
-    """OpenAI-compatible Responses endpoint."""
-    if not config.is_platform_mode and request_body.model == DEFAULT_ROUTING_MODEL:
-        return await _run_default_routing_response(
-            raw_request=raw_request,
-            response=response,
-            background_tasks=background_tasks,
-            request_body=request_body,
-            db=db,
-            config=config,
-            log_writer=log_writer,
-        )
-
     api_key, is_master_key = auth_result
     api_key_id = api_key.id if api_key else None
 
@@ -180,3 +167,37 @@ async def create_response(
     set_served_headers(response, metadata)
     payload = result.model_dump(exclude_none=True)  # type: ignore[union-attr]
     return response_payload_with_served_metadata(payload, provider=provider.value, requested_model=model)
+
+
+@router.post("/responses", response_model=None)
+async def create_response(
+    raw_request: Request,
+    response: FastAPIResponse,
+    background_tasks: BackgroundTasks,
+    request_body: ResponsesRequest,
+    auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    config: Annotated[GatewayConfig, Depends(get_config)],
+    log_writer: Annotated[LogWriter, Depends(get_log_writer)],
+) -> dict[str, Any] | StreamingResponse:
+    """OpenAI-compatible Responses endpoint."""
+    if not config.is_platform_mode and request_body.model == DEFAULT_ROUTING_MODEL:
+        return await _run_default_routing_response(
+            raw_request=raw_request,
+            response=response,
+            background_tasks=background_tasks,
+            request_body=request_body,
+            db=db,
+            config=config,
+            log_writer=log_writer,
+        )
+
+    return await _run_provider_native_response(
+        raw_request=raw_request,
+        response=response,
+        request_body=request_body,
+        auth_result=auth_result,
+        db=db,
+        config=config,
+        log_writer=log_writer,
+    )
