@@ -18,8 +18,6 @@ from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_
 from gateway.services.budget_periods import budget_period_window
 from gateway.services.budget_service import (
     TAG_BUDGET_SCOPE,
-    normalize_alert_thresholds,
-    normalize_alert_webhook_url,
 )
 
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
@@ -42,8 +40,8 @@ async def create_budget(
         budget_duration_sec=request.budget_duration_sec,
         scope_type=request.scope_type,
         match_tags=dict(request.match_tags or {}),
-        alert_thresholds=normalize_alert_thresholds(request.alert_thresholds),
-        alert_webhook_url=normalize_alert_webhook_url(request.alert_webhook_url),
+        alert_thresholds=request.alert_thresholds,
+        alert_webhook_url=request.alert_webhook_url,
         spend=0.0,
         budget_started_at=budget_started_at,
         next_budget_reset_at=next_budget_reset_at,
@@ -163,9 +161,9 @@ async def update_budget(
     if request.match_tags is not None:
         budget.match_tags = dict(request.match_tags)
     if "alert_thresholds" in request.model_fields_set:
-        budget.alert_thresholds = normalize_alert_thresholds(request.alert_thresholds)
+        budget.alert_thresholds = request.alert_thresholds
     if "alert_webhook_url" in request.model_fields_set:
-        budget.alert_webhook_url = normalize_alert_webhook_url(request.alert_webhook_url)
+        budget.alert_webhook_url = request.alert_webhook_url
     validate_tag_budget_shape(budget.scope_type, budget.match_tags)
     if request.spend is not None:
         budget.spend = request.spend

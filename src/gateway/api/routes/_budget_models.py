@@ -34,6 +34,13 @@ def _budget_alert_thresholds(budget: Budget) -> list[float]:
     return alert_thresholds if isinstance(alert_thresholds, list) else []
 
 
+def normalize_budget_scope_type(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in {"entity", TAG_BUDGET_SCOPE}:
+        raise ValueError("scope_type must be 'entity' or 'tag'")
+    return normalized
+
+
 class CreateBudgetRequest(BaseModel):
     """Request model for creating a new budget."""
 
@@ -63,10 +70,7 @@ class CreateBudgetRequest(BaseModel):
     @classmethod
     def validate_scope_type(cls, value: str) -> str:
         """Validate supported budget scopes."""
-        normalized = value.strip().lower()
-        if normalized not in {"entity", TAG_BUDGET_SCOPE}:
-            raise ValueError("scope_type must be 'entity' or 'tag'")
-        return normalized
+        return normalize_budget_scope_type(value)
 
     @field_validator("alert_thresholds")
     @classmethod
@@ -146,10 +150,7 @@ class UpdateBudgetRequest(BaseModel):
         """Validate supported budget scopes."""
         if value is None:
             return None
-        normalized = value.strip().lower()
-        if normalized not in {"entity", TAG_BUDGET_SCOPE}:
-            raise ValueError("scope_type must be 'entity' or 'tag'")
-        return normalized
+        return normalize_budget_scope_type(value)
 
     @field_validator("alert_thresholds")
     @classmethod

@@ -1,7 +1,44 @@
 from datetime import UTC, datetime
 
-from gateway.api.routes._budget_models import BudgetAlertResponse, BudgetResponse
+import pytest
+from pydantic import ValidationError
+
+from gateway.api.routes._budget_models import (
+    BudgetAlertResponse,
+    BudgetResponse,
+    CreateBudgetRequest,
+    UpdateBudgetRequest,
+)
 from gateway.models.entities import Budget, BudgetAlert
+
+
+def test_create_and_update_budget_requests_share_scope_normalization() -> None:
+    assert CreateBudgetRequest(scope_type=" TAG ", match_tags={"team": "platform"}).scope_type == "tag"
+    assert UpdateBudgetRequest(scope_type=" ENTITY ").scope_type == "entity"
+    assert UpdateBudgetRequest(scope_type=None).scope_type is None
+
+
+def test_budget_request_scope_normalization_rejects_unsupported_values() -> None:
+    with pytest.raises(ValidationError, match="scope_type must be 'entity' or 'tag'"):
+        CreateBudgetRequest(scope_type="workspace")
+    with pytest.raises(ValidationError, match="scope_type must be 'entity' or 'tag'"):
+        UpdateBudgetRequest(scope_type="workspace")
+
+
+def test_budget_requests_normalize_alert_fields() -> None:
+    create_request = CreateBudgetRequest(
+        alert_thresholds=[0.8, 0.5, 0.5],
+        alert_webhook_url=" https://alerts.example.test/hook ",
+    )
+    update_request = UpdateBudgetRequest(
+        alert_thresholds=[0.8, 0.5, 0.5],
+        alert_webhook_url=" https://alerts.example.test/hook ",
+    )
+
+    assert create_request.alert_thresholds == [0.5, 0.8]
+    assert create_request.alert_webhook_url == "https://alerts.example.test/hook"
+    assert update_request.alert_thresholds == [0.5, 0.8]
+    assert update_request.alert_webhook_url == "https://alerts.example.test/hook"
 
 
 def test_budget_match_tag_dict_returns_match_tags_when_dict() -> None:
