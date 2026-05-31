@@ -7,6 +7,7 @@ from any_llm.types.completion import ChatCompletionChunk, CompletionUsage
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gateway.api.routes._completion_usage import completion_usage_from_token_counts
 from gateway.api.routes._usage import log_usage, optional_rate_limit_headers, provider_model_label
 from gateway.core.config import GatewayConfig
 from gateway.rate_limit import RateLimitInfo
@@ -89,9 +90,9 @@ def build_chat_streaming_response(
     def _extract_usage(chunk: ChatCompletionChunk) -> CompletionUsage | None:
         if not chunk.usage:
             return None
-        return CompletionUsage(
-            prompt_tokens=chunk.usage.prompt_tokens or 0,
-            completion_tokens=chunk.usage.completion_tokens or 0,
+        return completion_usage_from_token_counts(
+            input_tokens=chunk.usage.prompt_tokens or 0,
+            output_tokens=chunk.usage.completion_tokens or 0,
             total_tokens=chunk.usage.total_tokens or 0,
         )
 

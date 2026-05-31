@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._budget_checks import validate_user_request_budget
+from gateway.api.routes._completion_usage import completion_usage_from_token_counts
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._message_models import MessagesRequest
 from gateway.api.routes._stream_events import format_typed_stream_event
@@ -108,20 +109,13 @@ class MessageExecutionContext:
         )
 
 
-def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
-    prompt_tokens = input_tokens or 0
-    completion_tokens = output_tokens or 0
-    return CompletionUsage(
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        total_tokens=prompt_tokens + completion_tokens,
-    )
-
-
 def _message_response_usage(result: MessageResponse) -> CompletionUsage | None:
     if not result.usage:
         return None
-    return _message_completion_usage(result.usage.input_tokens, result.usage.output_tokens)
+    return completion_usage_from_token_counts(
+        input_tokens=result.usage.input_tokens,
+        output_tokens=result.usage.output_tokens,
+    )
 
 
 def _resolve_message_request_context(
@@ -189,11 +183,14 @@ async def _message_execution_context(
 
 def _message_stream_event_usage(event: MessageStreamEvent) -> CompletionUsage | None:
     if isinstance(event, MessageDeltaEvent):
-        return _message_completion_usage(event.usage.input_tokens, event.usage.output_tokens)
+        return completion_usage_from_token_counts(
+            input_tokens=event.usage.input_tokens,
+            output_tokens=event.usage.output_tokens,
+        )
     if isinstance(event, MessageStartEvent):
         input_tokens = event.message.usage.input_tokens or 0
         if input_tokens:
-            return _message_completion_usage(input_tokens, 0)
+            return completion_usage_from_token_counts(input_tokens=input_tokens, output_tokens=0)
     return None
 
 

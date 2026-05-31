@@ -13,6 +13,7 @@ from openresponses_types.types import Usage as OpenResponsesUsage
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._completion_usage import completion_usage_from_token_counts
 from gateway.services.pricing_service import legacy_pricing_model_ref
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, require_routing_model_selector
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
@@ -43,9 +44,9 @@ def usage_to_completion_usage(
 ) -> CompletionUsage | None:
     if usage is None:
         return None
-    return CompletionUsage(
-        prompt_tokens=getattr(usage, "input_tokens", 0) or 0,
-        completion_tokens=getattr(usage, "output_tokens", 0) or 0,
+    return completion_usage_from_token_counts(
+        input_tokens=getattr(usage, "input_tokens", 0) or 0,
+        output_tokens=getattr(usage, "output_tokens", 0) or 0,
         total_tokens=getattr(usage, "total_tokens", 0) or 0,
     )
 
