@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_request_fields import chat_provider_request_fields
+from gateway.api.routes._chat_request_fields import chat_provider_call_kwargs, chat_provider_request_fields
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
@@ -58,7 +58,7 @@ async def run_standalone_streaming_chat(
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )
-    completion_kwargs = {**provider_kwargs, **request_fields}
+    completion_kwargs = chat_provider_call_kwargs(provider_kwargs, request_fields)
     ensure_stream_usage_options(completion_kwargs)
 
     try:

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_request_fields import chat_provider_request_fields
+from gateway.api.routes._chat_request_fields import chat_provider_call_kwargs, chat_provider_request_fields
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_tool_backend_errors import (
     chat_tool_backend_failure_exception,
@@ -82,7 +82,7 @@ async def run_standalone_non_streaming_chat(
         tools_extracted=tool_selection.tools_extracted,
         remaining_user_tools=tool_selection.remaining_user_tools,
     )
-    completion_kwargs = {**provider_kwargs, **request_fields}
+    completion_kwargs = chat_provider_call_kwargs(provider_kwargs, request_fields)
 
     try:
         completion = await run_non_streaming_completion(

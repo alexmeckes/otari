@@ -12,7 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_request_fields import chat_provider_request_fields
+from gateway.api.routes._chat_request_fields import chat_provider_call_kwargs, chat_provider_request_fields
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.models.mcp import McpServerConfig
 from gateway.services.chat_tool_config import extract_code_execution_tool, extract_web_search_tool
@@ -232,4 +232,29 @@ def test_chat_provider_request_fields_strip_gateway_metadata_and_preserve_user_t
         "model": "openai:gpt-4o-mini",
         "messages": [{"role": "user", "content": "hi"}],
         "tools": [user_tool],
+    }
+
+
+def test_chat_provider_call_kwargs_preserves_request_and_attempt_model_precedence() -> None:
+    call_kwargs = chat_provider_call_kwargs(
+        {
+            "api_key": "sk-test",
+            "model": "provider-default",
+            "temperature": 0.9,
+            "timeout": 30,
+        },
+        {
+            "model": "openai:gpt-4o-mini",
+            "messages": [{"role": "user", "content": "hi"}],
+            "temperature": 0.2,
+        },
+        model="anthropic:claude-3-5-sonnet",
+    )
+
+    assert call_kwargs == {
+        "api_key": "sk-test",
+        "model": "anthropic:claude-3-5-sonnet",
+        "temperature": 0.2,
+        "timeout": 30,
+        "messages": [{"role": "user", "content": "hi"}],
     }

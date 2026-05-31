@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_provider_errors import is_provider_timeout
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.api.routes._chat_request_fields import chat_provider_request_fields
+from gateway.api.routes._chat_request_fields import chat_provider_call_kwargs, chat_provider_request_fields
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure, chat_tool_iteration_cap_failure
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import apply_rate_limit_headers, log_usage
@@ -121,7 +121,7 @@ async def run_standalone_routing_plan(
 
     for candidate in plan.candidates:
         provider_kwargs = get_provider_kwargs(config, LLMProvider(candidate.provider))
-        completion_kwargs = {**provider_kwargs, **request_fields, "model": candidate.model}
+        completion_kwargs = chat_provider_call_kwargs(provider_kwargs, request_fields, model=candidate.model)
         attempt = _RoutingAttemptContext(
             candidate=candidate,
             attempts=attempts,
