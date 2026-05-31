@@ -105,6 +105,16 @@ async def get_policy_or_404(db: AsyncSession, policy_id: str) -> RoutingPolicy:
     return policy
 
 
+async def get_active_policy_or_error(db: AsyncSession, policy_id: str) -> RoutingPolicy:
+    policy = await get_policy_or_404(db, policy_id)
+    if policy.status != ACTIVE_ROUTING_POLICY_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Routing policy '{policy_id}' is not active",
+        )
+    return policy
+
+
 async def get_policy_revision(
     db: AsyncSession,
     *,

@@ -8,25 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_db, verify_master_key
 from gateway.api.routes._database import commit_or_database_error, get_budget_or_404, get_project_or_404
 from gateway.api.routes._project_models import CreateProjectRequest, ProjectResponse, UpdateProjectRequest
-from gateway.models.entities import Budget, Project, RoutingPolicy
+from gateway.api.routes._routing_policy_admin import get_active_policy_or_error
+from gateway.models.entities import Budget, Project
 from gateway.services.budget_service import start_budget_period
-from gateway.services.routing_policy_service import ACTIVE_ROUTING_POLICY_STATUS
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
-
-
-async def _ensure_policy_exists(db: AsyncSession, policy_id: str) -> None:
-    policy = await db.get(RoutingPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Routing policy '{policy_id}' not found",
-        )
-    if policy.status != ACTIVE_ROUTING_POLICY_STATUS:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Routing policy '{policy_id}' is not active",
-        )
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -43,7 +29,7 @@ async def create_project(
                 detail=f"Project '{request.project_id}' already exists",
             )
     if request.routing_policy_id:
-        await _ensure_policy_exists(db, request.routing_policy_id)
+        await get_active_policy_or_error(db, request.routing_policy_id)
     budget: Budget | None = None
     if request.budget_id:
         budget = await get_budget_or_404(db, request.budget_id)
@@ -100,7 +86,7 @@ async def update_project(
 
     payload = request.model_dump(exclude_unset=True)
     if "routing_policy_id" in payload and payload["routing_policy_id"] is not None:
-        await _ensure_policy_exists(db, str(payload["routing_policy_id"]))
+        await get_active_policy_or_error(db, str(payload["routing_policy_id"]))
         project.routing_policy_id = str(payload["routing_policy_id"])
     elif "routing_policy_id" in payload:
         project.routing_policy_id = None
