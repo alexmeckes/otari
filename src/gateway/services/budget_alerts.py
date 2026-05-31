@@ -7,17 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
 from gateway.models.entities import Budget, BudgetAlert, Project
+from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.repositories.users_repository import get_active_user
 
 BUDGET_ALERT_SCOPE_PROJECT = "project"
 BUDGET_ALERT_SCOPE_USER = "user"
 
 _HTTP_URL_ADAPTER = TypeAdapter(AnyHttpUrl)
-
-
-async def _get_budget(db: AsyncSession, budget_id: str) -> Budget | None:
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    return result.scalar_one_or_none()
 
 
 def normalize_alert_thresholds(value: Any) -> list[float]:
@@ -127,7 +123,7 @@ async def record_user_budget_alerts_after_spend(
     user = await get_active_user(db, user_id)
     if user is None or not user.budget_id:
         return []
-    budget = await _get_budget(db, user.budget_id)
+    budget = await get_budget_by_id(db, user.budget_id)
     if budget is None:
         return []
     return await record_budget_alerts(
@@ -152,7 +148,7 @@ async def record_project_budget_alerts_after_spend(
     project = result.scalar_one_or_none()
     if project is None or not project.budget_id:
         return []
-    budget = await _get_budget(db, project.budget_id)
+    budget = await get_budget_by_id(db, project.budget_id)
     if budget is None:
         return []
     return await record_budget_alerts(

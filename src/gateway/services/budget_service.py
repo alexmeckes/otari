@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.log_config import logger
 from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog, Project, User
+from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.repositories.users_repository import get_active_user
 from gateway.services import budget_alerts as _budget_alerts
 from gateway.services import budget_periods as _budget_periods
@@ -180,11 +181,6 @@ async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: 
     return project
 
 
-async def _get_budget(db: AsyncSession, budget_id: str) -> Budget | None:
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    return result.scalar_one_or_none()
-
-
 def _normalize_budget_strategy(strategy: str) -> str:
     normalized_strategy = strategy or "for_update"
     normalized_strategy = normalized_strategy.strip().lower()
@@ -265,7 +261,7 @@ async def validate_user_budget(
     if normalized_strategy == "disabled" or not user.budget_id:
         return user
 
-    budget = await _get_budget(db, user.budget_id)
+    budget = await get_budget_by_id(db, user.budget_id)
     if not budget:
         return user
 
@@ -327,7 +323,7 @@ async def validate_project_budget(
     if normalized_strategy == "disabled" or not project.budget_id:
         return project
 
-    budget = await _get_budget(db, project.budget_id)
+    budget = await get_budget_by_id(db, project.budget_id)
     if not budget:
         return project
 

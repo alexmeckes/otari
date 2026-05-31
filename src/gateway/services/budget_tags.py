@@ -12,17 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.log_config import logger
 from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog
+from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.services.budget_alerts import record_budget_alerts
 from gateway.services.budget_periods import as_utc, budget_period_window
 
 TAG_BUDGET_SCOPE = "tag"
 
 IsModelFree = Callable[[AsyncSession, str], Awaitable[bool]]
-
-
-async def _get_budget(db: AsyncSession, budget_id: str) -> Budget | None:
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    return result.scalar_one_or_none()
 
 
 def normalize_budget_strategy(strategy: str) -> str:
@@ -122,7 +118,7 @@ async def cas_reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) 
             await db.rollback()
             logger.error("Failed to commit CAS budget reset for tag budget '%s': %s", budget.budget_id, e)
             raise
-        refreshed = await _get_budget(db, budget.budget_id)
+        refreshed = await get_budget_by_id(db, budget.budget_id)
         return refreshed or budget
 
     await db.rollback()
