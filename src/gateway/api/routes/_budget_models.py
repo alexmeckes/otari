@@ -214,7 +214,7 @@ class BudgetAlertResponse(BaseModel):
                 else None
             ),
             created_at=alert.created_at.isoformat(),
-            metadata=alert.metadata_ if isinstance(alert.metadata_, dict) else {},
+            metadata=alert.metadata_dict(),
         )
 
 

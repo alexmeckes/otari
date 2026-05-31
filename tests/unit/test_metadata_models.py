@@ -1,4 +1,4 @@
-from gateway.models.entities import APIKey, Project, User
+from gateway.models.entities import APIKey, BudgetAlert, Project, User
 
 
 def test_api_key_metadata_dict_returns_metadata_when_dict() -> None:
@@ -41,3 +41,17 @@ def test_project_metadata_dict_returns_empty_dict_for_invalid_metadata() -> None
 
     assert project.metadata_dict() == {}
     assert project.to_dict()["metadata"] == {}
+
+
+def test_budget_alert_metadata_dict_returns_metadata_when_dict() -> None:
+    alert = BudgetAlert(metadata_={"threshold": "warning"})
+
+    assert alert.metadata_dict() == {"threshold": "warning"}
+    assert alert.to_dict()["metadata"] == {"threshold": "warning"}
+
+
+def test_budget_alert_metadata_dict_returns_empty_dict_for_invalid_metadata() -> None:
+    alert = BudgetAlert(metadata_=None)  # type: ignore[arg-type]
+
+    assert alert.metadata_dict() == {}
+    assert alert.to_dict()["metadata"] == {}

@@ -536,6 +536,11 @@ class BudgetAlert(Base):
 
     budget = relationship("Budget", back_populates="alerts")
 
+    def metadata_dict(self) -> dict[str, Any]:
+        if isinstance(self.metadata_, dict):
+            return self.metadata_
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -565,5 +570,5 @@ class BudgetAlert(Base):
             "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
             "dead_lettered_at": self.dead_lettered_at.isoformat() if self.dead_lettered_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "metadata": self.metadata_ or {},
+            "metadata": self.metadata_dict(),
         }

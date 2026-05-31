@@ -58,7 +58,7 @@ def _alert_payload(alert: BudgetAlert) -> dict[str, Any]:
                 else None
             ),
             "created_at": alert.created_at.isoformat() if alert.created_at else None,
-            "metadata": alert.metadata_ or {},
+            "metadata": alert.metadata_dict(),
         },
     }
 
