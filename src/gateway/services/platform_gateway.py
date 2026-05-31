@@ -34,6 +34,10 @@ class ResolvedAttempt(BaseModel):
     api_key: str
     managed: bool
 
+    @property
+    def model_selector(self) -> str:
+        return f"{self.provider}:{self.model}"
+
 
 class ResolvedRoute(BaseModel):
     """The full resolution plan returned by the platform."""

@@ -1,7 +1,6 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, NamedTuple
 
-from any_llm import LLMProvider
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
 from fastapi import BackgroundTasks, HTTPException, Response, status
 
@@ -70,7 +69,6 @@ async def run_platform_non_streaming_chat(
     mcp_server_configs = request.mcp_servers
 
     for attempt in route.attempts:
-        attempt_provider = LLMProvider(attempt.provider)
         attempt_kwargs: dict[str, Any] = {"api_key": attempt.api_key}
         if attempt.api_base:
             attempt_kwargs["api_base"] = attempt.api_base
@@ -78,7 +76,7 @@ async def run_platform_non_streaming_chat(
         completion_kwargs = {
             **attempt_kwargs,
             **base_request_fields,
-            "model": f"{attempt_provider.value}:{attempt.model}",
+            "model": attempt.model_selector,
         }
 
         locked_in = False

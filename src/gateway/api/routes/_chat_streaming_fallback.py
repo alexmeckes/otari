@@ -102,14 +102,13 @@ async def run_streaming_with_fallback(
     async def _build_for_attempt(
         attempt: ResolvedAttempt,
     ) -> AsyncIterator[ChatCompletionChunk]:
-        attempt_provider = LLMProvider(attempt.provider)
         provider_kwargs: dict[str, Any] = {"api_key": attempt.api_key}
         if attempt.api_base:
             provider_kwargs["api_base"] = attempt.api_base
         completion_kwargs = {
             **provider_kwargs,
             **base_request_fields,
-            "model": f"{attempt_provider.value}:{attempt.model}",
+            "model": attempt.model_selector,
         }
         ensure_stream_usage_options(completion_kwargs)
         if pool_for_loop is None:

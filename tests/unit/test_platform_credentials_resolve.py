@@ -67,3 +67,4 @@ async def test_resolve_platform_credentials_uses_shared_request_setup(
     }
     assert route.request_id == "request-1"
     assert route.attempts[0].model == "gpt-4o-mini"
+    assert route.attempts[0].model_selector == "openai:gpt-4o-mini"
