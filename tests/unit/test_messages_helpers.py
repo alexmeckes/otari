@@ -84,10 +84,9 @@ async def test_log_message_usage_forwards_success_fields(monkeypatch: pytest.Mon
     await messages._log_message_usage(
         db=db,
         log_writer=log_writer,
-        api_key_id="key-1",
+        message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
         model="claude-3-5-sonnet",
         provider="anthropic",
-        user_id="user-1",
         usage_data=usage,
     )
 
@@ -120,10 +119,9 @@ async def test_log_message_usage_forwards_error_fields(monkeypatch: pytest.Monke
     await messages._log_message_usage(
         db=db,
         log_writer=log_writer,
-        api_key_id=None,
+        message_context=messages.MessageRequestContext(api_key_id=None, user_id="user-1"),
         model="claude-3-5-sonnet",
         provider="anthropic",
-        user_id="user-1",
         error="provider down",
     )
 

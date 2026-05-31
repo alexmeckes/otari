@@ -104,21 +104,20 @@ async def _log_message_usage(
     *,
     db: AsyncSession,
     log_writer: LogWriter,
-    api_key_id: str | None,
+    message_context: MessageRequestContext,
     model: str,
     provider: Any,
-    user_id: str,
     usage_data: CompletionUsage | None = None,
     error: str | None = None,
 ) -> None:
     await log_usage(
         db=db,
         log_writer=log_writer,
-        api_key_id=api_key_id,
+        api_key_id=message_context.api_key_id,
         model=model,
         provider=provider,
         endpoint=_MESSAGES_ENDPOINT,
-        user_id=user_id,
+        user_id=message_context.user_id,
         usage_override=usage_data,
         error=error,
     )
@@ -171,10 +170,9 @@ async def create_message(
                 await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
-                    api_key_id=message_context.api_key_id,
+                    message_context=message_context,
                     model=model,
                     provider=provider,
-                    user_id=message_context.user_id,
                     usage_data=usage_data,
                 )
 
@@ -182,10 +180,9 @@ async def create_message(
                 await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
-                    api_key_id=message_context.api_key_id,
+                    message_context=message_context,
                     model=model,
                     provider=provider,
-                    user_id=message_context.user_id,
                     error=error,
                 )
 
@@ -212,10 +209,9 @@ async def create_message(
             await _log_message_usage(
                 db=db,
                 log_writer=log_writer,
-                api_key_id=message_context.api_key_id,
+                message_context=message_context,
                 model=model,
                 provider=provider,
-                user_id=message_context.user_id,
                 usage_data=usage_data,
             )
 
@@ -225,10 +221,9 @@ async def create_message(
         await _log_message_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=message_context.api_key_id,
+            message_context=message_context,
             model=model,
             provider=provider,
-            user_id=message_context.user_id,
             error=str(e),
         )
         logger.error("Provider call failed for %s:%s: %s", provider, model, e)
