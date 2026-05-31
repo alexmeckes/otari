@@ -30,6 +30,8 @@ UNSUPPORTED_MODERATION_SUBSTRING = "does not support moderation"
 
 router = APIRouter(prefix="/v1", tags=["moderations"])
 
+_MODERATIONS_ENDPOINT = "/v1/moderations"
+
 
 @router.post("/moderations", response_model=ModerationResponse)
 async def create_moderation(
@@ -82,7 +84,7 @@ async def create_moderation(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/moderations",
+            endpoint=_MODERATIONS_ENDPOINT,
             prompt_tokens=None,
             completion_tokens=0,
             total_tokens=None,
@@ -95,7 +97,7 @@ async def create_moderation(
         else:
             usage_log.cost = 0.0
             # Intentionally do NOT emit "No pricing configured" warning for
-            # /v1/moderations (free at most providers; keeps logs clean).
+            # moderations (free at most providers; keeps logs clean).
 
         await log_writer.put(usage_log)
 
@@ -108,7 +110,7 @@ async def create_moderation(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/moderations",
+            endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
         if UNSUPPORTED_MODERATION_SUBSTRING in str(e):
@@ -128,7 +130,7 @@ async def create_moderation(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/moderations",
+            endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
 

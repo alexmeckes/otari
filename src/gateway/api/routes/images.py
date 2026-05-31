@@ -21,6 +21,8 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["images"])
 
+_IMAGE_GENERATIONS_ENDPOINT = "/v1/images/generations"
+
 
 @router.post("/images/generations", response_model=None)
 async def create_image(
@@ -83,7 +85,7 @@ async def create_image(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/images/generations",
+            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
@@ -108,7 +110,7 @@ async def create_image(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/images/generations",
+            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
             error=e,
         )
 

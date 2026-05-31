@@ -21,6 +21,8 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
 
+_EMBEDDINGS_ENDPOINT = "/v1/embeddings"
+
 
 @router.post("/embeddings", response_model=None)
 async def create_embedding(
@@ -75,7 +77,7 @@ async def create_embedding(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/embeddings",
+            endpoint=_EMBEDDINGS_ENDPOINT,
             prompt_tokens=result.usage.prompt_tokens if result.usage else None,
             completion_tokens=0,
             total_tokens=result.usage.total_tokens if result.usage else None,
@@ -100,7 +102,7 @@ async def create_embedding(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/embeddings",
+            endpoint=_EMBEDDINGS_ENDPOINT,
             error=e,
         )
 

@@ -20,6 +20,8 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 
 router = APIRouter(prefix="/v1", tags=["rerank"])
 
+_RERANK_ENDPOINT = "/v1/rerank"
+
 
 @router.post("/rerank", response_model=None)
 async def create_rerank(
@@ -77,7 +79,7 @@ async def create_rerank(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/rerank",
+            endpoint=_RERANK_ENDPOINT,
             prompt_tokens=total_tokens,
             completion_tokens=0,
             total_tokens=total_tokens,
@@ -102,7 +104,7 @@ async def create_rerank(
             user_id=user_id,
             model=model,
             provider=provider,
-            endpoint="/v1/rerank",
+            endpoint=_RERANK_ENDPOINT,
             error=e,
         )
 
