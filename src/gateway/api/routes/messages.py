@@ -282,6 +282,42 @@ async def _log_and_raise_message_provider_error(
     ) from error
 
 
+async def _message_provider_response(
+    *,
+    request: MessagesRequest,
+    response: Response,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    execution_context: MessageExecutionContext,
+) -> dict[str, Any] | StreamingResponse:
+    message_context = execution_context.message_context
+    provider_call_context = execution_context.provider_call_context
+    rate_limit_info = execution_context.rate_limit_info
+    call_kwargs = _message_call_kwargs(provider_call_context, stream=request.stream)
+
+    if request.stream:
+        msg_stream = await amessages(**call_kwargs)
+        return _message_streaming_response(
+            stream_result=msg_stream,
+            db=db,
+            log_writer=log_writer,
+            message_context=message_context,
+            provider_call_context=provider_call_context,
+            rate_limit_info=rate_limit_info,
+        )
+
+    result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
+    return await _message_response_payload(
+        result=result,
+        response=response,
+        db=db,
+        log_writer=log_writer,
+        message_context=message_context,
+        provider_call_context=provider_call_context,
+        rate_limit_info=rate_limit_info,
+    )
+
+
 @router.post("/messages", response_model=None)
 async def create_message(
     raw_request: Request,
@@ -300,32 +336,14 @@ async def create_message(
         db=db,
         config=config,
     )
-    message_context = execution_context.message_context
-    rate_limit_info = execution_context.rate_limit_info
-    provider_call_context = execution_context.provider_call_context
-    call_kwargs = _message_call_kwargs(provider_call_context, stream=request.stream)
 
     try:
-        if request.stream:
-            msg_stream = await amessages(**call_kwargs)
-            return _message_streaming_response(
-                stream_result=msg_stream,
-                db=db,
-                log_writer=log_writer,
-                message_context=message_context,
-                provider_call_context=provider_call_context,
-                rate_limit_info=rate_limit_info,
-            )
-
-        result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
-        return await _message_response_payload(
-            result=result,
+        return await _message_provider_response(
+            request=request,
             response=response,
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
-            rate_limit_info=rate_limit_info,
+            execution_context=execution_context,
         )
 
     except HTTPException:
@@ -334,7 +352,7 @@ async def create_message(
         await _log_and_raise_message_provider_error(
             db=db,
             log_writer=log_writer,
-            message_context=message_context,
-            provider_call_context=provider_call_context,
+            message_context=execution_context.message_context,
+            provider_call_context=execution_context.provider_call_context,
             error=e,
         )

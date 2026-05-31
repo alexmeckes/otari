@@ -12,6 +12,7 @@ from any_llm.types.messages import (
     TextBlock,
 )
 from fastapi import HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
@@ -52,6 +53,17 @@ def _provider_call_context() -> messages.MessageProviderCallContext:
         provider="anthropic",
         model="claude-3-5-sonnet",
         call_kwargs={},
+    )
+
+
+def _execution_context(
+    *,
+    provider_call_context: messages.MessageProviderCallContext | None = None,
+) -> messages.MessageExecutionContext:
+    return messages.MessageExecutionContext(
+        message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+        rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
+        provider_call_context=provider_call_context or _provider_call_context(),
     )
 
 
@@ -210,6 +222,120 @@ async def test_message_execution_context_resolves_rate_limit_budget_and_provider
         ("rate_limit", raw_request, "metadata-user"),
         ("budget", db, "metadata-user", "anthropic:claude-3-5-sonnet", "fail_closed"),
         ("provider_kwargs", config, context.provider_call_context.provider),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_message_provider_response_calls_non_streaming_provider_and_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+    response = Response()
+    db = cast(AsyncSession, object())
+    log_writer = cast(LogWriter, object())
+    provider_context = messages.MessageProviderCallContext(
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        call_kwargs={"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"},
+    )
+    provider_result = _message_response()
+    payload = {"ok": True}
+
+    async def fake_amessages(**kwargs: Any) -> MessageResponse:
+        calls.append(("amessages", kwargs))
+        return provider_result
+
+    async def fake_message_response_payload(**kwargs: Any) -> dict[str, Any]:
+        calls.append(("payload", kwargs))
+        return payload
+
+    monkeypatch.setattr(messages, "amessages", fake_amessages)
+    monkeypatch.setattr(messages, "_message_response_payload", fake_message_response_payload)
+
+    result = await messages._message_provider_response(
+        request=_messages_request(),
+        response=response,
+        db=db,
+        log_writer=log_writer,
+        execution_context=_execution_context(provider_call_context=provider_context),
+    )
+
+    assert result == payload
+    assert calls == [
+        (
+            "amessages",
+            {"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"},
+        ),
+        (
+            "payload",
+            {
+                "result": provider_result,
+                "response": response,
+                "db": db,
+                "log_writer": log_writer,
+                "message_context": messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+                "provider_call_context": provider_context,
+                "rate_limit_info": RateLimitInfo(limit=10, remaining=8, reset=123.4),
+            },
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_message_provider_response_calls_streaming_provider_and_response_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+    response = Response()
+    db = cast(AsyncSession, object())
+    log_writer = cast(LogWriter, object())
+    provider_context = messages.MessageProviderCallContext(
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        call_kwargs={"model": "anthropic:claude-3-5-sonnet"},
+    )
+    request = _messages_request()
+    request.stream = True
+    stream_result = object()
+    streaming_response = cast(StreamingResponse, object())
+
+    async def fake_amessages(**kwargs: Any) -> object:
+        calls.append(("amessages", kwargs))
+        return stream_result
+
+    def fake_message_streaming_response(**kwargs: Any) -> StreamingResponse:
+        calls.append(("streaming_response", kwargs))
+        return streaming_response
+
+    monkeypatch.setattr(messages, "amessages", fake_amessages)
+    monkeypatch.setattr(messages, "_message_streaming_response", fake_message_streaming_response)
+
+    result = await messages._message_provider_response(
+        request=request,
+        response=response,
+        db=db,
+        log_writer=log_writer,
+        execution_context=_execution_context(provider_call_context=provider_context),
+    )
+
+    assert result is streaming_response
+    assert provider_context.call_kwargs == {"model": "anthropic:claude-3-5-sonnet"}
+    assert calls == [
+        (
+            "amessages",
+            {"model": "anthropic:claude-3-5-sonnet", "stream": True},
+        ),
+        (
+            "streaming_response",
+            {
+                "stream_result": stream_result,
+                "db": db,
+                "log_writer": log_writer,
+                "message_context": messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+                "provider_call_context": provider_context,
+                "rate_limit_info": RateLimitInfo(limit=10, remaining=8, reset=123.4),
+            },
+        ),
     ]
 
 
