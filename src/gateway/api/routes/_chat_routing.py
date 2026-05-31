@@ -1,6 +1,7 @@
 import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -34,6 +35,16 @@ from gateway.services.routing_policy_service import (
 )
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
+
+
+@dataclass(frozen=True)
+class _RoutingExecutionContext:
+    db: AsyncSession
+    log_writer: LogWriter
+    plan: RoutingPlan
+    api_key_id: str | None
+    user_id: str | None
+    trace_endpoint: str
 
 
 async def resolve_standalone_chat_routing_plan(
@@ -90,6 +101,14 @@ async def run_standalone_routing_plan(
 
     attempts: list[dict[str, Any]] = []
     last_exc: BaseException | None = None
+    execution = _RoutingExecutionContext(
+        db=db,
+        log_writer=log_writer,
+        plan=plan,
+        api_key_id=api_key_id,
+        user_id=user_id,
+        trace_endpoint=trace_endpoint,
+    )
 
     for candidate in plan.candidates:
         provider_kwargs = get_provider_kwargs(config, LLMProvider(candidate.provider))
@@ -122,11 +141,7 @@ async def run_standalone_routing_plan(
             raise
         except SandboxNotReachableError as exc:
             await _record_routing_attempt_error(
-                db=db,
-                log_writer=log_writer,
-                plan=plan,
-                api_key_id=api_key_id,
-                user_id=user_id,
+                execution=execution,
                 candidate=candidate,
                 attempts=attempts,
                 attempt_record=attempt_record,
@@ -134,7 +149,6 @@ async def run_standalone_routing_plan(
                 exc=exc,
                 error_class="sandbox_unreachable",
                 final=True,
-                trace_endpoint=trace_endpoint,
             )
             logger.error("Sandbox unreachable for routed model %s: %s", candidate.model, exc)
             raise HTTPException(
@@ -143,11 +157,7 @@ async def run_standalone_routing_plan(
             ) from exc
         except WebSearchNotReachableError as exc:
             await _record_routing_attempt_error(
-                db=db,
-                log_writer=log_writer,
-                plan=plan,
-                api_key_id=api_key_id,
-                user_id=user_id,
+                execution=execution,
                 candidate=candidate,
                 attempts=attempts,
                 attempt_record=attempt_record,
@@ -155,7 +165,6 @@ async def run_standalone_routing_plan(
                 exc=exc,
                 error_class="web_search_unreachable",
                 final=True,
-                trace_endpoint=trace_endpoint,
             )
             logger.error("Web search backend unreachable for routed model %s: %s", candidate.model, exc)
             raise HTTPException(
@@ -164,11 +173,7 @@ async def run_standalone_routing_plan(
             ) from exc
         except MaxToolIterationsExceeded as exc:
             await _record_routing_attempt_error(
-                db=db,
-                log_writer=log_writer,
-                plan=plan,
-                api_key_id=api_key_id,
-                user_id=user_id,
+                execution=execution,
                 candidate=candidate,
                 attempts=attempts,
                 attempt_record=attempt_record,
@@ -176,7 +181,6 @@ async def run_standalone_routing_plan(
                 exc=exc,
                 error_class="max_tool_iterations",
                 final=True,
-                trace_endpoint=trace_endpoint,
             )
             logger.warning("Tool loop iteration cap hit (routed): cap=%d", max_tool_iterations)
             raise HTTPException(
@@ -187,11 +191,7 @@ async def run_standalone_routing_plan(
             _retryable, error_class = classify_upstream_error(exc)
             last_exc = exc
             await _record_routing_attempt_error(
-                db=db,
-                log_writer=log_writer,
-                plan=plan,
-                api_key_id=api_key_id,
-                user_id=user_id,
+                execution=execution,
                 candidate=candidate,
                 attempts=attempts,
                 attempt_record=attempt_record,
@@ -199,7 +199,6 @@ async def run_standalone_routing_plan(
                 exc=exc,
                 error_class=error_class,
                 final=False,
-                trace_endpoint=trace_endpoint,
             )
             logger.warning(
                 "Routed provider call failed policy_id=%s provider=%s model=%s error_class=%s error=%s",
@@ -211,40 +210,16 @@ async def run_standalone_routing_plan(
             )
             continue
 
-        attempt_record.update(
-            {
-                "status": "success",
-                "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
-            }
-        )
-        attempts.append(attempt_record)
-        await log_usage(
-            db=db,
-            log_writer=log_writer,
-            api_key_id=api_key_id,
-            model=candidate.provider_model,
-            provider=candidate.provider,
-            endpoint=trace_endpoint,
-            user_id=user_id,
-            project_id=plan.project_id,
-            tags=plan.tags,
-            response=completion,
-        )
-        trace_id = await record_route_trace(
-            db,
-            plan=plan,
-            api_key_id=api_key_id,
-            user_id=user_id,
-            status="success",
+        await _record_routing_attempt_success(
+            execution=execution,
+            response=response,
+            rate_limit_info=rate_limit_info,
+            candidate=candidate,
             attempts=attempts,
-            error_message=None,
-            selected_candidate=candidate,
-            endpoint=trace_endpoint,
+            attempt_record=attempt_record,
+            started_at=started_at,
+            completion=completion,
         )
-        _set_routing_response_headers(response=response, plan=plan, trace_id=trace_id, routed_model=candidate.model)
-        if rate_limit_info:
-            for key, value in rate_limit_headers(rate_limit_info).items():
-                response.headers[key] = value
         return completion
 
     trace_id = await record_route_trace(
@@ -288,13 +263,61 @@ def _set_routing_response_headers(
         response.headers["X-Routed-Model"] = routed_model
 
 
+async def _record_routing_attempt_success(
+    *,
+    execution: _RoutingExecutionContext,
+    response: Response,
+    rate_limit_info: RateLimitInfo | None,
+    candidate: RoutingCandidate,
+    attempts: list[dict[str, Any]],
+    attempt_record: dict[str, Any],
+    started_at: float,
+    completion: ChatCompletion,
+) -> None:
+    attempt_record.update(
+        {
+            "status": "success",
+            "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+        }
+    )
+    attempts.append(attempt_record)
+    await log_usage(
+        db=execution.db,
+        log_writer=execution.log_writer,
+        api_key_id=execution.api_key_id,
+        model=candidate.provider_model,
+        provider=candidate.provider,
+        endpoint=execution.trace_endpoint,
+        user_id=execution.user_id,
+        project_id=execution.plan.project_id,
+        tags=execution.plan.tags,
+        response=completion,
+    )
+    trace_id = await record_route_trace(
+        execution.db,
+        plan=execution.plan,
+        api_key_id=execution.api_key_id,
+        user_id=execution.user_id,
+        status="success",
+        attempts=attempts,
+        error_message=None,
+        selected_candidate=candidate,
+        endpoint=execution.trace_endpoint,
+    )
+    _set_routing_response_headers(
+        response=response,
+        plan=execution.plan,
+        trace_id=trace_id,
+        routed_model=candidate.model,
+    )
+    if rate_limit_info:
+        for key, value in rate_limit_headers(rate_limit_info).items():
+            response.headers[key] = value
+
+
 async def _record_routing_attempt_error(
     *,
-    db: AsyncSession,
-    log_writer: LogWriter,
-    plan: RoutingPlan,
-    api_key_id: str | None,
-    user_id: str | None,
+    execution: _RoutingExecutionContext,
     candidate: RoutingCandidate,
     attempts: list[dict[str, Any]],
     attempt_record: dict[str, Any],
@@ -302,19 +325,18 @@ async def _record_routing_attempt_error(
     exc: BaseException,
     error_class: str,
     final: bool,
-    trace_endpoint: str,
 ) -> str | None:
     """Record usage and trace data for a routed attempt error."""
     await log_usage(
-        db=db,
-        log_writer=log_writer,
-        api_key_id=api_key_id,
+        db=execution.db,
+        log_writer=execution.log_writer,
+        api_key_id=execution.api_key_id,
         model=candidate.provider_model,
         provider=candidate.provider,
-        endpoint=trace_endpoint,
-        user_id=user_id,
-        project_id=plan.project_id,
-        tags=plan.tags,
+        endpoint=execution.trace_endpoint,
+        user_id=execution.user_id,
+        project_id=execution.plan.project_id,
+        tags=execution.plan.tags,
         error=str(exc),
     )
     attempt_record.update(
@@ -329,13 +351,13 @@ async def _record_routing_attempt_error(
     if not final:
         return None
     return await record_route_trace(
-        db,
-        plan=plan,
-        api_key_id=api_key_id,
-        user_id=user_id,
+        execution.db,
+        plan=execution.plan,
+        api_key_id=execution.api_key_id,
+        user_id=execution.user_id,
         status="error",
         attempts=attempts,
         error_message=str(exc),
         selected_candidate=candidate,
-        endpoint=trace_endpoint,
+        endpoint=execution.trace_endpoint,
     )
