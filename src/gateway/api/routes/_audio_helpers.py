@@ -1,19 +1,16 @@
 from dataclasses import dataclass
 from typing import Any, NoReturn
 
-from any_llm import AnyLLM
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes._budget_checks import validate_user_request_budget
-from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._usage import make_usage_log
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
-from gateway.rate_limit import RateLimitInfo, check_rate_limit
+from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
-from gateway.services.provider_kwargs import get_provider_kwargs
 
 _PROVIDER_ERROR_DETAIL = "The request could not be completed by the provider"
 
@@ -23,25 +20,6 @@ class AudioRequestContext:
     api_key_id: str | None
     user_id: str
     rate_limit_info: RateLimitInfo | None
-
-
-def resolve_audio_request_context(
-    *,
-    raw_request: Request,
-    auth_result: tuple[APIKey | None, bool],
-    user: str | None,
-) -> AudioRequestContext:
-    api_key, is_master_key = auth_result
-    user_id = resolve_openai_user_id(
-        user_id_from_request=user,
-        api_key=api_key,
-        is_master_key=is_master_key,
-    )
-    return AudioRequestContext(
-        api_key_id=api_key.id if api_key else None,
-        user_id=user_id,
-        rate_limit_info=check_rate_limit(raw_request, user_id),
-    )
 
 
 async def log_audio_usage(
@@ -77,15 +55,20 @@ async def audio_provider_call_context(
     config: GatewayConfig,
     model: str,
 ) -> tuple[AudioRequestContext, Any, str, dict[str, Any]]:
-    context = resolve_audio_request_context(
+    provider_context = await resolve_openai_provider_request_context(
         raw_request=raw_request,
         auth_result=auth_result,
         user=user,
+        db=db,
+        config=config,
+        model=model,
     )
-    await validate_user_request_budget(db, context.user_id, model, strategy=config.budget_strategy)
-
-    provider, model_name = AnyLLM.split_model_provider(model)
-    return context, provider, model_name, get_provider_kwargs(config, provider)
+    context = AudioRequestContext(
+        api_key_id=provider_context.api_key_id,
+        user_id=provider_context.user_id,
+        rate_limit_info=provider_context.rate_limit_info,
+    )
+    return context, provider_context.provider, provider_context.model, provider_context.provider_kwargs
 
 
 async def raise_audio_provider_error(
