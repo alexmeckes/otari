@@ -63,6 +63,27 @@ def _platform_url(base_url: str, path: str) -> str:
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
+def _platform_base_url_or_raise(config: GatewayConfig) -> str:
+    platform_base_url = config.platform.get("base_url")
+    if not platform_base_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Platform mode is misconfigured",
+        )
+    return str(platform_base_url)
+
+
+def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, str]:
+    return {
+        "X-Gateway-Token": config.platform_token or "",
+        "X-User-Token": user_token,
+    }
+
+
+def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
+    return int(config.platform.get("resolve_timeout_ms", 5000)) / 1000
+
+
 def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
     try:
         payload = response.json()
@@ -102,20 +123,10 @@ async def resolve_platform_credentials(
     user_token: str,
     model_selector: str,
 ) -> ResolvedRoute:
-    platform_base_url = config.platform.get("base_url")
-    if not platform_base_url:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Platform mode is misconfigured",
-        )
-
     provider, model_name = _split_model_selector(model_selector)
-    timeout_ms = int(config.platform.get("resolve_timeout_ms", 5000))
+    platform_base_url = _platform_base_url_or_raise(config)
     resolve_url = _platform_url(platform_base_url, "/gateway/provider-keys/resolve")
-    resolve_headers = {
-        "X-Gateway-Token": config.platform_token or "",
-        "X-User-Token": user_token,
-    }
+    resolve_headers = _platform_user_headers(config, user_token)
     resolve_body: dict[str, Any] = {"model": model_name}
     if provider:
         resolve_body["provider"] = provider
@@ -125,7 +136,7 @@ async def resolve_platform_credentials(
             url=resolve_url,
             headers=resolve_headers,
             body=resolve_body,
-            timeout_seconds=timeout_ms / 1000,
+            timeout_seconds=_platform_resolve_timeout_seconds(config),
         )
     except (httpx.TimeoutException, httpx.NetworkError):
         raise HTTPException(
@@ -209,24 +220,17 @@ async def resolve_platform_mcp_servers(
     mcp_server_ids: list[uuid.UUID],
 ) -> list[McpServerConfig]:
     """Swap workspace-scoped MCP server ids for inline configs by calling the platform."""
-    platform_base_url = config.platform.get("base_url")
-    if not platform_base_url:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Platform mode is misconfigured",
-        )
-
-    timeout_ms = int(config.platform.get("resolve_timeout_ms", 5000))
+    platform_base_url = _platform_base_url_or_raise(config)
     resolve_url = _platform_url(platform_base_url, "/gateway/mcp-servers/resolve")
-    headers = {
-        "X-Gateway-Token": config.platform_token or "",
-        "X-User-Token": user_token,
-    }
+    headers = _platform_user_headers(config, user_token)
     body: dict[str, Any] = {"mcp_server_ids": [str(uid) for uid in mcp_server_ids]}
 
     try:
         response = await _post_platform(
-            url=resolve_url, headers=headers, body=body, timeout_seconds=timeout_ms / 1000
+            url=resolve_url,
+            headers=headers,
+            body=body,
+            timeout_seconds=_platform_resolve_timeout_seconds(config),
         )
     except (httpx.TimeoutException, httpx.NetworkError):
         raise HTTPException(
