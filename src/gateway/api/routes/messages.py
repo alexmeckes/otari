@@ -42,6 +42,7 @@ _MASTER_KEY_USER_REQUIRED = "When using master key, 'metadata.user_id' is requir
 _API_KEY_VALIDATION_FAILED = "API key validation failed"
 _API_KEY_NO_USER = "API key has no associated user"
 _PROVIDER_ERROR = "The request could not be completed by the provider"
+_MESSAGES_ENDPOINT = "/v1/messages"
 
 
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
@@ -58,6 +59,30 @@ def _message_response_usage(result: MessageResponse) -> CompletionUsage | None:
     if not result.usage:
         return None
     return _message_completion_usage(result.usage.input_tokens, result.usage.output_tokens)
+
+
+async def _log_message_usage(
+    *,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    api_key_id: str | None,
+    model: str,
+    provider: Any,
+    user_id: str,
+    usage_data: CompletionUsage | None = None,
+    error: str | None = None,
+) -> None:
+    await log_usage(
+        db=db,
+        log_writer=log_writer,
+        api_key_id=api_key_id,
+        model=model,
+        provider=provider,
+        endpoint=_MESSAGES_ENDPOINT,
+        user_id=user_id,
+        usage_override=usage_data,
+        error=error,
+    )
 
 
 def _format_message_stream_chunk(event: MessageStreamEvent) -> str:
@@ -126,25 +151,23 @@ async def create_message(
             call_kwargs["stream"] = True
 
             async def _on_complete(usage_data: CompletionUsage) -> None:
-                await log_usage(
+                await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
                     api_key_id=api_key_id,
                     model=model,
                     provider=provider,
-                    endpoint="/v1/messages",
                     user_id=user_id,
-                    usage_override=usage_data,
+                    usage_data=usage_data,
                 )
 
             async def _on_error(error: str) -> None:
-                await log_usage(
+                await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
                     api_key_id=api_key_id,
                     model=model,
                     provider=provider,
-                    endpoint="/v1/messages",
                     user_id=user_id,
                     error=error,
                 )
@@ -169,27 +192,25 @@ async def create_message(
 
         usage_data = _message_response_usage(result)
         if usage_data:
-            await log_usage(
+            await _log_message_usage(
                 db=db,
                 log_writer=log_writer,
                 api_key_id=api_key_id,
                 model=model,
                 provider=provider,
-                endpoint="/v1/messages",
                 user_id=user_id,
-                usage_override=usage_data,
+                usage_data=usage_data,
             )
 
     except HTTPException:
         raise
     except Exception as e:
-        await log_usage(
+        await _log_message_usage(
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
             model=model,
             provider=provider,
-            endpoint="/v1/messages",
             user_id=user_id,
             error=str(e),
         )
