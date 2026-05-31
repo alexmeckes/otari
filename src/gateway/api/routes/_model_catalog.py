@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TypeVar
 
+from any_llm.types.model import Model
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,6 +111,37 @@ def _vendor_name(vendor: str) -> str:
     return _VENDOR_DISPLAY_NAMES.get(vendor, vendor.replace("_", " ").replace("-", " ").title())
 
 
+def _catalog_record_from_discovered(
+    provider_name: str,
+    model: Model,
+    pricing: ModelPricing | None,
+) -> CatalogRecord:
+    model_key = f"{provider_name}:{model.id}"
+    created_at = _iso_from_epoch(model.created)
+    return CatalogRecord(
+        model_key=model_key,
+        provider=provider_name,
+        provider_model=model.id,
+        created=model.created,
+        created_at=created_at,
+        updated_at=pricing.updated_at.isoformat() if pricing else created_at,
+        pricing=_model_pricing_info(pricing),
+    )
+
+
+def _catalog_record_from_pricing(pricing: ModelPricing) -> CatalogRecord:
+    provider, provider_model = _split_model_key(pricing.model_key)
+    return CatalogRecord(
+        model_key=pricing.model_key,
+        provider=provider,
+        provider_model=provider_model,
+        created=_created_epoch(pricing.created_at),
+        created_at=pricing.created_at.isoformat() if pricing.created_at else None,
+        updated_at=pricing.updated_at.isoformat() if pricing.updated_at else None,
+        pricing=_model_pricing_info(pricing),
+    )
+
+
 def model_from_catalog_record(record: CatalogRecord) -> ModelObject:
     """Convert an internal catalog record to an OpenAI-compatible ModelObject."""
     return ModelObject(
@@ -188,30 +220,10 @@ async def load_catalog_records(
         for provider_name, model in discovered:
             model_key = f"{provider_name}:{model.id}"
             pricing = pricing_map.pop(model_key, None)
-            created_at = _iso_from_epoch(model.created)
-            records[model_key] = CatalogRecord(
-                model_key=model_key,
-                provider=provider_name,
-                provider_model=model.id,
-                created=model.created,
-                created_at=created_at,
-                updated_at=pricing.updated_at.isoformat() if pricing else created_at,
-                pricing=_model_pricing_info(pricing),
-            )
+            records[model_key] = _catalog_record_from_discovered(provider_name, model, pricing)
 
     for model_key, pricing in pricing_map.items():
-        if model_key in records:
-            continue
-        provider, provider_model = _split_model_key(model_key)
-        records[model_key] = CatalogRecord(
-            model_key=model_key,
-            provider=provider,
-            provider_model=provider_model,
-            created=_created_epoch(pricing.created_at),
-            created_at=pricing.created_at.isoformat() if pricing.created_at else None,
-            updated_at=pricing.updated_at.isoformat() if pricing.updated_at else None,
-            pricing=_model_pricing_info(pricing),
-        )
+        records[model_key] = _catalog_record_from_pricing(pricing)
 
     return sorted(records.values(), key=lambda record: record.model_key)
 
@@ -310,24 +322,9 @@ async def load_model_object(db: AsyncSession, config: GatewayConfig, model_id: s
 
     if discovered_model:
         assert discovered_provider is not None
-        model_key = f"{discovered_provider}:{discovered_model.id}"
-        return ModelObject(
-            id=model_key,
-            created=discovered_model.created,
-            owned_by=discovered_provider,
-            pricing=_model_pricing_info(pricing),
+        return model_from_catalog_record(
+            _catalog_record_from_discovered(discovered_provider, discovered_model, pricing)
         )
 
     assert pricing is not None
-    provider, provider_model = _split_model_key(pricing.model_key)
-    return model_from_catalog_record(
-        CatalogRecord(
-            model_key=pricing.model_key,
-            provider=provider,
-            provider_model=provider_model,
-            created=_created_epoch(pricing.created_at),
-            created_at=pricing.created_at.isoformat() if pricing.created_at else None,
-            updated_at=pricing.updated_at.isoformat() if pricing.updated_at else None,
-            pricing=_model_pricing_info(pricing),
-        )
-    )
+    return model_from_catalog_record(_catalog_record_from_pricing(pricing))
