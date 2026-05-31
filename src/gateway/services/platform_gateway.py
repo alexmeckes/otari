@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from gateway.core.config import GatewayConfig
 from gateway.models.mcp import McpServerConfig
+from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
 _USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
@@ -36,7 +37,7 @@ class ResolvedAttempt(BaseModel):
 
     @property
     def model_selector(self) -> str:
-        return f"{self.provider}:{self.model}"
+        return pricing_model_ref(self.provider, self.model)
 
 
 class ResolvedRoute(BaseModel):
