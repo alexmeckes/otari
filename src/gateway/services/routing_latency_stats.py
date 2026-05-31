@@ -31,8 +31,7 @@ async def attach_latency_stats(
     )
     durations_by_model: dict[str, list[float]] = {model: [] for model in candidate_models}
     for trace in result.scalars().all():
-        attempts = trace.attempts if isinstance(trace.attempts, list) else []
-        for attempt in attempts:
+        for attempt in trace.attempt_list():
             if not isinstance(attempt, dict) or attempt.get("status") != "success":
                 continue
             model_key = attempt_model_key(attempt)

@@ -136,7 +136,7 @@ async def attach_provider_health(
     }
     result = await db.execute(select(RouteTrace).order_by(RouteTrace.timestamp.desc()).limit(sample_limit))
     for trace in result.scalars().all():
-        attempts = trace.attempts if isinstance(trace.attempts, list) else []
+        attempts = trace.attempt_list()
         if attempts:
             for attempt in attempts:
                 if not isinstance(attempt, dict):
