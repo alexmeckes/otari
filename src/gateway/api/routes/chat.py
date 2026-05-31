@@ -1,6 +1,6 @@
 import asyncio
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from typing import Annotated, Any, NamedTuple
 
 import httpx
@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
@@ -38,7 +39,6 @@ from gateway.services.mcp_loop import (
     MAX_TOOL_ITERATIONS_CAP,
     MaxToolIterationsExceeded,
     inject_purpose_hints,
-    mcp_tool_loop,
     mcp_tool_loop_stream,
 )
 from gateway.services.platform_gateway import (
@@ -64,79 +64,6 @@ from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachable
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
-
-
-async def _run_non_streaming_completion(
-    *,
-    completion_kwargs: dict[str, Any],
-    mcp_server_configs: list[McpServerConfig] | None,
-    max_tool_iterations: int,
-    tools_header: str | None,
-    use_sandbox: bool,
-    sandbox_url: str | None,
-    sandbox_tool_entry: dict[str, Any] | None,
-    use_web_search: bool,
-    web_search_url: str | None,
-    web_search_tool_entry: dict[str, Any] | None,
-    on_first_response: Callable[[], None] | None = None,
-) -> ChatCompletion:
-    """Run one non-streaming completion attempt with gateway tool backends."""
-    if mcp_server_configs:
-        async with MCPClientPool(mcp_server_configs) as pool:
-            mcp_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    pool.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
-            return await mcp_tool_loop(
-                completion_kwargs=mcp_kwargs,
-                pool=pool,
-                max_iterations=max_tool_iterations,
-                on_first_response=on_first_response,
-            )
-    if use_sandbox:
-        assert sandbox_url is not None
-        sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
-        async with SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint) as backend:
-            sandbox_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    backend.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
-            return await mcp_tool_loop(
-                completion_kwargs=sandbox_kwargs,
-                pool=backend,  # type: ignore[arg-type]
-                max_iterations=max_tool_iterations,
-                on_first_response=on_first_response,
-            )
-    if use_web_search:
-        assert web_search_url is not None
-        assert web_search_tool_entry is not None
-        async with build_web_search_backend(
-            base_url=web_search_url,
-            tool_entry=web_search_tool_entry,
-        ) as web_backend:
-            web_kwargs = {
-                **completion_kwargs,
-                "messages": inject_purpose_hints(
-                    completion_kwargs["messages"],
-                    web_backend.purpose_hints(),
-                    header=tools_header,
-                ),
-            }
-            return await mcp_tool_loop(
-                completion_kwargs=web_kwargs,
-                pool=web_backend,  # type: ignore[arg-type]
-                max_iterations=max_tool_iterations,
-                on_first_response=on_first_response,
-            )
-    return await acompletion(**completion_kwargs)  # type: ignore[return-value]
 
 
 async def _run_standalone_routing_plan(
@@ -186,8 +113,10 @@ async def _run_standalone_routing_plan(
         }
 
         try:
-            completion = await _run_non_streaming_completion(
+            completion = await run_non_streaming_completion(
                 completion_kwargs=completion_kwargs,
+                completion_fn=acompletion,
+                mcp_client_pool_factory=MCPClientPool,
                 mcp_server_configs=mcp_server_configs,
                 max_tool_iterations=max_tool_iterations,
                 tools_header=request.tools_header,
@@ -890,8 +819,10 @@ async def chat_completions(
                 )
 
             try:
-                completion = await _run_non_streaming_completion(
+                completion = await run_non_streaming_completion(
                     completion_kwargs=completion_kwargs,
+                    completion_fn=acompletion,
+                    mcp_client_pool_factory=MCPClientPool,
                     mcp_server_configs=mcp_server_configs,
                     max_tool_iterations=max_tool_iterations,
                     tools_header=request.tools_header,
@@ -1032,8 +963,10 @@ async def chat_completions(
     completion_kwargs = {**provider_kwargs, **request_fields}
 
     try:
-        completion = await _run_non_streaming_completion(
+        completion = await run_non_streaming_completion(
             completion_kwargs=completion_kwargs,
+            completion_fn=acompletion,
+            mcp_client_pool_factory=MCPClientPool,
             mcp_server_configs=mcp_server_configs,
             max_tool_iterations=max_tool_iterations,
             tools_header=request.tools_header,
