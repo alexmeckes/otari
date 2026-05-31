@@ -123,24 +123,20 @@ async def _post_platform(
         return await client.post(url, headers=headers, json=body)
 
 
-async def resolve_platform_credentials(
+async def _post_platform_resolution(
     config: GatewayConfig,
     user_token: str,
-    model_selector: str,
-) -> ResolvedRoute:
-    provider, model_name = _split_model_selector(model_selector)
+    path: str,
+    body: dict[str, Any],
+) -> httpx.Response:
     platform_base_url = _platform_base_url_or_raise(config)
-    resolve_url = _platform_url(platform_base_url, "/gateway/provider-keys/resolve")
-    resolve_headers = _platform_user_headers(config, user_token)
-    resolve_body: dict[str, Any] = {"model": model_name}
-    if provider:
-        resolve_body["provider"] = provider
-
+    resolve_url = _platform_url(platform_base_url, path)
+    headers = _platform_user_headers(config, user_token)
     try:
-        response = await _post_platform(
+        return await _post_platform(
             url=resolve_url,
-            headers=resolve_headers,
-            body=resolve_body,
+            headers=headers,
+            body=body,
             timeout_seconds=_platform_resolve_timeout_seconds(config),
         )
     except (httpx.TimeoutException, httpx.NetworkError):
@@ -148,6 +144,24 @@ async def resolve_platform_credentials(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Authorization service unavailable",
         ) from None
+
+
+async def resolve_platform_credentials(
+    config: GatewayConfig,
+    user_token: str,
+    model_selector: str,
+) -> ResolvedRoute:
+    provider, model_name = _split_model_selector(model_selector)
+    resolve_body: dict[str, Any] = {"model": model_name}
+    if provider:
+        resolve_body["provider"] = provider
+
+    response = await _post_platform_resolution(
+        config,
+        user_token,
+        "/gateway/provider-keys/resolve",
+        resolve_body,
+    )
 
     if response.status_code == 200:
         payload = response.json()
@@ -225,23 +239,13 @@ async def resolve_platform_mcp_servers(
     mcp_server_ids: list[uuid.UUID],
 ) -> list[McpServerConfig]:
     """Swap workspace-scoped MCP server ids for inline configs by calling the platform."""
-    platform_base_url = _platform_base_url_or_raise(config)
-    resolve_url = _platform_url(platform_base_url, "/gateway/mcp-servers/resolve")
-    headers = _platform_user_headers(config, user_token)
     body: dict[str, Any] = {"mcp_server_ids": [str(uid) for uid in mcp_server_ids]}
-
-    try:
-        response = await _post_platform(
-            url=resolve_url,
-            headers=headers,
-            body=body,
-            timeout_seconds=_platform_resolve_timeout_seconds(config),
-        )
-    except (httpx.TimeoutException, httpx.NetworkError):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Authorization service unavailable",
-        ) from None
+    response = await _post_platform_resolution(
+        config,
+        user_token,
+        "/gateway/mcp-servers/resolve",
+        body,
+    )
 
     if response.status_code == 200:
         payload = response.json()
