@@ -1,12 +1,10 @@
 import asyncio
-from collections.abc import AsyncIterator
 from typing import Annotated, Any, NamedTuple
 
 import httpx
 from any_llm import AnyLLM, LLMProvider, acompletion
 from any_llm.types.completion import (
     ChatCompletion,
-    ChatCompletionChunk,
 )
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -17,32 +15,26 @@ from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolv
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
+from gateway.api.routes._chat_standalone_streaming import run_standalone_streaming_chat
 from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
-from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.api.routes._usage import log_usage, rate_limit_headers
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
-from gateway.services.chat_tool_config import (
-    build_web_search_backend,
-    resolve_sandbox_purpose_hint,
-    strip_gateway_fields,
-)
+from gateway.services.chat_tool_config import strip_gateway_fields
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     MAX_TOOL_ITERATIONS_CAP,
     MaxToolIterationsExceeded,
-    inject_purpose_hints,
-    mcp_tool_loop_stream,
 )
 from gateway.services.platform_gateway import (
     classify_upstream_error,
     report_platform_usage,
 )
 from gateway.services.provider_kwargs import get_provider_kwargs
-from gateway.services.sandbox_backend import SandboxBackend, SandboxNotReachableError
+from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
@@ -189,176 +181,17 @@ async def chat_completions(
                     detail=("LLM provider error" if len(route.attempts) <= 1 else "All upstream providers failed"),
                 ) from exc
 
-        # Standalone path: single attempt, no fallback (no `route.attempts`).
-        # Platform-mode requests (including tool modes) take the multi-attempt
-        # branch above; this block runs only when `model` is a literal
-        # ``provider:model`` selector and no routing policy applies.
-        provider, model = AnyLLM.split_model_provider(request.model)
-        provider_kwargs = get_provider_kwargs(config, provider)
-
-        mcp_server_configs = request.mcp_servers
-        max_tool_iterations = min(
-            request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
-            MAX_TOOL_ITERATIONS_CAP,
-        )
-
-        request_fields = strip_gateway_fields(
-            request.model_dump(exclude_unset=True),
-            tools_extracted=tools_extracted,
-            remaining_user_tools=remaining_user_tools,
-        )
-        completion_kwargs = {**provider_kwargs, **request_fields}
-        if completion_kwargs.get("stream_options") is None:
-            completion_kwargs["stream_options"] = {"include_usage": True}
-
-        try:
-            if mcp_server_configs:
-                # Bind the truthy value to a non-Optional local so mypy can
-                # narrow inside the nested `_mcp_stream` closure.
-                pool_configs = mcp_server_configs
-
-                async def _mcp_stream() -> AsyncIterator[ChatCompletionChunk]:
-                    async with MCPClientPool(pool_configs) as pool:
-                        kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                pool.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        async for chunk in mcp_tool_loop_stream(
-                            completion_kwargs=kwargs,
-                            pool=pool,
-                            max_iterations=max_tool_iterations,
-                        ):
-                            yield chunk
-
-                stream: AsyncIterator[ChatCompletionChunk] = _mcp_stream()
-            elif use_sandbox:
-                # SandboxBackend duck-types as MCPClientPool — same tool-loop helper.
-                # Eagerly open the backend *before* constructing the
-                # StreamingResponse so that a failure to reach the sandbox
-                # surfaces synchronously as an HTTP error. A lazy `async with`
-                # inside the generator would only run after the response
-                # was committed, and SandboxNotReachableError would land in
-                # the SSE channel after a 200 OK header — confusing for
-                # clients that expected a normal HTTP failure.
-                assert sandbox_url is not None
-                sandbox_hint = resolve_sandbox_purpose_hint(sandbox_tool_entry)
-                sandbox_backend = SandboxBackend(sandbox_url=sandbox_url, purpose_hint=sandbox_hint)
-                await sandbox_backend.__aenter__()  # may raise SandboxNotReachableError
-
-                async def _sandbox_stream() -> AsyncIterator[ChatCompletionChunk]:
-                    try:
-                        kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                sandbox_backend.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        async for chunk in mcp_tool_loop_stream(
-                            completion_kwargs=kwargs,
-                            pool=sandbox_backend,  # type: ignore[arg-type]
-                            max_iterations=max_tool_iterations,
-                        ):
-                            yield chunk
-                    finally:
-                        await sandbox_backend.__aexit__(None, None, None)
-
-                stream = _sandbox_stream()
-            elif use_web_search:
-                # Same eager-open rationale as the sandbox path above.
-                assert web_search_url is not None
-                assert web_search_tool_entry is not None
-                web_search_backend = build_web_search_backend(
-                    base_url=web_search_url,
-                    tool_entry=web_search_tool_entry,
-                )
-                await web_search_backend.__aenter__()
-
-                async def _web_search_stream() -> AsyncIterator[ChatCompletionChunk]:
-                    try:
-                        kwargs = {
-                            **completion_kwargs,
-                            "messages": inject_purpose_hints(
-                                completion_kwargs["messages"],
-                                web_search_backend.purpose_hints(),
-                                header=request.tools_header,
-                            ),
-                        }
-                        async for chunk in mcp_tool_loop_stream(
-                            completion_kwargs=kwargs,
-                            pool=web_search_backend,  # type: ignore[arg-type]
-                            max_iterations=max_tool_iterations,
-                        ):
-                            yield chunk
-                    finally:
-                        await web_search_backend.__aexit__(None, None, None)
-
-                stream = _web_search_stream()
-            else:
-                stream = await acompletion(**completion_kwargs)  # type: ignore[assignment]
-        except HTTPException:
-            raise
-        except SandboxNotReachableError as exc:
-            # The sandbox is part of the gateway's own infra, not the LLM
-            # provider — surface a clearer status so operators don't chase
-            # a "provider outage" that's actually the sandbox container
-            # being down. 502 keeps "upstream dependency failed" semantics.
-            logger.error("Sandbox unreachable for %s:%s: %s", provider, model, exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-            ) from exc
-        except WebSearchNotReachableError as exc:
-            logger.error("Web search backend unreachable for %s:%s: %s", provider, model, exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-            ) from exc
-        except Exception as exc:
-            if db is not None:
-                await log_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    api_key_id=api_key_id,
-                    model=model,
-                    provider=provider,
-                    endpoint="/v1/chat/completions",
-                    user_id=user_id,
-                    project_id=request.project_id,
-                    tags=request.tags,
-                    error=str(exc),
-                )
-            logger.error("Stream creation failed for %s:%s: %s", provider, model, exc)
-            if isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail="LLM provider timeout",
-                ) from exc
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="LLM provider error",
-            ) from exc
-
-        return build_chat_streaming_response(
-            stream=stream,
-            provider=provider,
-            model=model,
-            platform_mode=False,
-            correlation_id=None,
-            request_id=None,
+        return await run_standalone_streaming_chat(
+            request=request,
             config=config,
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
             user_id=user_id,
-            project_id=request.project_id,
-            tags=request.tags,
             rate_limit_info=rate_limit_info,
+            tool_selection=tool_selection,
+            completion_fn=acompletion,
+            mcp_client_pool_factory=MCPClientPool,
         )
 
     # ------------------------------------------------------------------
