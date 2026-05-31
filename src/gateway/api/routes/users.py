@@ -9,7 +9,7 @@ from gateway.api.deps import get_db, verify_master_key
 from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
 from gateway.api.routes._user_models import CreateUserRequest, UpdateUserRequest, UsageLogResponse, UserResponse
 from gateway.models.entities import APIKey, UsageLog, User
-from gateway.repositories.users_repository import get_active_user
+from gateway.repositories.users_repository import get_active_user, get_user_by_id
 from gateway.services.budget_service import start_budget_period
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
@@ -31,8 +31,7 @@ async def create_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Create a new user."""
-    result = await db.execute(select(User).where(User.user_id == request.user_id))
-    existing_user = result.scalar_one_or_none()
+    existing_user = await get_user_by_id(db, request.user_id)
     if existing_user and existing_user.deleted_at is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -144,8 +143,7 @@ async def get_user_usage(
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> list[UsageLogResponse]:
     """Get usage history for a specific user."""
-    result = await db.execute(select(User).where(User.user_id == user_id))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

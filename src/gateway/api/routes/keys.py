@@ -10,6 +10,7 @@ from gateway.api.routes._database import commit_or_database_error, get_api_key_o
 from gateway.api.routes._key_models import CreateKeyRequest, CreateKeyResponse, KeyInfo, UpdateKeyRequest
 from gateway.auth.models import generate_api_key, hash_key
 from gateway.models.entities import APIKey, User
+from gateway.repositories.users_repository import get_user_by_id
 
 router = APIRouter(prefix="/v1/keys", tags=["keys"])
 
@@ -31,8 +32,7 @@ async def create_key(
     key_id = uuid.uuid4()
 
     if request.user_id:
-        result = await db.execute(select(User).where(User.user_id == request.user_id))
-        user = result.scalar_one_or_none()
+        user = await get_user_by_id(db, request.user_id)
         if not user:
             user = User(
                 user_id=request.user_id,

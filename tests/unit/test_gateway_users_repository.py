@@ -2,7 +2,23 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from gateway.repositories.users_repository import get_active_user
+from gateway.repositories.users_repository import get_active_user, get_user_by_id
+
+
+@pytest.mark.asyncio
+async def test_get_user_by_id_queries_including_deleted_users() -> None:
+    db = AsyncMock()
+    expected = object()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = expected
+    db.execute = AsyncMock(return_value=result)
+
+    user = await get_user_by_id(db, "user-0")
+
+    assert user is expected
+    executed_stmt = db.execute.call_args.args[0]
+    where_criteria = [str(criterion) for criterion in executed_stmt._where_criteria]
+    assert where_criteria == ["users.user_id = :user_id_1"]
 
 
 @pytest.mark.asyncio
