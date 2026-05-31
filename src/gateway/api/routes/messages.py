@@ -188,8 +188,7 @@ def _message_streaming_response(
     db: AsyncSession,
     log_writer: LogWriter,
     message_context: MessageRequestContext,
-    model: str,
-    provider: Any,
+    provider_call_context: MessageProviderCallContext,
     rate_limit_info: RateLimitInfo | None,
 ) -> StreamingResponse:
     async def _on_complete(usage_data: CompletionUsage) -> None:
@@ -197,8 +196,8 @@ def _message_streaming_response(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=model,
-            provider=provider,
+            model=provider_call_context.model,
+            provider=provider_call_context.provider,
             usage_data=usage_data,
         )
 
@@ -207,8 +206,8 @@ def _message_streaming_response(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=model,
-            provider=provider,
+            model=provider_call_context.model,
+            provider=provider_call_context.provider,
             error=error,
         )
 
@@ -220,7 +219,7 @@ def _message_streaming_response(
             fmt=ANTHROPIC_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
-            label=f"{provider}:{model}",
+            label=f"{provider_call_context.provider}:{provider_call_context.model}",
         ),
         media_type="text/event-stream",
         headers=optional_rate_limit_headers(rate_limit_info),
@@ -234,8 +233,7 @@ async def _message_response_payload(
     db: AsyncSession,
     log_writer: LogWriter,
     message_context: MessageRequestContext,
-    model: str,
-    provider: Any,
+    provider_call_context: MessageProviderCallContext,
     rate_limit_info: RateLimitInfo | None,
 ) -> dict[str, Any]:
     usage_data = _message_response_usage(result)
@@ -244,8 +242,8 @@ async def _message_response_payload(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=model,
-            provider=provider,
+            model=provider_call_context.model,
+            provider=provider_call_context.provider,
             usage_data=usage_data,
         )
 
@@ -314,8 +312,7 @@ async def create_message(
                 db=db,
                 log_writer=log_writer,
                 message_context=message_context,
-                model=provider_call_context.model,
-                provider=provider_call_context.provider,
+                provider_call_context=provider_call_context,
                 rate_limit_info=rate_limit_info,
             )
 
@@ -326,8 +323,7 @@ async def create_message(
             db=db,
             log_writer=log_writer,
             message_context=message_context,
-            model=provider_call_context.model,
-            provider=provider_call_context.provider,
+            provider_call_context=provider_call_context,
             rate_limit_info=rate_limit_info,
         )
 

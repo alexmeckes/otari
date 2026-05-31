@@ -47,6 +47,14 @@ def _message_response() -> MessageResponse:
     )
 
 
+def _provider_call_context() -> messages.MessageProviderCallContext:
+    return messages.MessageProviderCallContext(
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        call_kwargs={},
+    )
+
+
 def test_resolve_message_request_context_uses_master_key_metadata_user() -> None:
     context = messages._resolve_message_request_context(
         _messages_request({"user_id": "metadata-user"}),
@@ -232,8 +240,7 @@ async def test_message_response_payload_logs_usage_sets_headers_and_serializes(
         db=db,
         log_writer=log_writer,
         message_context=message_context,
-        model="claude-3-5-sonnet",
-        provider="anthropic",
+        provider_call_context=_provider_call_context(),
         rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
     )
 
@@ -323,11 +330,7 @@ async def test_log_and_raise_message_provider_error_preserves_logging_and_error_
             db=db,
             log_writer=log_writer,
             message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
-            provider_call_context=messages.MessageProviderCallContext(
-                provider="anthropic",
-                model="claude-3-5-sonnet",
-                call_kwargs={},
-            ),
+            provider_call_context=_provider_call_context(),
             error=provider_error,
         )
 
@@ -385,8 +388,7 @@ async def test_message_streaming_response_logs_usage_and_sets_headers(monkeypatc
         db=db,
         log_writer=log_writer,
         message_context=message_context,
-        model="claude-3-5-sonnet",
-        provider="anthropic",
+        provider_call_context=_provider_call_context(),
         rate_limit_info=RateLimitInfo(limit=10, remaining=8, reset=123.4),
     )
 
