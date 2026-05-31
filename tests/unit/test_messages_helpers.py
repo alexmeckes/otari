@@ -173,6 +173,39 @@ def test_message_call_kwargs_preserves_explicit_non_streaming_flag() -> None:
     }
 
 
+def test_message_execution_context_formats_label_and_rate_limit_headers() -> None:
+    context = _execution_context()
+    response = Response()
+
+    assert context.provider_label == "anthropic:claude-3-5-sonnet"
+    assert context.rate_limit_headers() == {
+        "X-RateLimit-Limit": "10",
+        "X-RateLimit-Remaining": "8",
+        "X-RateLimit-Reset": "123",
+    }
+
+    context.apply_rate_limit_headers(response)
+
+    assert response.headers["X-RateLimit-Limit"] == "10"
+    assert response.headers["X-RateLimit-Remaining"] == "8"
+    assert response.headers["X-RateLimit-Reset"] == "123"
+
+
+def test_message_execution_context_ignores_missing_rate_limit_info() -> None:
+    context = messages.MessageExecutionContext(
+        message_context=messages.MessageRequestContext(api_key_id="key-1", user_id="user-1"),
+        rate_limit_info=None,
+        provider_call_context=_provider_call_context(),
+    )
+    response = Response()
+
+    assert context.rate_limit_headers() == {}
+
+    context.apply_rate_limit_headers(response)
+
+    assert "X-RateLimit-Limit" not in response.headers
+
+
 @pytest.mark.asyncio
 async def test_message_execution_context_resolves_rate_limit_budget_and_provider(
     monkeypatch: pytest.MonkeyPatch,

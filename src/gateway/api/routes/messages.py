@@ -65,6 +65,16 @@ class MessageExecutionContext:
     rate_limit_info: RateLimitInfo | None
     provider_call_context: MessageProviderCallContext
 
+    @property
+    def provider_label(self) -> str:
+        return f"{self.provider_call_context.provider}:{self.provider_call_context.model}"
+
+    def rate_limit_headers(self) -> dict[str, str]:
+        return optional_rate_limit_headers(self.rate_limit_info)
+
+    def apply_rate_limit_headers(self, response: Response) -> None:
+        apply_rate_limit_headers(response, self.rate_limit_info)
+
 
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
     prompt_tokens = input_tokens or 0
@@ -197,8 +207,6 @@ def _message_streaming_response(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> StreamingResponse:
-    provider_call_context = execution_context.provider_call_context
-
     async def _on_complete(usage_data: CompletionUsage) -> None:
         await _log_message_usage(
             db=db,
@@ -223,10 +231,10 @@ def _message_streaming_response(
             fmt=ANTHROPIC_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
-            label=f"{provider_call_context.provider}:{provider_call_context.model}",
+            label=execution_context.provider_label,
         ),
         media_type="text/event-stream",
-        headers=optional_rate_limit_headers(execution_context.rate_limit_info),
+        headers=execution_context.rate_limit_headers(),
     )
 
 
@@ -247,7 +255,7 @@ async def _message_response_payload(
             usage_data=usage_data,
         )
 
-    apply_rate_limit_headers(response, execution_context.rate_limit_info)
+    execution_context.apply_rate_limit_headers(response)
     return result.model_dump(exclude_none=True)
 
 
