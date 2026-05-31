@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
-from gateway.api.routes._database import commit_or_database_error
+from gateway.api.routes._database import commit_or_database_error, get_api_key_or_404
 from gateway.api.routes._key_models import CreateKeyRequest, CreateKeyResponse, KeyInfo, UpdateKeyRequest
 from gateway.auth.models import generate_api_key, hash_key
 from gateway.models.entities import APIKey, User
@@ -98,15 +98,7 @@ async def get_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     return KeyInfo.from_model(key)
 
 
@@ -120,15 +112,7 @@ async def update_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     if request.key_name is not None:
         key.key_name = request.key_name
     if request.is_active is not None:
@@ -153,14 +137,6 @@ async def delete_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     await db.delete(key)
     await commit_or_database_error(db)

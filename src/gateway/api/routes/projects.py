@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
-from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
+from gateway.api.routes._database import commit_or_database_error, get_budget_or_404, get_project_or_404
 from gateway.api.routes._project_models import CreateProjectRequest, ProjectResponse, UpdateProjectRequest
 from gateway.models.entities import Budget, Project, RoutingPolicy
 from gateway.services.budget_service import start_budget_period
@@ -85,12 +85,7 @@ async def get_project(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectResponse:
     """Get a project."""
-    project = await db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project '{project_id}' not found",
-        )
+    project = await get_project_or_404(db, project_id)
     return ProjectResponse.from_model(project)
 
 
@@ -101,12 +96,7 @@ async def update_project(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectResponse:
     """Update a project."""
-    project = await db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project '{project_id}' not found",
-        )
+    project = await get_project_or_404(db, project_id)
 
     payload = request.model_dump(exclude_unset=True)
     if "routing_policy_id" in payload and payload["routing_policy_id"] is not None:
@@ -146,12 +136,7 @@ async def delete_project(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a project."""
-    project = await db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project '{project_id}' not found",
-        )
+    project = await get_project_or_404(db, project_id)
 
     await db.delete(project)
     await commit_or_database_error(db)
