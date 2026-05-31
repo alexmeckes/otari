@@ -6,14 +6,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from gateway.services.routing_config_values import dict_or_empty
-from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, string_list
+from gateway.services.routing_guardrail_helpers import PII_PATTERNS, guardrails_config, named_patterns, string_list
 from gateway.services.routing_request_analysis import bool_config
-
-_PII_PATTERNS = {
-    "email": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
-    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
-    "credit_card": re.compile(r"\b(?:\d[ -]*?){13,16}\b"),
-}
 
 
 def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -33,9 +27,9 @@ def _redaction_rules(config: Mapping[str, Any]) -> list[tuple[str, str, re.Patte
     pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
     if pii_enabled:
         type_config = pii_config.get("types") if isinstance(pii_config, dict) else redactions.get("pii_types")
-        pii_types = string_list(type_config) or sorted(_PII_PATTERNS)
+        pii_types = string_list(type_config) or sorted(PII_PATTERNS)
         for pii_type in pii_types:
-            pattern = _PII_PATTERNS.get(pii_type)
+            pattern = PII_PATTERNS.get(pii_type)
             if pattern is not None:
                 rules.append(("pii", pii_type, pattern))
 

@@ -2,13 +2,13 @@
 
 import copy
 import json
-import re
 from collections.abc import Mapping
 from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
 from gateway.services.routing_guardrail_helpers import (
+    PII_PATTERNS,
     guardrail_violation,
     guardrails_config,
     named_patterns,
@@ -31,11 +31,6 @@ _PROMPT_INJECTION_PHRASES = (
     "developer message",
     "jailbreak",
 )
-_PII_PATTERNS = {
-    "email": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
-    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
-    "credit_card": re.compile(r"\b(?:\d[ -]*?){13,16}\b"),
-}
 _CREDENTIAL_BLOCKED_PATTERNS = (
     {"name": "openai_api_key", "pattern": r"\bsk-[A-Za-z0-9_-]{20,}\b"},
     {"name": "aws_access_key_id", "pattern": r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"},
@@ -218,9 +213,9 @@ async def evaluate_guardrails(
     pii_enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
     if pii_enabled:
         type_config = pii_config.get("types") if isinstance(pii_config, dict) else None
-        pii_types = string_list(type_config) or sorted(_PII_PATTERNS)
+        pii_types = string_list(type_config) or sorted(PII_PATTERNS)
         for pii_type in pii_types:
-            pii_pattern = _PII_PATTERNS.get(pii_type)
+            pii_pattern = PII_PATTERNS.get(pii_type)
             if pii_pattern is not None and pii_pattern.search(request_text):
                 violations.append(guardrail_violation("pii", pii_type))
 
