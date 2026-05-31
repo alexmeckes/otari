@@ -85,3 +85,28 @@ async def log_usage(
             log_missing_pricing(provider, model)
 
     await log_writer.put(usage_log)
+
+
+async def log_usage_error(
+    log_writer: LogWriter,
+    *,
+    api_key_id: str | None,
+    user_id: str | None,
+    model: str,
+    provider: Any,
+    endpoint: str,
+    error: BaseException,
+) -> None:
+    await log_writer.put(
+        UsageLog(
+            id=str(uuid.uuid4()),
+            api_key_id=api_key_id,
+            user_id=user_id,
+            timestamp=datetime.now(UTC),
+            model=model,
+            provider=provider,
+            endpoint=endpoint,
+            status="error",
+            error_message=str(error),
+        )
+    )
