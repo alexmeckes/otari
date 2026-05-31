@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.api.routes._rerank_models import RerankRequest
 from gateway.core.config import GatewayConfig
@@ -45,10 +44,13 @@ async def create_rerank(
         model=request.model,
     )
 
-    rerank_kwargs = with_optional_kwargs(
-        context.call_kwargs(query=request.query, documents=request.documents),
-        top_n=request.top_n,
-        max_tokens_per_doc=request.max_tokens_per_doc,
+    rerank_kwargs = context.call_kwargs(
+        query=request.query,
+        documents=request.documents,
+        optional={
+            "top_n": request.top_n,
+            "max_tokens_per_doc": request.max_tokens_per_doc,
+        },
     )
 
     try:

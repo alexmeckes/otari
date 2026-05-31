@@ -34,13 +34,16 @@ class OpenAIProviderRequestContext:
     model: str
     provider_kwargs: dict[str, Any]
 
-    def call_kwargs(self, **kwargs: Any) -> dict[str, Any]:
-        return {
+    def call_kwargs(self, *, optional: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        call_kwargs = {
             "model": self.model,
             "provider": self.provider,
             **kwargs,
             **self.provider_kwargs,
         }
+        if optional is not None:
+            call_kwargs.update({key: value for key, value in optional.items() if value is not None})
+        return call_kwargs
 
     def rate_limit_headers(self) -> dict[str, str]:
         if self.rate_limit_info is None:

@@ -39,6 +39,36 @@ def test_provider_context_call_kwargs_includes_provider_defaults() -> None:
     }
 
 
+def test_provider_context_call_kwargs_filters_optional_values_after_provider_defaults() -> None:
+    context = OpenAIProviderRequestContext(
+        api_key_id="key-1",
+        user_id="user-1",
+        rate_limit_info=None,
+        provider="openai",
+        model="gpt-4o-mini",
+        provider_kwargs={"api_key": "sk-test", "timeout": 5},
+    )
+
+    call_kwargs = context.call_kwargs(
+        input="hello",
+        timeout=1,
+        optional={
+            "timeout": 10,
+            "temperature": None,
+            "response_format": "json",
+        },
+    )
+
+    assert call_kwargs == {
+        "model": "gpt-4o-mini",
+        "provider": "openai",
+        "input": "hello",
+        "api_key": "sk-test",
+        "timeout": 10,
+        "response_format": "json",
+    }
+
+
 def test_provider_context_rate_limit_headers_are_empty_when_disabled() -> None:
     response = Response()
     context = _context()

@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._embedding_models import EmbeddingRequest
-from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
@@ -46,10 +45,12 @@ async def create_embedding(
         model=request.model,
     )
 
-    embedding_kwargs = with_optional_kwargs(
-        context.call_kwargs(inputs=request.input),
-        encoding_format=request.encoding_format,
-        dimensions=request.dimensions,
+    embedding_kwargs = context.call_kwargs(
+        inputs=request.input,
+        optional={
+            "encoding_format": request.encoding_format,
+            "dimensions": request.dimensions,
+        },
     )
 
     try:

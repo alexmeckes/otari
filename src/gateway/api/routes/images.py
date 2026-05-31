@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._image_models import ImageGenerationRequest
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.core.config import GatewayConfig
@@ -46,13 +45,15 @@ async def create_image(
         model=request.model,
     )
 
-    image_kwargs = with_optional_kwargs(
-        context.call_kwargs(prompt=request.prompt),
-        n=request.n,
-        size=request.size,
-        quality=request.quality,
-        style=request.style,
-        response_format=request.response_format,
+    image_kwargs = context.call_kwargs(
+        prompt=request.prompt,
+        optional={
+            "n": request.n,
+            "size": request.size,
+            "quality": request.quality,
+            "style": request.style,
+            "response_format": request.response_format,
+        },
     )
 
     try:

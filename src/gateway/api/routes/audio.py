@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._audio_models import AudioSpeechRequest
-from gateway.api.routes._helpers import with_optional_kwargs
 from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
@@ -74,12 +73,14 @@ async def create_transcription(
             detail=f"Audio file exceeds maximum upload size of {_MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)} MB",
         )
 
-    transcription_kwargs = with_optional_kwargs(
-        context.call_kwargs(file=file_bytes),
-        language=language,
-        prompt=prompt,
-        response_format=response_format,
-        temperature=temperature,
+    transcription_kwargs = context.call_kwargs(
+        file=file_bytes,
+        optional={
+            "language": language,
+            "prompt": prompt,
+            "response_format": response_format,
+            "temperature": temperature,
+        },
     )
 
     try:
@@ -141,11 +142,14 @@ async def create_speech(
         model=request.model,
     )
 
-    speech_kwargs = with_optional_kwargs(
-        context.call_kwargs(input=request.input, voice=request.voice),
-        instructions=request.instructions,
-        response_format=request.response_format,
-        speed=request.speed,
+    speech_kwargs = context.call_kwargs(
+        input=request.input,
+        voice=request.voice,
+        optional={
+            "instructions": request.instructions,
+            "response_format": request.response_format,
+            "speed": request.speed,
+        },
     )
 
     try:
