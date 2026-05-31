@@ -14,6 +14,55 @@ from gateway.services.log_writer import LogWriter
 from gateway.services.platform_gateway import report_platform_usage
 from gateway.streaming import OPENAI_STREAM_FORMAT, streaming_generator
 
+_CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
+
+
+def _schedule_platform_streaming_usage(
+    *,
+    config: GatewayConfig,
+    correlation_id: str,
+    outcome: str,
+    usage: CompletionUsage | None,
+) -> asyncio.Task[None]:
+    return asyncio.create_task(
+        report_platform_usage(
+            config=config,
+            correlation_id=correlation_id,
+            outcome=outcome,
+            usage=usage,
+        )
+    )
+
+
+async def _log_standalone_streaming_usage(
+    *,
+    db: AsyncSession | None,
+    log_writer: LogWriter | None,
+    api_key_id: str | None,
+    model: str,
+    provider: LLMProvider,
+    user_id: str | None,
+    project_id: str | None,
+    tags: Mapping[str, Any] | None,
+    usage_data: CompletionUsage | None = None,
+    error: str | None = None,
+) -> None:
+    if db is None or log_writer is None:
+        return
+    await log_usage(
+        db=db,
+        log_writer=log_writer,
+        api_key_id=api_key_id,
+        model=model,
+        provider=provider,
+        endpoint=_CHAT_COMPLETIONS_ENDPOINT,
+        user_id=user_id,
+        project_id=project_id,
+        tags=tags,
+        usage_override=usage_data,
+        error=error,
+    )
+
 
 def build_chat_streaming_response(
     *,
@@ -48,50 +97,40 @@ def build_chat_streaming_response(
 
     async def _on_complete(usage_data: CompletionUsage) -> None:
         if platform_mode and correlation_id:
-            asyncio.create_task(
-                report_platform_usage(
-                    config=config,
-                    correlation_id=correlation_id,
-                    outcome="success",
-                    usage=usage_data,
-                )
+            _schedule_platform_streaming_usage(
+                config=config,
+                correlation_id=correlation_id,
+                outcome="success",
+                usage=usage_data,
             )
             return
-        if db is None or log_writer is None:
-            return
-        await log_usage(
+        await _log_standalone_streaming_usage(
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
             model=model,
             provider=provider,
-            endpoint="/v1/chat/completions",
             user_id=user_id,
             project_id=project_id,
             tags=tags,
-            usage_override=usage_data,
+            usage_data=usage_data,
         )
 
     async def _on_error(error: str) -> None:
         if platform_mode and correlation_id:
-            asyncio.create_task(
-                report_platform_usage(
-                    config=config,
-                    correlation_id=correlation_id,
-                    outcome="error",
-                    usage=None,
-                )
+            _schedule_platform_streaming_usage(
+                config=config,
+                correlation_id=correlation_id,
+                outcome="error",
+                usage=None,
             )
             return
-        if db is None or log_writer is None:
-            return
-        await log_usage(
+        await _log_standalone_streaming_usage(
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
             model=model,
             provider=provider,
-            endpoint="/v1/chat/completions",
             user_id=user_id,
             project_id=project_id,
             tags=tags,
