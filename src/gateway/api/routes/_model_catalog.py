@@ -23,6 +23,7 @@ from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import ModelPricing
 from gateway.services.model_discovery_service import discover_all_models, get_model_cache
+from gateway.services.routing_policy_shape import split_model_selector
 
 T = TypeVar("T")
 
@@ -51,13 +52,8 @@ _VENDOR_DISPLAY_NAMES = {
 
 def _split_model_key(model_key: str) -> tuple[str, str]:
     """Split a gateway model selector into provider/model parts."""
-    if ":" in model_key:
-        provider, model_name = model_key.split(":", 1)
-        return provider or "unknown", model_name
-    if "/" in model_key:
-        provider, model_name = model_key.split("/", 1)
-        return provider or "unknown", model_name
-    return "unknown", model_key
+    provider, model_name = split_model_selector(model_key)
+    return provider or "unknown", model_name
 
 
 def _canonical_model_id(model_key: str) -> str:

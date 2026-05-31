@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from gateway.core.config import GatewayConfig
 from gateway.models.mcp import McpServerConfig
+from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
 _USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
 
@@ -55,16 +56,6 @@ def extract_platform_user_token(request: Request) -> str:
             detail="Missing authentication token",
         )
     return token
-
-
-def _split_model_selector(model_selector: str) -> tuple[str | None, str]:
-    if ":" in model_selector:
-        provider, model_name = model_selector.split(":", 1)
-        return provider or None, model_name
-    if "/" in model_selector:
-        provider, model_name = model_selector.split("/", 1)
-        return provider or None, model_name
-    return None, model_selector
 
 
 def _platform_url(base_url: str, path: str) -> str:

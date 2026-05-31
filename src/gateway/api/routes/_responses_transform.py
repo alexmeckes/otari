@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, require_routing_model_selector
+from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
 
 class ResponsesRequest(BaseModel):
@@ -115,17 +116,6 @@ def _chat_completion_text(completion: ChatCompletion) -> str:
         return ""
     message = completion.choices[0].message
     return _content_to_text(getattr(message, "content", None))
-
-
-def _split_model_selector(model_selector: str) -> tuple[str | None, str]:
-    """Split either provider:model or provider/model into provider/model parts."""
-    if ":" in model_selector:
-        provider, model = model_selector.split(":", 1)
-        return provider or None, model
-    if "/" in model_selector:
-        provider, model = model_selector.split("/", 1)
-        return provider or None, model
-    return None, model_selector
 
 
 def served_metadata(provider: str, model: str) -> dict[str, str]:
