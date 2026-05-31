@@ -1,8 +1,6 @@
 from typing import Annotated, Any
 
 from any_llm import AnyLLM, aresponses
-from any_llm.types.completion import CompletionUsage
-from any_llm.types.responses import ResponseStreamEvent
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi import Response as FastAPIResponse
 from fastapi.responses import StreamingResponse
@@ -10,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
 from gateway.api.routes._helpers import resolve_user_id
+from gateway.api.routes._responses_native import (
+    log_native_response_usage,
+    native_response_call_kwargs,
+    native_response_streaming_response,
+)
 from gateway.api.routes._responses_transform import (
     ResponsesRequest,
     chat_completion_to_response_payload,
@@ -20,7 +23,7 @@ from gateway.api.routes._responses_transform import (
     set_served_headers,
     usage_to_completion_usage,
 )
-from gateway.api.routes._usage import log_usage, rate_limit_headers
+from gateway.api.routes._usage import rate_limit_headers
 from gateway.api.routes.chat import (
     chat_completions,
 )
@@ -32,7 +35,6 @@ from gateway.services.budget_service import validate_project_budget, validate_ta
 from gateway.services.log_writer import LogWriter
 from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL
-from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
 
 router = APIRouter(prefix="/v1", tags=["responses"])
 
@@ -120,110 +122,48 @@ async def create_response(
         )
 
     provider_kwargs = get_provider_kwargs(config, provider)
-
-    request_fields = request_body.model_dump(exclude_none=True)
-    input_payload = request_fields.pop("input")
-    stream = bool(request_fields.pop("stream", False))
-    request_fields.pop("model", None)
-    request_fields.pop("user", None)
-    request_fields.pop("project_id", None)
-    request_fields.pop("tags", None)
-    request_fields["user"] = user_id
-
-    call_kwargs: dict[str, Any] = {**provider_kwargs}
-    call_kwargs.update(request_fields)
-    call_kwargs["model"] = model
-    call_kwargs["provider"] = provider
-    call_kwargs["input_data"] = input_payload
+    call_kwargs, stream = native_response_call_kwargs(request_body, provider_kwargs, provider, model, user_id)
 
     try:
         if stream:
             call_kwargs["stream"] = True
-
-            def _format_chunk(event: ResponseStreamEvent) -> str:
-                return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
-
-            def _extract_usage(event: ResponseStreamEvent) -> CompletionUsage | None:
-                response_obj = getattr(event, "response", None)
-                if response_obj and getattr(response_obj, "usage", None):
-                    return usage_to_completion_usage(response_obj.usage)
-                return None
-
-            async def _on_complete(usage_data: CompletionUsage) -> None:
-                await log_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    api_key_id=api_key_id,
-                    model=model,
-                    provider=provider,
-                    endpoint="/v1/responses",
-                    user_id=user_id,
-                    project_id=request_body.project_id,
-                    tags=request_body.tags,
-                    usage_override=usage_data,
-                )
-
-            async def _on_error(error: str) -> None:
-                await log_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    api_key_id=api_key_id,
-                    model=model,
-                    provider=provider,
-                    endpoint="/v1/responses",
-                    user_id=user_id,
-                    project_id=request_body.project_id,
-                    tags=request_body.tags,
-                    error=error,
-                )
-
             stream_result = await aresponses(**call_kwargs)
-            rl_headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
-            metadata = served_metadata(provider.value, model)
-            rl_headers["X-Response-Model"] = metadata["model"]
-            rl_headers["X-Response-Vendor"] = metadata["vendor"]
-            return StreamingResponse(
-                streaming_generator(
-                    stream=stream_result,  # type: ignore[arg-type]
-                    format_chunk=_format_chunk,
-                    extract_usage=_extract_usage,
-                    fmt=RESPONSES_STREAM_FORMAT,
-                    on_complete=_on_complete,
-                    on_error=_on_error,
-                    label=f"{provider}:{model}",
-                ),
-                media_type="text/event-stream",
-                headers=rl_headers,
+            return native_response_streaming_response(
+                stream_result=stream_result,
+                db=db,
+                log_writer=log_writer,
+                api_key_id=api_key_id,
+                provider=provider,
+                model=model,
+                user_id=user_id,
+                request_body=request_body,
+                rate_limit_info=rate_limit_info,
             )
 
         result = await aresponses(**call_kwargs)
         usage_data = usage_to_completion_usage(getattr(result, "usage", None))
-        await log_usage(
+        await log_native_response_usage(
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
-            model=model,
             provider=provider,
-            endpoint="/v1/responses",
+            model=model,
             user_id=user_id,
-            project_id=request_body.project_id,
-            tags=request_body.tags,
-            usage_override=usage_data,
+            request_body=request_body,
+            usage_data=usage_data,
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        await log_usage(
+        await log_native_response_usage(
             db=db,
             log_writer=log_writer,
             api_key_id=api_key_id,
-            model=model,
             provider=provider,
-            endpoint="/v1/responses",
+            model=model,
             user_id=user_id,
-            project_id=request_body.project_id,
-            tags=request_body.tags,
+            request_body=request_body,
             error=str(e),
         )
         logger.error("Provider call failed for %s:%s: %s", provider, model, e)
