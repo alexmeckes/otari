@@ -1,16 +1,15 @@
-import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, NoReturn
 
-import httpx
 from any_llm import LLMProvider
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
 from fastapi import HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_non_streaming_completion import run_non_streaming_completion
+from gateway.api.routes._chat_provider_errors import is_provider_timeout
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure
 from gateway.api.routes._chat_tools import ChatToolSelection
@@ -233,7 +232,7 @@ async def run_standalone_routing_plan(
     )
     _set_routing_response_headers(response=response, plan=plan, trace_id=trace_id)
 
-    if last_exc is not None and isinstance(last_exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
+    if is_provider_timeout(last_exc):
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="All routed upstream providers timed out",
