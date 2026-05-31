@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import RouteTrace
 from gateway.services import routing_request_analysis as _routing_request_analysis
+from gateway.services.routing_config_values import non_negative_float_or_none
 
 _HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
 _HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
@@ -39,21 +40,6 @@ class ProviderHealth:
         }
 
 
-def _float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    parsed = _float_or_none(value)
-    if parsed is None or parsed < 0:
-        return None
-    return parsed
-
-
 def _provider_health_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     health = config.get("health")
     return health if isinstance(health, dict) else {}
@@ -69,7 +55,7 @@ def _provider_health_mode(config: Mapping[str, Any]) -> str:
 
 
 def _provider_health_rate(config: Mapping[str, Any], key: str, default: float) -> float:
-    rate = _non_negative_float_or_none(_provider_health_config(config).get(key))
+    rate = non_negative_float_or_none(_provider_health_config(config).get(key))
     if rate is None:
         return default
     return min(rate, 1.0)

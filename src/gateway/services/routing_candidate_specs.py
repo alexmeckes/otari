@@ -4,6 +4,8 @@ from typing import Any
 
 from any_llm import AnyLLM
 
+from gateway.services.routing_config_values import float_or_none, score_or_none
+
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
 _INFERRED_TIER_BY_OUTPUT_PRICE = (
     (0.10, "simple"),
@@ -21,32 +23,6 @@ class CandidateSpec:
     output_price_per_million: float | None
     quality_score: float | None
     metadata: dict[str, Any]
-
-
-def _float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    parsed = _float_or_none(value)
-    if parsed is None or parsed < 0:
-        return None
-    return parsed
-
-
-def _score_or_none(value: Any) -> float | None:
-    parsed = _non_negative_float_or_none(value)
-    if parsed is None:
-        return None
-    if parsed <= 1.0:
-        return parsed
-    if parsed <= 100.0:
-        return parsed / 100.0
-    return None
 
 
 def _normalize_tier(value: Any) -> str | None:
@@ -81,22 +57,22 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
     for key in ("region", "regions"):
         if key in item and key not in metadata:
             metadata[key] = item[key]
-    quality_score = _score_or_none(item.get("quality_score"))
+    quality_score = score_or_none(item.get("quality_score"))
     if quality_score is None:
         for key in ("benchmark_score", "score", "intelligence_score"):
-            quality_score = _score_or_none(item.get(key))
+            quality_score = score_or_none(item.get(key))
             if quality_score is not None:
                 break
     if quality_score is None:
         for key in ("quality_score", "benchmark_score", "score", "intelligence_score"):
-            quality_score = _score_or_none(metadata.get(key))
+            quality_score = score_or_none(metadata.get(key))
             if quality_score is not None:
                 break
     return CandidateSpec(
         model=model_value.strip(),
         tier=_normalize_tier(item.get("tier")) or tier,
-        input_price_per_million=_float_or_none(item.get("input_price_per_million")),
-        output_price_per_million=_float_or_none(item.get("output_price_per_million")),
+        input_price_per_million=float_or_none(item.get("input_price_per_million")),
+        output_price_per_million=float_or_none(item.get("output_price_per_million")),
         quality_score=quality_score,
         metadata=metadata,
     )

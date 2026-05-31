@@ -3,6 +3,8 @@ from typing import Any
 
 from any_llm import AnyLLM
 
+from gateway.services.routing_config_values import non_negative_float_or_none
+
 
 def _bool_config(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
@@ -14,21 +16,6 @@ def _bool_config(value: Any, default: bool) -> bool:
         if lowered in {"0", "false", "no", "off"}:
             return False
     return default
-
-
-def _float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    parsed = _float_or_none(value)
-    if parsed is None or parsed < 0:
-        return None
-    return parsed
 
 
 def _string_set(value: Any) -> set[str]:
@@ -116,7 +103,7 @@ def _constraint_failure(
             if requested_region not in candidate_regions:
                 return "region_not_supported"
 
-    max_estimated_cost = _non_negative_float_or_none(constraints.get("max_estimated_cost"))
+    max_estimated_cost = non_negative_float_or_none(constraints.get("max_estimated_cost"))
     if max_estimated_cost is None:
         return None
 

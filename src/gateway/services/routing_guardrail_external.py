@@ -5,20 +5,13 @@ from typing import Any
 
 import httpx
 
+from gateway.services.routing_config_values import non_negative_float_or_none
 from gateway.services.routing_request_analysis import bool_config
 
 ExternalClassifierPost = Callable[
     ...,
     Awaitable[tuple[int | None, dict[str, Any] | None, str | None]],
 ]
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float) and value >= 0:
-        return float(value)
-    return None
 
 
 def _guardrail_violation(kind: str, rule: str) -> dict[str, str]:
@@ -101,7 +94,7 @@ def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: flo
             violations.append(_guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
 
     flagged = payload.get("blocked") is True or payload.get("flagged") is True
-    score = _non_negative_float_or_none(payload.get("score"))
+    score = non_negative_float_or_none(payload.get("score"))
     if threshold is not None and score is not None and score >= threshold:
         flagged = True
     if flagged and not violations:
@@ -124,8 +117,8 @@ async def evaluate_external_classifiers(
         if not isinstance(url, str) or not url.strip():
             classifier_results.append({"name": name, "status": "skipped", "reason": "missing_url"})
             continue
-        timeout_seconds = _non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
-        threshold = _non_negative_float_or_none(classifier.get("threshold"))
+        timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
+        threshold = non_negative_float_or_none(classifier.get("threshold"))
         status_code, payload, error = await post_classifier(
             url=url.strip(),
             request_text=request_text,
@@ -149,7 +142,7 @@ async def evaluate_external_classifiers(
         assert payload is not None
         classifier_violations = _classifier_violations(name, payload, threshold)
         violations.extend(classifier_violations)
-        score = _non_negative_float_or_none(payload.get("score"))
+        score = non_negative_float_or_none(payload.get("score"))
         label = payload.get("label") if isinstance(payload.get("label"), str) else None
         classifier_results.append(
             {

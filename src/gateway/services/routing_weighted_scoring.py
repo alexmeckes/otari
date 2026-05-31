@@ -2,31 +2,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
-
-def _float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    parsed = _float_or_none(value)
-    if parsed is None or parsed < 0:
-        return None
-    return parsed
-
-
-def _score_or_none(value: Any) -> float | None:
-    parsed = _non_negative_float_or_none(value)
-    if parsed is None:
-        return None
-    if parsed <= 1.0:
-        return parsed
-    if parsed <= 100.0:
-        return parsed / 100.0
-    return None
+from gateway.services.routing_config_values import non_negative_float_or_none, score_or_none
 
 
 def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -44,7 +20,7 @@ def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float
         weight_value = weights.get(key, weights.get(f"{key}_weight"))
     if weight_value is None:
         weight_value = scoring.get(f"{key}_weight", scoring.get(key))
-    parsed = _non_negative_float_or_none(weight_value)
+    parsed = non_negative_float_or_none(weight_value)
     return default if parsed is None else parsed
 
 
@@ -85,9 +61,9 @@ def attach_weighted_scores(
     scoring = _weighted_scoring_config(config)
     weights = _weighted_score_weights(config)
     weight_total = sum(weights.values())
-    default_quality = _score_or_none(scoring.get("default_quality_score"))
-    unknown_cost = _score_or_none(scoring.get("unknown_cost_score"))
-    unknown_latency = _score_or_none(scoring.get("unknown_latency_score"))
+    default_quality = score_or_none(scoring.get("default_quality_score"))
+    unknown_cost = score_or_none(scoring.get("unknown_cost_score"))
+    unknown_latency = score_or_none(scoring.get("unknown_latency_score"))
     default_quality_score = 0.5 if default_quality is None else default_quality
     unknown_cost_score = 0.0 if unknown_cost is None else unknown_cost
     unknown_latency_score = 0.5 if unknown_latency is None else unknown_latency
