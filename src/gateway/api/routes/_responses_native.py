@@ -2,11 +2,18 @@ from typing import Any
 
 from any_llm.types.completion import CompletionUsage
 from any_llm.types.responses import ResponseStreamEvent
+from fastapi import Response as FastAPIResponse
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._provider_context import OpenAIProviderRequestContext
-from gateway.api.routes._responses_transform import ResponsesRequest, served_metadata, usage_to_completion_usage
+from gateway.api.routes._responses_transform import (
+    ResponsesRequest,
+    response_payload_with_served_metadata,
+    served_metadata,
+    set_served_headers,
+    usage_to_completion_usage,
+)
 from gateway.api.routes._usage import log_usage
 from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
@@ -97,6 +104,23 @@ def native_response_streaming_response(
         ),
         media_type="text/event-stream",
         headers=_response_stream_headers(context),
+    )
+
+
+def native_response_payload(
+    *,
+    result: Any,
+    response: FastAPIResponse,
+    context: OpenAIProviderRequestContext,
+) -> dict[str, Any]:
+    context.apply_rate_limit_headers(response)
+    metadata = served_metadata(context.provider.value, context.model)
+    set_served_headers(response, metadata)
+    payload = result.model_dump(exclude_none=True)
+    return response_payload_with_served_metadata(
+        payload,
+        provider=context.provider.value,
+        requested_model=context.model,
     )
 
 

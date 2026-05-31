@@ -3,11 +3,13 @@ from typing import Any
 import pytest
 from any_llm import AnyLLM
 from any_llm.types.completion import CompletionUsage
+from fastapi import Response
 
 from gateway.api.routes._provider_context import OpenAIProviderRequestContext
 from gateway.api.routes._responses_native import (
     log_native_response_usage,
     native_response_call_kwargs,
+    native_response_payload,
     native_response_streaming_response,
 )
 from gateway.api.routes._responses_transform import ResponsesRequest
@@ -101,4 +103,35 @@ def test_native_response_streaming_response_uses_context_headers() -> None:
     assert response.headers["X-Response-Vendor"] == "openai"
     assert response.headers["X-RateLimit-Limit"] == "10"
     assert response.headers["X-RateLimit-Remaining"] == "8"
+    assert response.headers["X-RateLimit-Reset"] == "123"
+
+
+def test_native_response_payload_applies_headers_and_served_metadata() -> None:
+    class FakeResult:
+        def model_dump(self, *, exclude_none: bool = False) -> dict[str, Any]:
+            assert exclude_none is True
+            return {
+                "id": "resp_native",
+                "model": "gpt-4o-mini",
+                "output": [],
+            }
+
+    response = Response()
+
+    payload = native_response_payload(
+        result=FakeResult(),
+        response=response,
+        context=_context(RateLimitInfo(limit=10, remaining=7, reset=123.4)),
+    )
+
+    assert payload == {
+        "id": "resp_native",
+        "model": "openai/gpt-4o-mini",
+        "output": [],
+        "vendor": "openai",
+    }
+    assert response.headers["X-Response-Model"] == "openai/gpt-4o-mini"
+    assert response.headers["X-Response-Vendor"] == "openai"
+    assert response.headers["X-RateLimit-Limit"] == "10"
+    assert response.headers["X-RateLimit-Remaining"] == "7"
     assert response.headers["X-RateLimit-Reset"] == "123"

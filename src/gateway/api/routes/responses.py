@@ -11,6 +11,7 @@ from gateway.api.routes._provider_context import resolve_openai_provider_request
 from gateway.api.routes._responses_native import (
     log_native_response_usage,
     native_response_call_kwargs,
+    native_response_payload,
     native_response_streaming_response,
 )
 from gateway.api.routes._responses_transform import (
@@ -18,8 +19,6 @@ from gateway.api.routes._responses_transform import (
     chat_completion_to_response_payload,
     chat_request_from_response_request,
     metadata_from_model_selector,
-    response_payload_with_served_metadata,
-    served_metadata,
     set_served_headers,
     usage_to_completion_usage,
 )
@@ -136,16 +135,7 @@ async def _run_provider_native_response(
             detail="LLM provider error",
         ) from e
 
-    context.apply_rate_limit_headers(response)
-
-    metadata = served_metadata(context.provider.value, context.model)
-    set_served_headers(response, metadata)
-    payload = result.model_dump(exclude_none=True)  # type: ignore[union-attr]
-    return response_payload_with_served_metadata(
-        payload,
-        provider=context.provider.value,
-        requested_model=context.model,
-    )
+    return native_response_payload(result=result, response=response, context=context)
 
 
 @router.post("/responses", response_model=None)
