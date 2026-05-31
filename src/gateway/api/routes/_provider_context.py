@@ -21,6 +21,7 @@ from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.log_writer import LogWriter
+from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 
@@ -103,6 +104,21 @@ class OpenAIProviderRequestContext:
             endpoint=endpoint,
             error=error,
         )
+
+    async def apply_input_token_cost(
+        self,
+        db: AsyncSession,
+        usage_log: UsageLog,
+        *,
+        token_count: int | None,
+        require_positive_tokens: bool = False,
+    ) -> None:
+        pricing = await find_model_pricing(db, self.provider, self.model, as_of=usage_log.timestamp)
+        if pricing:
+            if token_count is not None and (token_count or not require_positive_tokens):
+                usage_log.cost = (token_count / 1_000_000) * pricing.input_price_per_million
+        else:
+            log_missing_pricing(self.provider, self.model)
 
 
 async def resolve_openai_provider_request_context(

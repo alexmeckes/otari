@@ -14,7 +14,6 @@ from gateway.api.routes._provider_context import resolve_openai_provider_request
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
 
@@ -64,12 +63,11 @@ async def create_embedding(
         )
 
         if result.usage:
-            pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
-            if pricing:
-                cost = (result.usage.prompt_tokens / 1_000_000) * pricing.input_price_per_million
-                usage_log.cost = cost
-            else:
-                log_missing_pricing(context.provider, context.model)
+            await context.apply_input_token_cost(
+                db,
+                usage_log,
+                token_count=result.usage.prompt_tokens,
+            )
 
         await log_writer.put(usage_log)
 

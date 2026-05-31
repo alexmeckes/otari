@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 from fastapi import HTTPException, Response
@@ -115,3 +116,74 @@ async def test_provider_context_log_and_raise_provider_error_logs_then_raises() 
     assert len(writer.logs) == 1
     assert writer.logs[0].status == "error"
     assert writer.logs[0].error_message == "provider down"
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_token_cost_sets_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+
+    class Pricing:
+        input_price_per_million = 2.0
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
+        return Pricing()
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+
+    await _context().apply_input_token_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        token_count=250_000,
+    )
+
+    assert usage_log.cost == 0.5
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_token_cost_keeps_zero_absent_when_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+
+    class Pricing:
+        input_price_per_million = 2.0
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> Pricing:
+        return Pricing()
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+
+    await _context().apply_input_token_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        token_count=0,
+        require_positive_tokens=True,
+    )
+
+    assert usage_log.cost is None
+
+
+@pytest.mark.asyncio
+async def test_provider_context_apply_input_token_cost_logs_missing_pricing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    usage_log = _context().usage_log(endpoint="/v1/test")
+    calls: list[tuple[str, str]] = []
+
+    async def fake_find_model_pricing(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    def fake_log_missing_pricing(provider: str, model: str) -> None:
+        calls.append((provider, model))
+
+    monkeypatch.setattr("gateway.api.routes._provider_context.find_model_pricing", fake_find_model_pricing)
+    monkeypatch.setattr("gateway.api.routes._provider_context.log_missing_pricing", fake_log_missing_pricing)
+
+    await _context().apply_input_token_cost(
+        object(),  # type: ignore[arg-type]
+        usage_log,
+        token_count=100,
+    )
+
+    assert usage_log.cost is None
+    assert calls == [("openai", "gpt-4o-mini")]

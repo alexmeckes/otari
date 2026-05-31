@@ -13,7 +13,6 @@ from gateway.api.routes._rerank_models import RerankRequest
 from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
 
 router = APIRouter(prefix="/v1", tags=["rerank"])
 
@@ -65,12 +64,12 @@ async def create_rerank(
         )
 
         if result.usage:
-            pricing = await find_model_pricing(db, context.provider, context.model, as_of=usage_log.timestamp)
-            if pricing and total_tokens:
-                cost = (total_tokens / 1_000_000) * pricing.input_price_per_million
-                usage_log.cost = cost
-            elif not pricing:
-                log_missing_pricing(context.provider, context.model)
+            await context.apply_input_token_cost(
+                db,
+                usage_log,
+                token_count=total_tokens,
+                require_positive_tokens=True,
+            )
 
         await log_writer.put(usage_log)
 
