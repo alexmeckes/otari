@@ -37,6 +37,12 @@ from gateway.services import routing_policy_eval_scores
 router = APIRouter(prefix="/v1/routing-policies", tags=["routing-policies"])
 
 
+async def _committed_policy_response(db: AsyncSession, policy: RoutingPolicy) -> RoutingPolicyResponse:
+    await commit_or_database_error(db)
+    await db.refresh(policy)
+    return RoutingPolicyResponse.from_model(policy)
+
+
 @router.post("", dependencies=[Depends(verify_master_key)])
 async def create_routing_policy(
     request: CreateRoutingPolicyRequest,
@@ -69,9 +75,7 @@ async def create_routing_policy(
         action="create",
         change_note=request.change_note,
     )
-    await commit_or_database_error(db)
-    await db.refresh(policy)
-    return RoutingPolicyResponse.from_model(policy)
+    return await _committed_policy_response(db, policy)
 
 
 @router.get("", dependencies=[Depends(verify_master_key)])
@@ -159,9 +163,7 @@ async def apply_routing_policy_revision(
         action="apply_revision",
         change_note=change_note,
     )
-    await commit_or_database_error(db)
-    await db.refresh(policy)
-    return RoutingPolicyResponse.from_model(policy)
+    return await _committed_policy_response(db, policy)
 
 
 @router.post("/{policy_id}/eval-scores", dependencies=[Depends(verify_master_key)])
@@ -199,10 +201,9 @@ async def apply_routing_policy_eval_scores(
         action="apply_eval_scores",
         change_note=request.change_note or "Applied routing policy eval scores",
     )
-    await commit_or_database_error(db)
-    await db.refresh(policy)
+    policy_response = await _committed_policy_response(db, policy)
     return ApplyRoutingPolicyEvalScoresResponse(
-        policy=RoutingPolicyResponse.from_model(policy),
+        policy=policy_response,
         applied_count=len(score_application.applied_scores),
         unmatched_models=score_application.unmatched_models,
         applied_scores=[
@@ -253,9 +254,7 @@ async def clone_routing_policy(
         action="clone",
         change_note=request.change_note or f"Cloned from routing policy '{source.policy_id}'",
     )
-    await commit_or_database_error(db)
-    await db.refresh(clone)
-    return RoutingPolicyResponse.from_model(clone)
+    return await _committed_policy_response(db, clone)
 
 
 @router.patch("/{policy_id}", dependencies=[Depends(verify_master_key)])
@@ -303,9 +302,7 @@ async def update_routing_policy(
         change_note=change_note,
     )
 
-    await commit_or_database_error(db)
-    await db.refresh(policy)
-    return RoutingPolicyResponse.from_model(policy)
+    return await _committed_policy_response(db, policy)
 
 
 @router.delete(
