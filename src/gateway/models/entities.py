@@ -10,6 +10,10 @@ class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 def _dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -45,7 +49,7 @@ class APIKey(Base):
     key_hash: Mapped[str] = mapped_column(unique=True, index=True)
     key_name: Mapped[str | None] = mapped_column()
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -90,11 +94,11 @@ class Budget(Base):
     next_budget_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     blocked: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=_utc_now,
+        onupdate=_utc_now,
     )
 
     users = relationship("User", back_populates="budget")
@@ -141,11 +145,11 @@ class User(Base):
     next_budget_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     blocked: Mapped[bool] = mapped_column(default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=_utc_now,
+        onupdate=_utc_now,
     )
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
@@ -183,15 +187,15 @@ class ModelPricing(Base):
     effective_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         primary_key=True,
-        default=lambda: datetime.now(UTC),
+        default=_utc_now,
     )
     input_price_per_million: Mapped[float] = mapped_column()
     output_price_per_million: Mapped[float] = mapped_column()
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=_utc_now,
+        onupdate=_utc_now,
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -218,11 +222,11 @@ class RoutingPolicy(Base):
     is_default: Mapped[bool] = mapped_column(default=False, index=True)
     revision: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(default="active", index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=_utc_now,
+        onupdate=_utc_now,
     )
 
     projects = relationship("Project", back_populates="routing_policy")
@@ -265,7 +269,7 @@ class RoutingPolicyRevision(Base):
     is_default: Mapped[bool] = mapped_column(default=False)
     status: Mapped[str] = mapped_column(default="active")
     change_note: Mapped[str | None] = mapped_column()
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     def config_dict(self) -> dict[str, Any]:
         return _dict_or_empty(self.config_, copy_value=True)
@@ -305,11 +309,11 @@ class Project(Base):
     blocked: Mapped[bool] = mapped_column(default=False)
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=_utc_now,
+        onupdate=_utc_now,
     )
 
     budget = relationship("Budget", back_populates="projects")
@@ -355,7 +359,7 @@ class UsageLog(Base):
         ForeignKey("projects.project_id", ondelete="SET NULL"),
         index=True,
     )
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
 
     model: Mapped[str] = mapped_column()
     provider: Mapped[str | None] = mapped_column()
@@ -408,7 +412,7 @@ class RouteTrace(Base):
     )
 
     trace_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
     api_key_id: Mapped[str | None] = mapped_column(ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
     project_id: Mapped[str | None] = mapped_column(
@@ -500,7 +504,7 @@ class BudgetResetLog(Base):
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.project_id", ondelete="SET NULL"), index=True)
     budget_id: Mapped[str] = mapped_column(ForeignKey("budgets.budget_id"))
     previous_spend: Mapped[float] = mapped_column()
-    reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     next_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user = relationship("User", back_populates="reset_logs")
@@ -546,7 +550,7 @@ class BudgetAlert(Base):
     next_delivery_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     budget = relationship("Budget", back_populates="alerts")
