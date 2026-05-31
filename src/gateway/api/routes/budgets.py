@@ -32,6 +32,27 @@ def _budget_window_start(duration_sec: int | None) -> tuple[datetime, datetime |
     return now, next_reset_at
 
 
+async def _get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
+    budget = await db.get(Budget, budget_id)
+    if budget is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Budget with id '{budget_id}' not found",
+        )
+    return budget
+
+
+async def _commit_or_database_error(db: AsyncSession) -> None:
+    try:
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error",
+        ) from None
+
+
 @router.post("", dependencies=[Depends(verify_master_key)])
 async def create_budget(
     request: CreateBudgetRequest,
@@ -59,14 +80,7 @@ async def create_budget(
     )
 
     db.add(budget)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await _commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -137,12 +151,7 @@ async def list_alerts_for_budget(
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> list[BudgetAlertResponse]:
     """List alert events for a specific budget."""
-    result = await db.execute(select(Budget.budget_id).where(Budget.budget_id == budget_id))
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
+    await _get_budget_or_404(db, budget_id)
     stmt = (
         select(BudgetAlert)
         .where(BudgetAlert.budget_id == budget_id)
@@ -160,15 +169,7 @@ async def get_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Get details of a specific budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
-
+    budget = await _get_budget_or_404(db, budget_id)
     return BudgetResponse.from_model(budget)
 
 
@@ -179,14 +180,7 @@ async def update_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Update a budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
+    budget = await _get_budget_or_404(db, budget_id)
 
     if request.max_budget is not None:
         budget.max_budget = request.max_budget
@@ -210,14 +204,7 @@ async def update_budget(
     if budget.scope_type == TAG_BUDGET_SCOPE and budget.budget_started_at is None:
         budget.budget_started_at, budget.next_budget_reset_at = _budget_window_start(budget.budget_duration_sec)
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await _commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -229,21 +216,7 @@ async def delete_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
+    budget = await _get_budget_or_404(db, budget_id)
 
     await db.delete(budget)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await _commit_or_database_error(db)
