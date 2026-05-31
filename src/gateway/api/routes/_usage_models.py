@@ -6,11 +6,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from gateway.api.deps import _as_utc
+from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.models.entities import UsageLog
 
 
 def _format_timestamp(value: datetime) -> str:
-    return (_as_utc(value) or value).isoformat()
+    return datetime_isoformat(_as_utc(value) or value)
 
 
 class UsageEntry(BaseModel):

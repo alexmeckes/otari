@@ -1,11 +1,14 @@
 from collections.abc import Generator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from gateway.api.routes._model_catalog import _catalog_record_from_pricing
 from gateway.core.config import API_KEY_HEADER, GatewayConfig
 from gateway.main import create_app
+from gateway.models.entities import ModelPricing
 
 
 @pytest.fixture
@@ -36,6 +39,24 @@ def _set_price(client: TestClient, master_header: dict[str, str], model_key: str
         headers=master_header,
     )
     assert response.status_code == 200, response.text
+
+
+def test_catalog_record_from_pricing_formats_datetimes() -> None:
+    created_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    updated_at = datetime(2026, 1, 3, 3, 4, 5, tzinfo=UTC)
+    pricing = ModelPricing(
+        model_key="openai:gpt-4o-mini",
+        effective_at=created_at,
+        input_price_per_million=0.15,
+        output_price_per_million=0.60,
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+    record = _catalog_record_from_pricing(pricing)
+
+    assert record.created_at == created_at.isoformat()
+    assert record.updated_at == updated_at.isoformat()
 
 
 def test_models_default_response_stays_openai_compatible(

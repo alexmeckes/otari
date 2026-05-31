@@ -18,6 +18,7 @@ from gateway.api.routes._model_catalog_models import (
     ModelObject,
     ModelPricingInfo,
 )
+from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import ModelPricing
@@ -124,7 +125,7 @@ def _catalog_record_from_discovered(
         provider_model=model.id,
         created=model.created,
         created_at=created_at,
-        updated_at=pricing.updated_at.isoformat() if pricing else created_at,
+        updated_at=datetime_isoformat(pricing.updated_at) if pricing else created_at,
         pricing=_model_pricing_info(pricing),
     )
 
@@ -136,8 +137,8 @@ def _catalog_record_from_pricing(pricing: ModelPricing) -> CatalogRecord:
         provider=provider,
         provider_model=provider_model,
         created=_created_epoch(pricing.created_at),
-        created_at=pricing.created_at.isoformat() if pricing.created_at else None,
-        updated_at=pricing.updated_at.isoformat() if pricing.updated_at else None,
+        created_at=optional_datetime_isoformat(pricing.created_at),
+        updated_at=optional_datetime_isoformat(pricing.updated_at),
         pricing=_model_pricing_info(pricing),
     )
 
