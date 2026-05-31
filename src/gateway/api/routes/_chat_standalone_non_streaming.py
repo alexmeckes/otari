@@ -26,6 +26,37 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
+_CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
+
+
+async def _log_standalone_chat_usage(
+    *,
+    db: AsyncSession | None,
+    log_writer: LogWriter,
+    api_key_id: str | None,
+    model: str,
+    provider: Any,
+    user_id: str | None,
+    request: ChatCompletionRequest,
+    response: ChatCompletion | None = None,
+    error: str | None = None,
+) -> None:
+    if db is None:
+        return
+    await log_usage(
+        db=db,
+        log_writer=log_writer,
+        api_key_id=api_key_id,
+        model=model,
+        provider=provider,
+        endpoint=_CHAT_COMPLETIONS_ENDPOINT,
+        user_id=user_id,
+        project_id=request.project_id,
+        tags=request.tags,
+        response=response,
+        error=error,
+    )
+
 
 async def run_standalone_non_streaming_chat(
     *,
@@ -67,19 +98,16 @@ async def run_standalone_non_streaming_chat(
             web_search_url=tool_selection.web_search_url,
             web_search_tool_entry=tool_selection.web_search_tool_entry,
         )
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                response=completion,
-            )
+        await _log_standalone_chat_usage(
+            db=db,
+            log_writer=log_writer,
+            api_key_id=api_key_id,
+            model=model,
+            provider=provider,
+            user_id=user_id,
+            request=request,
+            response=completion,
+        )
     except HTTPException:
         raise
     except SandboxNotReachableError as exc:
@@ -95,34 +123,28 @@ async def run_standalone_non_streaming_chat(
         # Gateway-owned cap, not an upstream provider failure. 422 lets
         # callers distinguish a runaway tool loop from a real outage.
         logger.warning("Tool loop iteration cap hit (standalone): cap=%d", max_tool_iterations)
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                error=str(exc),
-            )
+        await _log_standalone_chat_usage(
+            db=db,
+            log_writer=log_writer,
+            api_key_id=api_key_id,
+            model=model,
+            provider=provider,
+            user_id=user_id,
+            request=request,
+            error=str(exc),
+        )
         raise chat_tool_iteration_cap_exception(exc) from exc
     except Exception as exc:
-        if db is not None:
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/chat/completions",
-                user_id=user_id,
-                project_id=request.project_id,
-                tags=request.tags,
-                error=str(exc),
-            )
+        await _log_standalone_chat_usage(
+            db=db,
+            log_writer=log_writer,
+            api_key_id=api_key_id,
+            model=model,
+            provider=provider,
+            user_id=user_id,
+            request=request,
+            error=str(exc),
+        )
 
         logger.error("Provider call failed for %s:%s: %s", provider, model, exc)
         raise standalone_provider_failure_exception(exc) from exc
