@@ -1,6 +1,6 @@
 """OpenAI-compatible moderations endpoint."""
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from any_llm import amoderation
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -57,13 +57,7 @@ async def create_moderation(
         model=request.model,
     )
 
-    moderation_kwargs: dict[str, Any] = {
-        "model": context.model,
-        "input": request.input,
-        "provider": context.provider,
-        "include_raw": include_raw,
-        **context.provider_kwargs,
-    }
+    moderation_kwargs = context.call_kwargs(input=request.input, include_raw=include_raw)
 
     try:
         result = await amoderation(**moderation_kwargs)

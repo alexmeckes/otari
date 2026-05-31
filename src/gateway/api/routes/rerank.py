@@ -48,13 +48,7 @@ async def create_rerank(
     )
 
     rerank_kwargs = with_optional_kwargs(
-        {
-            "model": context.model,
-            "query": request.query,
-            "documents": request.documents,
-            "provider": context.provider,
-            **context.provider_kwargs,
-        },
+        context.call_kwargs(query=request.query, documents=request.documents),
         top_n=request.top_n,
         max_tokens_per_doc=request.max_tokens_per_doc,
     )

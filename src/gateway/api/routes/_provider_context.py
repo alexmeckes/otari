@@ -24,6 +24,14 @@ class OpenAIProviderRequestContext:
     model: str
     provider_kwargs: dict[str, Any]
 
+    def call_kwargs(self, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "provider": self.provider,
+            **kwargs,
+            **self.provider_kwargs,
+        }
+
 
 async def resolve_openai_provider_request_context(
     *,

@@ -49,12 +49,7 @@ async def create_image(
     )
 
     image_kwargs = with_optional_kwargs(
-        {
-            "model": context.model,
-            "prompt": request.prompt,
-            "provider": context.provider,
-            **context.provider_kwargs,
-        },
+        context.call_kwargs(prompt=request.prompt),
         n=request.n,
         size=request.size,
         quality=request.quality,

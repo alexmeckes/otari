@@ -49,12 +49,7 @@ async def create_embedding(
     )
 
     embedding_kwargs = with_optional_kwargs(
-        {
-            "model": context.model,
-            "inputs": request.input,
-            "provider": context.provider,
-            **context.provider_kwargs,
-        },
+        context.call_kwargs(inputs=request.input),
         encoding_format=request.encoding_format,
         dimensions=request.dimensions,
     )

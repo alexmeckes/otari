@@ -80,12 +80,7 @@ async def create_transcription(
         )
 
     transcription_kwargs = with_optional_kwargs(
-        {
-            "model": context.model,
-            "file": file_bytes,
-            "provider": context.provider,
-            **context.provider_kwargs,
-        },
+        context.call_kwargs(file=file_bytes),
         language=language,
         prompt=prompt,
         response_format=response_format,
@@ -157,13 +152,7 @@ async def create_speech(
     )
 
     speech_kwargs = with_optional_kwargs(
-        {
-            "model": context.model,
-            "input": request.input,
-            "voice": request.voice,
-            "provider": context.provider,
-            **context.provider_kwargs,
-        },
+        context.call_kwargs(input=request.input, voice=request.voice),
         instructions=request.instructions,
         response_format=request.response_format,
         speed=request.speed,
