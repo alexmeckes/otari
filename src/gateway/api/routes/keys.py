@@ -3,10 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
+from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._key_models import CreateKeyRequest, CreateKeyResponse, KeyInfo, UpdateKeyRequest
 from gateway.auth.models import generate_api_key, hash_key
 from gateway.models.entities import APIKey, User
@@ -63,14 +63,7 @@ async def create_key(
     )
 
     db.add(db_key)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(db_key)
 
     key_info = KeyInfo.from_model(db_key)
@@ -145,14 +138,7 @@ async def update_key(
     if request.metadata is not None:
         key.metadata_ = request.metadata
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(key)
 
     return KeyInfo.from_model(key)
@@ -177,11 +163,4 @@ async def delete_key(
         )
 
     await db.delete(key)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)

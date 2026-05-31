@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
+from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._routing_policy_admin import (
     bump_policy_revision,
-    commit_or_database_error,
     create_policy_shape,
     ensure_default_policy_is_active,
     get_policy_or_404,

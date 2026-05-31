@@ -4,10 +4,10 @@ from typing import Annotated, Any
 from any_llm import AnyLLM
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_api_key_or_master_key, verify_master_key
+from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._pricing_models import PricingResponse, SetPricingRequest
 from gateway.models.entities import ModelPricing
 from gateway.services.pricing_service import normalize_effective_at
@@ -63,17 +63,6 @@ async def _pricing_rows(
     return []
 
 
-async def _commit_or_database_error(db: AsyncSession) -> None:
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
-
-
 @router.post("", dependencies=[Depends(verify_master_key)])
 async def set_pricing(
     request: SetPricingRequest,
@@ -103,7 +92,7 @@ async def set_pricing(
         )
         db.add(pricing)
 
-    await _commit_or_database_error(db)
+    await commit_or_database_error(db)
     await db.refresh(pricing)
 
     return PricingResponse.from_model(pricing)
@@ -207,4 +196,4 @@ async def delete_pricing(
     for pricing in targets:
         await db.delete(pricing)
 
-    await _commit_or_database_error(db)
+    await commit_or_database_error(db)

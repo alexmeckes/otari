@@ -3,10 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, update
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
+from gateway.api.routes._database import commit_or_database_error
 from gateway.api.routes._user_models import CreateUserRequest, UpdateUserRequest, UsageLogResponse, UserResponse
 from gateway.models.entities import APIKey, Budget, UsageLog, User
 from gateway.repositories.users_repository import get_active_user
@@ -67,14 +67,7 @@ async def create_user(
         else:
             user.next_budget_reset_at = None
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(user)
 
     return UserResponse.from_model(user)
@@ -148,14 +141,7 @@ async def update_user(
     if request.metadata is not None:
         user.metadata_ = request.metadata
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(user)
 
     return UserResponse.from_model(user)
@@ -183,14 +169,7 @@ async def delete_user(
     )
     user.deleted_at = datetime.now(UTC)
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
 
 
 @router.get("/{user_id}/usage", dependencies=[Depends(verify_master_key)])

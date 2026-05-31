@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
@@ -14,6 +13,7 @@ from gateway.api.routes._budget_models import (
     UpdateBudgetRequest,
     validate_tag_budget_shape,
 )
+from gateway.api.routes._database import commit_or_database_error
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhook
 from gateway.services.budget_service import (
@@ -40,17 +40,6 @@ async def _get_budget_or_404(db: AsyncSession, budget_id: str) -> Budget:
             detail=f"Budget with id '{budget_id}' not found",
         )
     return budget
-
-
-async def _commit_or_database_error(db: AsyncSession) -> None:
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -80,7 +69,7 @@ async def create_budget(
     )
 
     db.add(budget)
-    await _commit_or_database_error(db)
+    await commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -204,7 +193,7 @@ async def update_budget(
     if budget.scope_type == TAG_BUDGET_SCOPE and budget.budget_started_at is None:
         budget.budget_started_at, budget.next_budget_reset_at = _budget_window_start(budget.budget_duration_sec)
 
-    await _commit_or_database_error(db)
+    await commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -219,4 +208,4 @@ async def delete_budget(
     budget = await _get_budget_or_404(db, budget_id)
 
     await db.delete(budget)
-    await _commit_or_database_error(db)
+    await commit_or_database_error(db)

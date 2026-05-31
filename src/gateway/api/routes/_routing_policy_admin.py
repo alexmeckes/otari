@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._routing_policy_models import CreateRoutingPolicyRequest
@@ -146,14 +145,3 @@ async def unset_default_policies(
             action="unset_default",
             change_note=change_note,
         )
-
-
-async def commit_or_database_error(db: AsyncSession) -> None:
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
