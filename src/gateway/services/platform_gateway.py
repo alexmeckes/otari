@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from typing import Any
+from typing import Any, NoReturn
 
 import httpx
 from any_llm.types.completion import CompletionUsage
@@ -14,6 +14,7 @@ from gateway.models.mcp import McpServerConfig
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
 _USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
+_PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES = {401, 402, 403, 404, 429}
 
 # Status codes that cause the gateway to move on to the next attempt in a
 # multi-attempt route. 401/403 are included because users configure multi-attempt
@@ -72,6 +73,20 @@ def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
     return detail if isinstance(detail, str) else fallback
 
 
+def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
+    if response.status_code in _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES:
+        detail = _safe_detail_from_platform(response, passthrough_fallback)
+        headers: dict[str, str] | None = None
+        if response.status_code == 429 and response.headers.get("Retry-After"):
+            headers = {"Retry-After": response.headers["Retry-After"]}
+        raise HTTPException(status_code=response.status_code, detail=detail, headers=headers)
+
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Authorization service unavailable",
+    )
+
+
 async def _post_platform(
     url: str,
     headers: dict[str, str],
@@ -122,23 +137,7 @@ async def resolve_platform_credentials(
         payload = response.json()
         return parse_resolve_payload(payload)
 
-    if response.status_code in {401, 402, 403, 404, 429}:
-        detail = _safe_detail_from_platform(response, "Authorization request rejected")
-        headers: dict[str, str] | None = None
-        if response.status_code == 429 and response.headers.get("Retry-After"):
-            headers = {"Retry-After": response.headers["Retry-After"]}
-        raise HTTPException(status_code=response.status_code, detail=detail, headers=headers)
-
-    if response.status_code == 422 or response.status_code >= 500:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Authorization service unavailable",
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="Authorization service unavailable",
-    )
+    _raise_platform_resolution_error(response, "Authorization request rejected")
 
 
 def parse_resolve_payload(payload: dict[str, Any]) -> ResolvedRoute:
@@ -248,23 +247,7 @@ async def resolve_platform_mcp_servers(
             for s in payload.get("servers", [])
         ]
 
-    if response.status_code in {401, 402, 403, 404, 429}:
-        detail = _safe_detail_from_platform(response, "MCP server resolution failed")
-        response_headers: dict[str, str] | None = None
-        if response.status_code == 429 and response.headers.get("Retry-After"):
-            response_headers = {"Retry-After": response.headers["Retry-After"]}
-        raise HTTPException(status_code=response.status_code, detail=detail, headers=response_headers)
-
-    if response.status_code == 422 or response.status_code >= 500:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Authorization service unavailable",
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="Authorization service unavailable",
-    )
+    _raise_platform_resolution_error(response, "MCP server resolution failed")
 
 
 async def report_platform_usage(
