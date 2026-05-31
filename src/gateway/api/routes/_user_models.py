@@ -5,7 +5,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
-from gateway.models.entities import UsageLog, User
+from gateway.api.routes._usage_models import UsageEntry
+from gateway.models.entities import User
 
 
 class CreateUserRequest(BaseModel):
@@ -57,41 +58,5 @@ class UpdateUserRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
-class UsageLogResponse(BaseModel):
+class UsageLogResponse(UsageEntry):
     """Response model for usage log."""
-
-    id: str
-    user_id: str | None
-    api_key_id: str | None
-    project_id: str | None
-    timestamp: str
-    model: str
-    provider: str | None
-    endpoint: str
-    prompt_tokens: int | None
-    completion_tokens: int | None
-    total_tokens: int | None
-    cost: float | None
-    status: str
-    error_message: str | None
-    tags: dict[str, Any]
-
-    @classmethod
-    def from_model(cls, log: UsageLog) -> "UsageLogResponse":
-        return cls(
-            id=log.id,
-            user_id=log.user_id,
-            api_key_id=log.api_key_id,
-            project_id=log.project_id,
-            timestamp=datetime_isoformat(log.timestamp),
-            model=log.model,
-            provider=log.provider,
-            endpoint=log.endpoint,
-            prompt_tokens=log.prompt_tokens,
-            completion_tokens=log.completion_tokens,
-            total_tokens=log.total_tokens,
-            cost=log.cost,
-            status=log.status,
-            error_message=log.error_message,
-            tags=log.tag_dict(),
-        )

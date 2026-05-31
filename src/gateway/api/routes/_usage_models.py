@@ -1,7 +1,7 @@
 """Response models and summary helpers for usage routes."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel
 
@@ -35,7 +35,7 @@ class UsageEntry(BaseModel):
     tags: dict[str, Any]
 
     @classmethod
-    def from_model(cls, log: UsageLog) -> "UsageEntry":
+    def from_model(cls, log: UsageLog) -> Self:
         return cls(
             id=log.id,
             user_id=log.user_id,
