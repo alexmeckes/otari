@@ -7,12 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, verify_api_key_or_master_key
 from gateway.api.routes._model_catalog import (
-    GatewayCatalogListResponse,
-    GatewayCatalogModel,
-    GatewayVendorListResponse,
-    GatewayVendorResponse,
-    ModelListResponse,
-    ModelObject,
     filter_catalog_records,
     gateway_model_from_catalog_record,
     load_catalog_records,
@@ -20,6 +14,14 @@ from gateway.api.routes._model_catalog import (
     model_from_catalog_record,
     paginate,
     vendor_catalog_from_records,
+)
+from gateway.api.routes._model_catalog_models import (
+    GatewayCatalogListResponse,
+    GatewayCatalogModel,
+    GatewayVendorListResponse,
+    GatewayVendorResponse,
+    ModelListResponse,
+    ModelObject,
 )
 from gateway.core.config import GatewayConfig
 
