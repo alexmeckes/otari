@@ -125,6 +125,13 @@ def _message_provider_call_context(request: MessagesRequest, config: GatewayConf
     )
 
 
+def _message_call_kwargs(provider_call_context: MessageProviderCallContext, *, stream: bool) -> dict[str, Any]:
+    call_kwargs = dict(provider_call_context.call_kwargs)
+    if stream:
+        call_kwargs["stream"] = True
+    return call_kwargs
+
+
 async def _message_execution_context(
     *,
     raw_request: Request,
@@ -296,11 +303,10 @@ async def create_message(
     message_context = execution_context.message_context
     rate_limit_info = execution_context.rate_limit_info
     provider_call_context = execution_context.provider_call_context
-    call_kwargs = provider_call_context.call_kwargs
+    call_kwargs = _message_call_kwargs(provider_call_context, stream=request.stream)
 
     try:
         if request.stream:
-            call_kwargs["stream"] = True
             msg_stream = await amessages(**call_kwargs)
             return _message_streaming_response(
                 stream_result=msg_stream,

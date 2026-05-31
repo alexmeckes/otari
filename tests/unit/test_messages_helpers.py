@@ -130,6 +130,36 @@ def test_message_provider_call_context_preserves_request_field_precedence(
     assert context.call_kwargs["max_tokens"] == 1024
 
 
+def test_message_call_kwargs_adds_stream_without_mutating_context() -> None:
+    context = messages.MessageProviderCallContext(
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        call_kwargs={"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"},
+    )
+
+    call_kwargs = messages._message_call_kwargs(context, stream=True)
+
+    assert call_kwargs == {
+        "model": "anthropic:claude-3-5-sonnet",
+        "api_key": "sk-test",
+        "stream": True,
+    }
+    assert context.call_kwargs == {"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"}
+
+
+def test_message_call_kwargs_preserves_explicit_non_streaming_flag() -> None:
+    context = messages.MessageProviderCallContext(
+        provider="anthropic",
+        model="claude-3-5-sonnet",
+        call_kwargs={"model": "anthropic:claude-3-5-sonnet", "stream": False},
+    )
+
+    assert messages._message_call_kwargs(context, stream=False) == {
+        "model": "anthropic:claude-3-5-sonnet",
+        "stream": False,
+    }
+
+
 @pytest.mark.asyncio
 async def test_message_execution_context_resolves_rate_limit_budget_and_provider(
     monkeypatch: pytest.MonkeyPatch,
