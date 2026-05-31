@@ -3,6 +3,7 @@
 from typing import Any
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 
 
 def test_stream_options_accepted_by_request_model() -> None:
@@ -52,8 +53,8 @@ def _build_completion_kwargs(
     request_fields = request.model_dump(exclude_unset=True)
     completion_kwargs: dict[str, Any] = {**(provider_kwargs or {}), **request_fields}
 
-    if request.stream and completion_kwargs.get("stream_options") is None:
-        completion_kwargs["stream_options"] = {"include_usage": True}
+    if request.stream:
+        ensure_stream_usage_options(completion_kwargs)
 
     return completion_kwargs
 
@@ -90,3 +91,17 @@ def test_preserves_client_stream_options() -> None:
         }
     )
     assert kwargs["stream_options"] == custom
+
+
+def test_preserves_empty_stream_options() -> None:
+    kwargs: dict[str, Any] = {"stream_options": {}}
+    ensure_stream_usage_options(kwargs)
+
+    assert kwargs["stream_options"] == {}
+
+
+def test_replaces_explicit_null_stream_options() -> None:
+    kwargs: dict[str, Any] = {"stream_options": None}
+    ensure_stream_usage_options(kwargs)
+
+    assert kwargs["stream_options"] == {"include_usage": True}

@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -116,8 +117,7 @@ async def run_streaming_with_fallback(
             **base_request_fields,
             "model": f"{attempt_provider.value}:{attempt.model}",
         }
-        if completion_kwargs.get("stream_options") is None:
-            completion_kwargs["stream_options"] = {"include_usage": True}
+        ensure_stream_usage_options(completion_kwargs)
         if pool_for_loop is None:
             return await acompletion(**completion_kwargs)  # type: ignore[return-value]
         kwargs = {

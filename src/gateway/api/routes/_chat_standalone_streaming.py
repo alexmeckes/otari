@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
+from gateway.api.routes._chat_stream_options import ensure_stream_usage_options
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tool_backend_errors import chat_tool_backend_failure_exception
 from gateway.api.routes._chat_tool_iterations import resolve_max_tool_iterations
@@ -57,8 +58,7 @@ async def run_standalone_streaming_chat(
         remaining_user_tools=tool_selection.remaining_user_tools,
     )
     completion_kwargs = {**provider_kwargs, **request_fields}
-    if completion_kwargs.get("stream_options") is None:
-        completion_kwargs["stream_options"] = {"include_usage": True}
+    ensure_stream_usage_options(completion_kwargs)
 
     try:
         stream = await _open_standalone_stream(
