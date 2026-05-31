@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._budget_checks import validate_user_request_budget
 from gateway.api.routes._helpers import resolve_openai_user_id
+from gateway.api.routes._usage import make_usage_log
 from gateway.core.config import GatewayConfig
-from gateway.models.entities import APIKey
+from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.provider_kwargs import get_provider_kwargs
 
@@ -31,6 +33,33 @@ class OpenAIProviderRequestContext:
             **kwargs,
             **self.provider_kwargs,
         }
+
+    def usage_log(
+        self,
+        *,
+        endpoint: str,
+        project_id: str | None = None,
+        status: str = "success",
+        error_message: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        total_tokens: int | None = None,
+        tags: Mapping[str, Any] | None = None,
+    ) -> UsageLog:
+        return make_usage_log(
+            api_key_id=self.api_key_id,
+            user_id=self.user_id,
+            project_id=project_id,
+            model=self.model,
+            provider=self.provider,
+            endpoint=endpoint,
+            status=status,
+            error_message=error_message,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            tags=tags,
+        )
 
 
 async def resolve_openai_provider_request_context(

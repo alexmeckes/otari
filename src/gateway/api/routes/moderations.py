@@ -13,7 +13,6 @@ from gateway.api.routes._usage import (
     apply_rate_limit_headers,
     log_and_raise_provider_error,
     log_usage_error,
-    make_usage_log,
 )
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
@@ -62,11 +61,7 @@ async def create_moderation(
     try:
         result = await amoderation(**moderation_kwargs)
 
-        usage_log = make_usage_log(
-            api_key_id=context.api_key_id,
-            user_id=context.user_id,
-            model=context.model,
-            provider=context.provider,
+        usage_log = context.usage_log(
             endpoint=_MODERATIONS_ENDPOINT,
             prompt_tokens=None,
             completion_tokens=0,

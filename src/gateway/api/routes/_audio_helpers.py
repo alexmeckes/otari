@@ -3,7 +3,6 @@ from typing import NoReturn
 from fastapi import HTTPException, status
 
 from gateway.api.routes._provider_context import OpenAIProviderRequestContext
-from gateway.api.routes._usage import make_usage_log
 from gateway.log_config import logger
 from gateway.services.log_writer import LogWriter
 
@@ -17,11 +16,7 @@ async def log_audio_usage(
     endpoint: str,
     error: str | None = None,
 ) -> None:
-    usage_log = make_usage_log(
-        api_key_id=context.api_key_id,
-        user_id=context.user_id,
-        model=context.model,
-        provider=context.provider,
+    usage_log = context.usage_log(
         endpoint=endpoint,
         status="success" if error is None else "error",
         error_message=error,
