@@ -62,8 +62,8 @@ class RouteTraceResponse(BaseModel):
             tags=trace.tag_dict(),
             guardrails=trace.guardrail_dict(),
             context=trace.context_dict(),
-            candidates=list(trace.candidates) if trace.candidates else [],
-            attempts=list(trace.attempts) if trace.attempts else [],
+            candidates=trace.candidate_list(),
+            attempts=trace.attempt_list(),
         )
 
 
@@ -95,8 +95,7 @@ class RouteTraceSummaryResponse(BaseModel):
 
 
 def _trace_latency_ms(trace: RouteTrace) -> float | None:
-    attempts = trace.attempts if isinstance(trace.attempts, list) else []
-    for attempt in attempts:
+    for attempt in trace.attempt_list():
         if not isinstance(attempt, dict) or attempt.get("status") != "success":
             continue
         duration = attempt_duration_ms(attempt)

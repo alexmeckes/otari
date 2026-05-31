@@ -420,6 +420,16 @@ class RouteTrace(Base):
             return self.context
         return {}
 
+    def candidate_list(self) -> list[dict[str, Any]]:
+        if isinstance(self.candidates, list):
+            return self.candidates
+        return []
+
+    def attempt_list(self) -> list[dict[str, Any]]:
+        if isinstance(self.attempts, list):
+            return self.attempts
+        return []
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -445,8 +455,8 @@ class RouteTrace(Base):
             "tags": self.tag_dict(),
             "guardrails": self.guardrail_dict(),
             "context": self.context_dict(),
-            "candidates": self.candidates,
-            "attempts": self.attempts,
+            "candidates": self.candidate_list(),
+            "attempts": self.attempt_list(),
         }
 
 
