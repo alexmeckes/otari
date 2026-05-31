@@ -45,6 +45,25 @@ def start_budget_period(subject: User | Project, budget: Budget, start: datetime
     )
 
 
+def _new_budget_reset_log(
+    subject: User | Project,
+    budget: Budget,
+    *,
+    previous_spend: float,
+    reset_at: datetime,
+    next_reset_at: datetime | None,
+) -> BudgetResetLog:
+    reset_log_kwargs = {
+        "budget_id": budget.budget_id,
+        "previous_spend": previous_spend,
+        "reset_at": reset_at,
+        "next_reset_at": next_reset_at,
+    }
+    if isinstance(subject, User):
+        return BudgetResetLog(user_id=subject.user_id, **reset_log_kwargs)
+    return BudgetResetLog(project_id=subject.project_id, **reset_log_kwargs)
+
+
 async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: datetime) -> None:
     """Reset user's budget spend and schedule next reset."""
 
@@ -54,9 +73,9 @@ async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: d
     user.spend = 0.0
     start_budget_period(user, budget, now)
 
-    reset_log = BudgetResetLog(
-        user_id=user.user_id,
-        budget_id=budget.budget_id,
+    reset_log = _new_budget_reset_log(
+        user,
+        budget,
         previous_spend=previous_spend,
         reset_at=now,
         next_reset_at=user.next_budget_reset_at,
@@ -93,9 +112,9 @@ async def _cas_reset_user_budget(db: AsyncSession, user: User, budget: Budget, n
 
     rowcount = getattr(result, "rowcount", 0)
     if rowcount and rowcount > 0:
-        reset_log = BudgetResetLog(
-            user_id=user.user_id,
-            budget_id=budget.budget_id,
+        reset_log = _new_budget_reset_log(
+            user,
+            budget,
             previous_spend=float(user.spend),
             reset_at=now,
             next_reset_at=next_reset_at,
@@ -123,9 +142,9 @@ async def reset_project_budget(db: AsyncSession, project: Project, budget: Budge
     project.spend = 0.0
     start_budget_period(project, budget, now)
 
-    reset_log = BudgetResetLog(
-        project_id=project.project_id,
-        budget_id=budget.budget_id,
+    reset_log = _new_budget_reset_log(
+        project,
+        budget,
         previous_spend=previous_spend,
         reset_at=now,
         next_reset_at=project.next_budget_reset_at,
@@ -161,9 +180,9 @@ async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: 
 
     rowcount = getattr(result, "rowcount", 0)
     if rowcount and rowcount > 0:
-        reset_log = BudgetResetLog(
-            project_id=project.project_id,
-            budget_id=budget.budget_id,
+        reset_log = _new_budget_reset_log(
+            project,
+            budget,
             previous_spend=float(project.spend),
             reset_at=now,
             next_reset_at=next_reset_at,
