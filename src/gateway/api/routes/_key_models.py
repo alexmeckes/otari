@@ -50,7 +50,7 @@ class KeyInfo(BaseModel):
             last_used_at=key.last_used_at.isoformat() if key.last_used_at else None,
             expires_at=key.expires_at.isoformat() if key.expires_at else None,
             is_active=bool(key.is_active),
-            metadata=dict(key.metadata_) if key.metadata_ else {},
+            metadata=key.metadata_dict(),
         )
 
 

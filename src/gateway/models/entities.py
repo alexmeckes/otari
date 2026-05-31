@@ -30,6 +30,11 @@ class APIKey(Base):
     usage_logs = relationship("UsageLog", back_populates="api_key", passive_deletes=True)
     route_traces = relationship("RouteTrace", back_populates="api_key", passive_deletes=True)
 
+    def metadata_dict(self) -> dict[str, Any]:
+        if isinstance(self.metadata_, dict):
+            return self.metadata_
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -40,7 +45,7 @@ class APIKey(Base):
             "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "is_active": self.is_active,
-            "metadata": self.metadata_,
+            "metadata": self.metadata_dict(),
         }
 
 
@@ -125,6 +130,11 @@ class User(Base):
     route_traces = relationship("RouteTrace", back_populates="user", passive_deletes=True)
     reset_logs = relationship("BudgetResetLog", back_populates="user", passive_deletes=True)
 
+    def metadata_dict(self) -> dict[str, Any]:
+        if isinstance(self.metadata_, dict):
+            return self.metadata_
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -137,7 +147,7 @@ class User(Base):
             "blocked": self.blocked,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "metadata": self.metadata_,
+            "metadata": self.metadata_dict(),
         }
 
 
@@ -279,6 +289,11 @@ class Project(Base):
     route_traces = relationship("RouteTrace", back_populates="project", passive_deletes=True)
     reset_logs = relationship("BudgetResetLog", back_populates="project", passive_deletes=True)
 
+    def metadata_dict(self) -> dict[str, Any]:
+        if isinstance(self.metadata_, dict):
+            return self.metadata_
+        return {}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
         return {
@@ -291,7 +306,7 @@ class Project(Base):
             "next_budget_reset_at": self.next_budget_reset_at.isoformat() if self.next_budget_reset_at else None,
             "blocked": self.blocked,
             "is_active": self.is_active,
-            "metadata": self.metadata_,
+            "metadata": self.metadata_dict(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

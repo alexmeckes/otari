@@ -59,7 +59,7 @@ class ProjectResponse(BaseModel):
             next_budget_reset_at=project.next_budget_reset_at.isoformat() if project.next_budget_reset_at else None,
             blocked=bool(project.blocked),
             is_active=bool(project.is_active),
-            metadata=dict(project.metadata_) if project.metadata_ else {},
+            metadata=project.metadata_dict(),
             created_at=project.created_at.isoformat(),
             updated_at=project.updated_at.isoformat(),
         )

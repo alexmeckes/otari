@@ -43,7 +43,7 @@ class UserResponse(BaseModel):
             blocked=bool(user.blocked),
             created_at=user.created_at.isoformat(),
             updated_at=user.updated_at.isoformat(),
-            metadata=dict(user.metadata_) if user.metadata_ else {},
+            metadata=user.metadata_dict(),
         )
 
 
