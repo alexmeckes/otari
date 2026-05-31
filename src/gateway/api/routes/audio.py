@@ -8,10 +8,10 @@ from any_llm import AnyLLM, aspeech, atranscription
 from any_llm.types.audio import Transcription
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._audio_models import AudioSpeechRequest
 from gateway.api.routes._helpers import resolve_user_id
 from gateway.api.routes._usage import rate_limit_headers
 from gateway.core.config import GatewayConfig
@@ -164,18 +164,6 @@ async def create_transcription(
             response.headers[key] = value
 
     return result.model_dump()
-
-
-class AudioSpeechRequest(BaseModel):
-    """OpenAI-compatible audio speech (TTS) request."""
-
-    model: str
-    input: str
-    voice: str
-    instructions: str | None = None
-    response_format: str | None = None
-    speed: float | None = None
-    user: str | None = None
 
 
 @router.post(
