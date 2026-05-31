@@ -12,7 +12,7 @@ from gateway.metrics import record_cost, record_tokens
 from gateway.models.entities import UsageLog
 from gateway.rate_limit import RateLimitInfo
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
+from gateway.services.pricing_service import find_model_pricing, log_missing_pricing, token_usage_cost
 
 
 def rate_limit_headers(info: RateLimitInfo) -> dict[str, str]:
@@ -108,9 +108,11 @@ async def log_usage(
 
         pricing = await find_model_pricing(db, provider, model, as_of=usage_log.timestamp)
         if pricing:
-            cost = (usage_data.prompt_tokens / 1_000_000) * pricing.input_price_per_million + (
-                usage_data.completion_tokens / 1_000_000
-            ) * pricing.output_price_per_million
+            cost = token_usage_cost(
+                pricing,
+                prompt_tokens=usage_data.prompt_tokens,
+                completion_tokens=usage_data.completion_tokens,
+            )
             usage_log.cost = cost
             record_cost(str(provider or ""), model, cost)
         else:

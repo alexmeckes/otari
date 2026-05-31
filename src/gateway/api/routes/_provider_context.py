@@ -21,7 +21,7 @@ from gateway.core.config import GatewayConfig
 from gateway.models.entities import APIKey, UsageLog
 from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing, log_missing_pricing
+from gateway.services.pricing_service import find_model_pricing, input_metered_cost, log_missing_pricing
 from gateway.services.provider_kwargs import get_provider_kwargs
 
 
@@ -134,7 +134,7 @@ class OpenAIProviderRequestContext:
         pricing = await find_model_pricing(db, self.provider, self.model, as_of=usage_log.timestamp)
         if pricing:
             if units is not None and (units or not require_positive_units):
-                usage_log.cost = (units / price_divisor) * pricing.input_price_per_million
+                usage_log.cost = input_metered_cost(pricing, units=units, price_divisor=price_divisor)
         else:
             if missing_cost is not None:
                 usage_log.cost = missing_cost
