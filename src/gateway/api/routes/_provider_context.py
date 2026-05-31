@@ -112,15 +112,15 @@ class OpenAIProviderRequestContext:
             total_tokens=total_tokens,
         )
         if apply_cost:
-            await self.apply_input_metered_cost(
-                db,
-                usage_log,
-                units=cost_units,
-                price_divisor=price_divisor,
-                require_positive_units=require_positive_units,
-                missing_cost=missing_cost,
-                warn_missing_pricing=warn_missing_pricing,
-            )
+            pricing = await find_model_pricing(db, self.provider, self.model, as_of=usage_log.timestamp)
+            if pricing:
+                if cost_units is not None and (cost_units or not require_positive_units):
+                    usage_log.cost = input_metered_cost(pricing, units=cost_units, price_divisor=price_divisor)
+            else:
+                if missing_cost is not None:
+                    usage_log.cost = missing_cost
+                if warn_missing_pricing:
+                    log_missing_pricing(self.provider, self.model)
         await log_writer.put(usage_log)
         return usage_log
 
@@ -151,27 +151,6 @@ class OpenAIProviderRequestContext:
             endpoint=endpoint,
             error=error,
         )
-
-    async def apply_input_metered_cost(
-        self,
-        db: AsyncSession,
-        usage_log: UsageLog,
-        *,
-        units: float | None,
-        price_divisor: float = 1_000_000,
-        require_positive_units: bool = False,
-        missing_cost: float | None = None,
-        warn_missing_pricing: bool = True,
-    ) -> None:
-        pricing = await find_model_pricing(db, self.provider, self.model, as_of=usage_log.timestamp)
-        if pricing:
-            if units is not None and (units or not require_positive_units):
-                usage_log.cost = input_metered_cost(pricing, units=units, price_divisor=price_divisor)
-        else:
-            if missing_cost is not None:
-                usage_log.cost = missing_cost
-            if warn_missing_pricing:
-                log_missing_pricing(self.provider, self.model)
 
 
 async def resolve_openai_provider_request_context(
