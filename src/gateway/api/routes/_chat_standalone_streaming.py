@@ -1,8 +1,6 @@
-import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-import httpx
 from any_llm import AnyLLM
 from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
 from fastapi import HTTPException, status
@@ -10,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
+from gateway.api.routes._chat_standalone_errors import standalone_provider_failure_exception
 from gateway.api.routes._chat_streaming_response import build_chat_streaming_response
 from gateway.api.routes._chat_tools import ChatToolSelection
 from gateway.api.routes._usage import log_usage
@@ -102,15 +101,7 @@ async def run_standalone_streaming_chat(
                 error=str(exc),
             )
         logger.error("Stream creation failed for %s:%s: %s", provider, model, exc)
-        if isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="LLM provider timeout",
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="LLM provider error",
-        ) from exc
+        raise standalone_provider_failure_exception(exc) from exc
 
     return build_chat_streaming_response(
         stream=stream,
