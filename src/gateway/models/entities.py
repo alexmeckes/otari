@@ -14,6 +14,10 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _uuid_str() -> str:
+    return str(uuid.uuid4())
+
+
 def _dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -82,7 +86,7 @@ class Budget(Base):
 
     __tablename__ = "budgets"
 
-    budget_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    budget_id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     max_budget: Mapped[float | None] = mapped_column()
     budget_duration_sec: Mapped[int | None] = mapped_column()
     scope_type: Mapped[str] = mapped_column(default="entity", index=True)
@@ -215,7 +219,7 @@ class RoutingPolicy(Base):
 
     __tablename__ = "routing_policies"
 
-    policy_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    policy_id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     name: Mapped[str] = mapped_column()
     strategy: Mapped[str] = mapped_column()
     config_: Mapped[dict[str, Any]] = mapped_column("config", JSON, default=dict)
@@ -259,7 +263,7 @@ class RoutingPolicyRevision(Base):
         Index("ix_routing_policy_revisions_policy_id_revision", "policy_id", "revision", unique=True),
     )
 
-    revision_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    revision_id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     policy_id: Mapped[str] = mapped_column(index=True)
     revision: Mapped[int] = mapped_column()
     action: Mapped[str] = mapped_column()
@@ -296,7 +300,7 @@ class Project(Base):
 
     __tablename__ = "projects"
 
-    project_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     name: Mapped[str | None] = mapped_column()
     routing_policy_id: Mapped[str | None] = mapped_column(
         ForeignKey("routing_policies.policy_id", ondelete="SET NULL"),
@@ -352,7 +356,7 @@ class UsageLog(Base):
         Index("ix_usage_logs_project_id_timestamp", "project_id", "timestamp"),
     )
 
-    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     api_key_id: Mapped[str | None] = mapped_column(ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
     project_id: Mapped[str | None] = mapped_column(
@@ -411,7 +415,7 @@ class RouteTrace(Base):
         Index("ix_route_traces_user_id_timestamp", "user_id", "timestamp"),
     )
 
-    trace_id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
+    trace_id: Mapped[str] = mapped_column(primary_key=True, default=_uuid_str)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
     api_key_id: Mapped[str | None] = mapped_column(ForeignKey("api_keys.id", ondelete="SET NULL"), index=True)
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
