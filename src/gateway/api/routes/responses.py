@@ -96,13 +96,7 @@ async def _run_provider_native_response(
             detail=f"Provider '{context.provider.value}' does not support the Responses API",
         )
 
-    call_kwargs, stream = native_response_call_kwargs(
-        request_body,
-        context.provider_kwargs,
-        context.provider,
-        context.model,
-        context.user_id,
-    )
+    call_kwargs, stream = native_response_call_kwargs(request_body, context)
 
     try:
         if stream:
@@ -112,12 +106,8 @@ async def _run_provider_native_response(
                 stream_result=stream_result,
                 db=db,
                 log_writer=log_writer,
-                api_key_id=context.api_key_id,
-                provider=context.provider,
-                model=context.model,
-                user_id=context.user_id,
+                context=context,
                 request_body=request_body,
-                rate_limit_info=context.rate_limit_info,
             )
 
         result = await aresponses(**call_kwargs)
@@ -125,10 +115,7 @@ async def _run_provider_native_response(
         await log_native_response_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=context.api_key_id,
-            provider=context.provider,
-            model=context.model,
-            user_id=context.user_id,
+            context=context,
             request_body=request_body,
             usage_data=usage_data,
         )
@@ -139,10 +126,7 @@ async def _run_provider_native_response(
         await log_native_response_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=context.api_key_id,
-            provider=context.provider,
-            model=context.model,
-            user_id=context.user_id,
+            context=context,
             request_body=request_body,
             error=str(e),
         )
