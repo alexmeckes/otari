@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from any_llm import AnyLLM, amessages
@@ -45,6 +46,12 @@ _PROVIDER_ERROR = "The request could not be completed by the provider"
 _MESSAGES_ENDPOINT = "/v1/messages"
 
 
+@dataclass(frozen=True)
+class MessageRequestContext:
+    api_key_id: str | None
+    user_id: str
+
+
 def _message_completion_usage(input_tokens: int | None, output_tokens: int | None) -> CompletionUsage:
     prompt_tokens = input_tokens or 0
     completion_tokens = output_tokens or 0
@@ -59,6 +66,38 @@ def _message_response_usage(result: MessageResponse) -> CompletionUsage | None:
     if not result.usage:
         return None
     return _message_completion_usage(result.usage.input_tokens, result.usage.output_tokens)
+
+
+def _resolve_message_request_context(
+    request: MessagesRequest,
+    auth_result: tuple[APIKey | None, bool],
+) -> MessageRequestContext:
+    api_key, is_master_key = auth_result
+    user_from_metadata = request.metadata.get("user_id") if request.metadata else None
+    user_id = resolve_user_id(
+        user_id_from_request=str(user_from_metadata) if user_from_metadata else None,
+        api_key=api_key,
+        is_master_key=is_master_key,
+        master_key_error=_anthropic_error(
+            _ERR_INVALID_REQUEST,
+            _MASTER_KEY_USER_REQUIRED,
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        no_api_key_error=_anthropic_error(
+            _ERR_API,
+            _API_KEY_VALIDATION_FAILED,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ),
+        no_user_error=_anthropic_error(
+            _ERR_API,
+            _API_KEY_NO_USER,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ),
+    )
+    return MessageRequestContext(
+        api_key_id=api_key.id if api_key else None,
+        user_id=user_id,
+    )
 
 
 async def _log_message_usage(
@@ -110,33 +149,11 @@ async def create_message(
     log_writer: Annotated[LogWriter, Depends(get_log_writer)],
 ) -> dict[str, Any] | StreamingResponse:
     """Anthropic Messages API-compatible endpoint."""
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-    user_from_metadata = request.metadata.get("user_id") if request.metadata else None
-    user_id = resolve_user_id(
-        user_id_from_request=str(user_from_metadata) if user_from_metadata else None,
-        api_key=api_key,
-        is_master_key=is_master_key,
-        master_key_error=_anthropic_error(
-            _ERR_INVALID_REQUEST,
-            _MASTER_KEY_USER_REQUIRED,
-            status.HTTP_400_BAD_REQUEST,
-        ),
-        no_api_key_error=_anthropic_error(
-            _ERR_API,
-            _API_KEY_VALIDATION_FAILED,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ),
-        no_user_error=_anthropic_error(
-            _ERR_API,
-            _API_KEY_NO_USER,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ),
-    )
+    message_context = _resolve_message_request_context(request, auth_result)
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
+    rate_limit_info = check_rate_limit(raw_request, message_context.user_id)
 
-    await validate_user_request_budget(db, user_id, request.model, strategy=config.budget_strategy)
+    await validate_user_request_budget(db, message_context.user_id, request.model, strategy=config.budget_strategy)
 
     provider, model = AnyLLM.split_model_provider(request.model)
 
@@ -154,10 +171,10 @@ async def create_message(
                 await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
-                    api_key_id=api_key_id,
+                    api_key_id=message_context.api_key_id,
                     model=model,
                     provider=provider,
-                    user_id=user_id,
+                    user_id=message_context.user_id,
                     usage_data=usage_data,
                 )
 
@@ -165,10 +182,10 @@ async def create_message(
                 await _log_message_usage(
                     db=db,
                     log_writer=log_writer,
-                    api_key_id=api_key_id,
+                    api_key_id=message_context.api_key_id,
                     model=model,
                     provider=provider,
-                    user_id=user_id,
+                    user_id=message_context.user_id,
                     error=error,
                 )
 
@@ -195,10 +212,10 @@ async def create_message(
             await _log_message_usage(
                 db=db,
                 log_writer=log_writer,
-                api_key_id=api_key_id,
+                api_key_id=message_context.api_key_id,
                 model=model,
                 provider=provider,
-                user_id=user_id,
+                user_id=message_context.user_id,
                 usage_data=usage_data,
             )
 
@@ -208,10 +225,10 @@ async def create_message(
         await _log_message_usage(
             db=db,
             log_writer=log_writer,
-            api_key_id=api_key_id,
+            api_key_id=message_context.api_key_id,
             model=model,
             provider=provider,
-            user_id=user_id,
+            user_id=message_context.user_id,
             error=str(e),
         )
         logger.error("Provider call failed for %s:%s: %s", provider, model, e)

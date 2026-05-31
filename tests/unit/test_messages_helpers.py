@@ -1,11 +1,72 @@
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from any_llm.types.completion import CompletionUsage
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.routes import messages
+from gateway.api.routes._message_models import MessagesRequest
+from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
+
+
+def _messages_request(metadata: dict[str, Any] | None = None) -> MessagesRequest:
+    return MessagesRequest(
+        model="anthropic:claude-3-5-sonnet",
+        messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=1024,
+        metadata=metadata,
+    )
+
+
+def _api_key(*, user_id: str | None = "api-user") -> APIKey:
+    return cast(APIKey, SimpleNamespace(id="key-1", user_id=user_id))
+
+
+def test_resolve_message_request_context_uses_master_key_metadata_user() -> None:
+    context = messages._resolve_message_request_context(
+        _messages_request({"user_id": "metadata-user"}),
+        (None, True),
+    )
+
+    assert context.api_key_id is None
+    assert context.user_id == "metadata-user"
+
+
+def test_resolve_message_request_context_uses_api_key_fallback() -> None:
+    context = messages._resolve_message_request_context(
+        _messages_request(),
+        (_api_key(), False),
+    )
+
+    assert context.api_key_id == "key-1"
+    assert context.user_id == "api-user"
+
+
+def test_resolve_message_request_context_metadata_overrides_api_key_user() -> None:
+    context = messages._resolve_message_request_context(
+        _messages_request({"user_id": "metadata-user"}),
+        (_api_key(), False),
+    )
+
+    assert context.api_key_id == "key-1"
+    assert context.user_id == "metadata-user"
+
+
+def test_resolve_message_request_context_preserves_master_key_error_shape() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        messages._resolve_message_request_context(_messages_request(), (None, True))
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "When using master key, 'metadata.user_id' is required in request body",
+        },
+    }
 
 
 @pytest.mark.asyncio
