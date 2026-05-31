@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from typing import Any
 
+from gateway.services.pricing_service import pricing_model_ref
+
 
 def attempt_model_key(attempt: Mapping[str, Any]) -> str | None:
     model_key = attempt.get("model_key")
@@ -12,7 +14,7 @@ def attempt_model_key(attempt: Mapping[str, Any]) -> str | None:
     provider = attempt.get("provider")
     model = attempt.get("model")
     if isinstance(provider, str) and provider and isinstance(model, str) and model:
-        return f"{provider}:{model}"
+        return pricing_model_ref(provider, model)
     return None
 
 
