@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from any_llm import AnyLLM
@@ -15,6 +15,7 @@ from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog, Project, User
 from gateway.repositories.users_repository import get_active_user
 from gateway.services import budget_alerts as _budget_alerts
+from gateway.services import budget_periods as _budget_periods
 from gateway.services import budget_tags as _budget_tags
 from gateway.services.pricing_service import find_model_pricing
 
@@ -31,34 +32,15 @@ reset_tag_budget = _budget_tags.reset_tag_budget
 _tag_scope_id = _budget_tags.tag_scope_id
 _matching_tag_budgets = _budget_tags.matching_tag_budgets
 _cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
-
-
-def calculate_next_reset(start: datetime, duration_sec: int) -> datetime:
-    """Calculate next budget reset datetime.
-
-    Args:
-        start: Starting datetime for the budget period
-        duration_sec: Duration in seconds
-
-    Returns:
-        datetime when the budget should next reset
-
-    """
-    return start + timedelta(seconds=duration_sec)
+calculate_next_reset = _budget_periods.calculate_next_reset
+_as_utc = _budget_periods.as_utc
 
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
-    started_at = start or datetime.now(UTC)
-    subject.budget_started_at = started_at
-    subject.next_budget_reset_at = (
-        calculate_next_reset(started_at, budget.budget_duration_sec) if budget.budget_duration_sec else None
+    subject.budget_started_at, subject.next_budget_reset_at = _budget_periods.budget_period_window(
+        budget.budget_duration_sec,
+        start,
     )
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None or value.tzinfo is not None:
-        return value
-    return value.replace(tzinfo=UTC)
 
 
 async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: datetime) -> None:
@@ -89,7 +71,7 @@ async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: d
 
 
 async def _cas_reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: datetime) -> User:
-    next_reset_at = calculate_next_reset(now, budget.budget_duration_sec) if budget.budget_duration_sec else None
+    _, next_reset_at = _budget_periods.budget_period_window(budget.budget_duration_sec, now)
 
     result = await db.execute(
         update(User)
@@ -158,7 +140,7 @@ async def reset_project_budget(db: AsyncSession, project: Project, budget: Budge
 
 
 async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: Budget, now: datetime) -> Project:
-    next_reset_at = calculate_next_reset(now, budget.budget_duration_sec) if budget.budget_duration_sec else None
+    _, next_reset_at = _budget_periods.budget_period_window(budget.budget_duration_sec, now)
 
     result = await db.execute(
         update(Project)

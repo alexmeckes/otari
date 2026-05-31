@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -13,20 +13,11 @@ from gateway.log_config import logger
 from gateway.metrics import record_budget_exceeded
 from gateway.models.entities import Budget, BudgetAlert, BudgetResetLog
 from gateway.services.budget_alerts import record_budget_alerts
+from gateway.services.budget_periods import as_utc, budget_period_window
 
 TAG_BUDGET_SCOPE = "tag"
 
 IsModelFree = Callable[[AsyncSession, str], Awaitable[bool]]
-
-
-def _calculate_next_reset(start: datetime, duration_sec: int) -> datetime:
-    return start + timedelta(seconds=duration_sec)
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None or value.tzinfo is not None:
-        return value
-    return value.replace(tzinfo=UTC)
 
 
 async def _get_budget(db: AsyncSession, budget_id: str) -> Budget | None:
@@ -80,12 +71,7 @@ async def reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> N
     """Reset a tag-scoped budget group's spend and schedule next reset."""
     previous_spend = float(budget.spend)
     budget.spend = 0.0
-    budget.budget_started_at = now
-    budget.next_budget_reset_at = (
-        _calculate_next_reset(now, budget.budget_duration_sec)
-        if budget.budget_duration_sec
-        else None
-    )
+    budget.budget_started_at, budget.next_budget_reset_at = budget_period_window(budget.budget_duration_sec, now)
     db.add(
         BudgetResetLog(
             budget_id=budget.budget_id,
@@ -104,7 +90,7 @@ async def reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> N
 
 
 async def cas_reset_tag_budget(db: AsyncSession, budget: Budget, now: datetime) -> Budget:
-    next_reset_at = _calculate_next_reset(now, budget.budget_duration_sec) if budget.budget_duration_sec else None
+    _, next_reset_at = budget_period_window(budget.budget_duration_sec, now)
     result = await db.execute(
         update(Budget)
         .where(
@@ -173,7 +159,7 @@ async def validate_tag_budgets(
                 detail=f"Budget group '{budget.budget_id}' is blocked",
             )
 
-        next_budget_reset_at = _as_utc(budget.next_budget_reset_at)
+        next_budget_reset_at = as_utc(budget.next_budget_reset_at)
         if next_budget_reset_at and now >= next_budget_reset_at:
             if normalized_strategy == "cas":
                 budget = await cas_reset_tag_budget(db, budget, now)

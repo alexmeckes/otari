@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,20 +15,14 @@ from gateway.api.routes._budget_models import (
 from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhook
+from gateway.services.budget_periods import budget_period_window
 from gateway.services.budget_service import (
     TAG_BUDGET_SCOPE,
-    calculate_next_reset,
     normalize_alert_thresholds,
     normalize_alert_webhook_url,
 )
 
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
-
-
-def _budget_window_start(duration_sec: int | None) -> tuple[datetime, datetime | None]:
-    now = datetime.now(UTC)
-    next_reset_at = calculate_next_reset(now, duration_sec) if duration_sec else None
-    return now, next_reset_at
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -42,7 +35,7 @@ async def create_budget(
     budget_started_at = None
     next_budget_reset_at = None
     if request.scope_type == TAG_BUDGET_SCOPE:
-        budget_started_at, next_budget_reset_at = _budget_window_start(request.budget_duration_sec)
+        budget_started_at, next_budget_reset_at = budget_period_window(request.budget_duration_sec)
 
     budget = Budget(
         max_budget=request.max_budget,
@@ -181,7 +174,7 @@ async def update_budget(
     if request.is_active is not None:
         budget.is_active = request.is_active
     if budget.scope_type == TAG_BUDGET_SCOPE and budget.budget_started_at is None:
-        budget.budget_started_at, budget.next_budget_reset_at = _budget_window_start(budget.budget_duration_sec)
+        budget.budget_started_at, budget.next_budget_reset_at = budget_period_window(budget.budget_duration_sec)
 
     await commit_or_database_error(db)
     await db.refresh(budget)
