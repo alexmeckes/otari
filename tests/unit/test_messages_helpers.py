@@ -143,14 +143,14 @@ def test_message_provider_call_context_preserves_request_field_precedence(
     assert context.call_kwargs["max_tokens"] == 1024
 
 
-def test_message_call_kwargs_adds_stream_without_mutating_context() -> None:
+def test_message_provider_call_context_adds_stream_without_mutating_context() -> None:
     context = messages.MessageProviderCallContext(
         provider="anthropic",
         model="claude-3-5-sonnet",
         call_kwargs={"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"},
     )
 
-    call_kwargs = messages._message_call_kwargs(context, stream=True)
+    call_kwargs = context.call_kwargs_for(stream=True)
 
     assert call_kwargs == {
         "model": "anthropic:claude-3-5-sonnet",
@@ -160,14 +160,14 @@ def test_message_call_kwargs_adds_stream_without_mutating_context() -> None:
     assert context.call_kwargs == {"model": "anthropic:claude-3-5-sonnet", "api_key": "sk-test"}
 
 
-def test_message_call_kwargs_preserves_explicit_non_streaming_flag() -> None:
+def test_message_provider_call_context_preserves_explicit_non_streaming_flag() -> None:
     context = messages.MessageProviderCallContext(
         provider="anthropic",
         model="claude-3-5-sonnet",
         call_kwargs={"model": "anthropic:claude-3-5-sonnet", "stream": False},
     )
 
-    assert messages._message_call_kwargs(context, stream=False) == {
+    assert context.call_kwargs_for(stream=False) == {
         "model": "anthropic:claude-3-5-sonnet",
         "stream": False,
     }

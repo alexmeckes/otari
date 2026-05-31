@@ -58,6 +58,12 @@ class MessageProviderCallContext:
     model: str
     call_kwargs: dict[str, Any]
 
+    def call_kwargs_for(self, *, stream: bool) -> dict[str, Any]:
+        call_kwargs = dict(self.call_kwargs)
+        if stream:
+            call_kwargs["stream"] = True
+        return call_kwargs
+
 
 @dataclass(frozen=True)
 class MessageExecutionContext:
@@ -133,13 +139,6 @@ def _message_provider_call_context(request: MessagesRequest, config: GatewayConf
         model=model,
         call_kwargs={**provider_kwargs, **request_fields},
     )
-
-
-def _message_call_kwargs(provider_call_context: MessageProviderCallContext, *, stream: bool) -> dict[str, Any]:
-    call_kwargs = dict(provider_call_context.call_kwargs)
-    if stream:
-        call_kwargs["stream"] = True
-    return call_kwargs
 
 
 async def _message_execution_context(
@@ -296,7 +295,7 @@ async def _message_provider_response(
     execution_context: MessageExecutionContext,
 ) -> dict[str, Any] | StreamingResponse:
     provider_call_context = execution_context.provider_call_context
-    call_kwargs = _message_call_kwargs(provider_call_context, stream=request.stream)
+    call_kwargs = provider_call_context.call_kwargs_for(stream=request.stream)
 
     if request.stream:
         msg_stream = await amessages(**call_kwargs)
