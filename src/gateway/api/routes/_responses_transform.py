@@ -13,7 +13,7 @@ from openresponses_types.types import Usage as OpenResponsesUsage
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
-from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, normalize_routing_model_selector
+from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, require_routing_model_selector
 
 
 class ResponsesRequest(BaseModel):
@@ -33,10 +33,7 @@ class ResponsesRequest(BaseModel):
     @classmethod
     def normalize_model(cls, v: Any) -> str:
         """Accept omitted/null/case-insensitive default_routing sentinels."""
-        normalized = normalize_routing_model_selector(v)
-        if not normalized:
-            raise ValueError("model must not be blank")
-        return normalized
+        return require_routing_model_selector(v)
 
 
 def usage_to_completion_usage(

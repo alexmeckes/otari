@@ -6,7 +6,7 @@ from gateway.services.routing_policy_service import (
     DEFAULT_ROUTING_MODEL,
     RoutingCandidate,
     RoutingPlan,
-    normalize_routing_model_selector,
+    require_routing_model_selector,
 )
 
 
@@ -28,10 +28,7 @@ class ResolveRoutingRequest(BaseModel):
     @classmethod
     def normalize_model(cls, v: Any) -> str:
         """Accept omitted/null/case-insensitive default_routing sentinels."""
-        normalized = normalize_routing_model_selector(v)
-        if not normalized:
-            raise ValueError("model must not be blank")
-        return normalized
+        return require_routing_model_selector(v)
 
 
 class ResolvedRoutingCandidateResponse(BaseModel):

@@ -59,6 +59,14 @@ def normalize_routing_model_selector(model: Any) -> str:
     return normalized
 
 
+def require_routing_model_selector(model: Any) -> str:
+    """Normalize a routing model selector and reject blank values."""
+    normalized = normalize_routing_model_selector(model)
+    if not normalized:
+        raise ValueError("model must not be blank")
+    return normalized
+
+
 class RoutingPolicyError(Exception):
     """Error that can be surfaced as an HTTP routing-policy failure."""
 

@@ -8,7 +8,7 @@ from gateway.services.mcp_loop import MAX_TOOL_ITERATIONS_CAP
 from gateway.services.routing_policy_service import (
     DEFAULT_ROUTE_TRACE_ENDPOINT,
     DEFAULT_ROUTING_MODEL,
-    normalize_routing_model_selector,
+    require_routing_model_selector,
 )
 
 
@@ -24,10 +24,7 @@ class ChatCompletionRequest(BaseModel):
     @classmethod
     def normalize_model(cls, v: Any) -> str:
         """Accept omitted/null/case-insensitive default_routing sentinels."""
-        normalized = normalize_routing_model_selector(v)
-        if not normalized:
-            raise ValueError("model must not be blank")
-        return normalized
+        return require_routing_model_selector(v)
 
     @field_validator("messages")
     @classmethod
