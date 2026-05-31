@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from gateway.api.routes._response_datetime import optional_datetime_isoformat
 from gateway.models.entities import APIKey
 
 
@@ -47,8 +48,8 @@ class KeyInfo(BaseModel):
             key_name=str(key.key_name) if key.key_name else None,
             user_id=str(key.user_id) if key.user_id else None,
             created_at=key.created_at.isoformat(),
-            last_used_at=key.last_used_at.isoformat() if key.last_used_at else None,
-            expires_at=key.expires_at.isoformat() if key.expires_at else None,
+            last_used_at=optional_datetime_isoformat(key.last_used_at),
+            expires_at=optional_datetime_isoformat(key.expires_at),
             is_active=bool(key.is_active),
             metadata=key.metadata_dict(),
         )

@@ -1,11 +1,11 @@
 """Request and response models for budget routes."""
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
+from gateway.api.routes._response_datetime import optional_datetime_isoformat
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_service import (
     TAG_BUDGET_SCOPE,
@@ -32,12 +32,6 @@ def _budget_alert_thresholds(budget: Budget) -> list[float]:
             return alert_thresholds
     alert_thresholds = getattr(budget, "alert_thresholds", [])
     return alert_thresholds if isinstance(alert_thresholds, list) else []
-
-
-def _optional_datetime_isoformat(value: Any) -> str | None:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return None
 
 
 class CreateBudgetRequest(BaseModel):
@@ -124,8 +118,8 @@ class BudgetResponse(BaseModel):
             alert_thresholds=_budget_alert_thresholds(budget),
             alert_webhook_url=alert_webhook_url if isinstance(alert_webhook_url, str) else None,
             spend=float(spend) if isinstance(spend, int | float) else 0.0,
-            budget_started_at=_optional_datetime_isoformat(budget_started_at),
-            next_budget_reset_at=_optional_datetime_isoformat(next_budget_reset_at),
+            budget_started_at=optional_datetime_isoformat(budget_started_at),
+            next_budget_reset_at=optional_datetime_isoformat(next_budget_reset_at),
             blocked=blocked if isinstance(blocked, bool) else False,
             is_active=is_active if isinstance(is_active, bool) else True,
             created_at=budget.created_at.isoformat(),
@@ -204,16 +198,16 @@ class BudgetAlertResponse(BaseModel):
             threshold=alert.threshold,
             spend=alert.spend,
             max_budget=alert.max_budget,
-            budget_period_start=_optional_datetime_isoformat(alert.budget_period_start),
+            budget_period_start=optional_datetime_isoformat(alert.budget_period_start),
             webhook_url=alert.webhook_url,
             delivery_status=alert.delivery_status,
             delivery_attempts=alert.delivery_attempts,
             last_delivery_status_code=alert.last_delivery_status_code,
             last_delivery_error=alert.last_delivery_error,
-            last_delivery_attempt_at=_optional_datetime_isoformat(alert.last_delivery_attempt_at),
-            next_delivery_attempt_at=_optional_datetime_isoformat(alert.next_delivery_attempt_at),
-            delivered_at=_optional_datetime_isoformat(alert.delivered_at),
-            dead_lettered_at=_optional_datetime_isoformat(alert.dead_lettered_at),
+            last_delivery_attempt_at=optional_datetime_isoformat(alert.last_delivery_attempt_at),
+            next_delivery_attempt_at=optional_datetime_isoformat(alert.next_delivery_attempt_at),
+            delivered_at=optional_datetime_isoformat(alert.delivered_at),
+            dead_lettered_at=optional_datetime_isoformat(alert.dead_lettered_at),
             created_at=alert.created_at.isoformat(),
             metadata=alert.metadata_dict(),
         )

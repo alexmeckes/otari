@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from gateway.api.routes._response_datetime import optional_datetime_isoformat
 from gateway.models.entities import Project
 
 
@@ -55,8 +56,8 @@ class ProjectResponse(BaseModel):
             routing_policy_id=project.routing_policy_id,
             spend=float(project.spend),
             budget_id=project.budget_id,
-            budget_started_at=project.budget_started_at.isoformat() if project.budget_started_at else None,
-            next_budget_reset_at=project.next_budget_reset_at.isoformat() if project.next_budget_reset_at else None,
+            budget_started_at=optional_datetime_isoformat(project.budget_started_at),
+            next_budget_reset_at=optional_datetime_isoformat(project.next_budget_reset_at),
             blocked=bool(project.blocked),
             is_active=bool(project.is_active),
             metadata=project.metadata_dict(),
