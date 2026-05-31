@@ -1,34 +1,29 @@
-import asyncio
 from typing import Annotated
 
-import httpx
 from any_llm import acompletion
 from any_llm.types.completion import (
     ChatCompletion,
 )
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db_if_needed, get_log_writer
 from gateway.api.routes._chat_context import resolve_chat_mcp_server_ids, resolve_chat_request_context
 from gateway.api.routes._chat_platform_non_streaming import run_platform_non_streaming_chat
+from gateway.api.routes._chat_platform_streaming import run_platform_streaming_chat
 from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_routing import resolve_standalone_chat_routing_plan, run_standalone_routing_plan
 from gateway.api.routes._chat_standalone_non_streaming import run_standalone_non_streaming_chat
 from gateway.api.routes._chat_standalone_streaming import run_standalone_streaming_chat
-from gateway.api.routes._chat_streaming_fallback import run_streaming_with_fallback
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.core.config import GatewayConfig
-from gateway.log_config import logger
 from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     MAX_TOOL_ITERATIONS_CAP,
 )
-from gateway.services.sandbox_backend import SandboxNotReachableError
-from gateway.services.web_search_backend import WebSearchNotReachableError
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
 
@@ -85,7 +80,6 @@ async def chat_completions(
     web_search_url = tool_selection.web_search_url
     use_web_search = tool_selection.use_web_search
     remaining_user_tools = tool_selection.remaining_user_tools
-    tools_extracted = tool_selection.tools_extracted
 
     routing_plan = await resolve_standalone_chat_routing_plan(
         request=request,
@@ -108,71 +102,14 @@ async def chat_completions(
         # also flow through here so they get per-attempt fallback up to the
         # lock-in point (first chunk = first assistant message).
         if platform_mode:
-            if route is None or not route.attempts:
-                if route is not None:
-                    logger.error(
-                        "Platform returned empty attempts list request_id=%s",
-                        route.request_id,
-                    )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Authorization service returned no resolvable provider",
-                )
-            stream_mcp_configs = request.mcp_servers
-            stream_max_tool_iterations = min(
-                request.max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
-                MAX_TOOL_ITERATIONS_CAP,
+            return await run_platform_streaming_chat(
+                request=request,
+                background_tasks=background_tasks,
+                route=route,
+                config=config,
+                rate_limit_info=rate_limit_info,
+                tool_selection=tool_selection,
             )
-            try:
-                return await run_streaming_with_fallback(
-                    route=route,
-                    request=request,
-                    config=config,
-                    background_tasks=background_tasks,
-                    rate_limit_info=rate_limit_info,
-                    mcp_server_configs=stream_mcp_configs,
-                    use_sandbox=use_sandbox,
-                    sandbox_url=sandbox_url,
-                    sandbox_tool_entry=sandbox_tool_entry,
-                    use_web_search=use_web_search,
-                    web_search_url=web_search_url,
-                    web_search_tool_entry=web_search_tool_entry,
-                    remaining_user_tools=remaining_user_tools,
-                    tools_extracted=tools_extracted,
-                    max_tool_iterations=stream_max_tool_iterations,
-                )
-            except HTTPException:
-                raise
-            except SandboxNotReachableError as exc:
-                logger.error("Sandbox unreachable request_id=%s: %s", route.request_id, exc)
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="code_execution sandbox unreachable — check GATEWAY_SANDBOX_URL",
-                ) from exc
-            except WebSearchNotReachableError as exc:
-                logger.error("Web search backend unreachable request_id=%s: %s", route.request_id, exc)
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="web_search backend unreachable — check GATEWAY_WEB_SEARCH_URL",
-                ) from exc
-            except Exception as exc:
-                # Every attempt failed before any bytes were flushed.
-                logger.error(
-                    "All streaming attempts failed request_id=%s: %s",
-                    route.request_id,
-                    exc,
-                )
-                if isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
-                    raise HTTPException(
-                        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                        detail=(
-                            "LLM provider timeout" if len(route.attempts) <= 1 else "All upstream providers timed out"
-                        ),
-                    ) from exc
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=("LLM provider error" if len(route.attempts) <= 1 else "All upstream providers failed"),
-                ) from exc
 
         return await run_standalone_streaming_chat(
             request=request,
