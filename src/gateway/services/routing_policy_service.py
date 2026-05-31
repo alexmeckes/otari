@@ -5,13 +5,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
-from any_llm import AnyLLM
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.log_config import logger
 from gateway.models.entities import Project, RouteTrace, RoutingPolicy
+from gateway.services import routing_candidate_specs as _routing_candidate_specs
 from gateway.services import routing_constraints as _routing_constraints
 from gateway.services import routing_guardrails as _routing_guardrails
 from gateway.services import routing_latency_stats as _routing_latency_stats
@@ -36,13 +36,7 @@ ROUTING_STRATEGIES = {
 }
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
-_TIER_ORDER = ("simple", "medium", "complex", "reasoning")
-_INFERRED_TIER_BY_OUTPUT_PRICE = (
-    (0.10, "simple"),
-    (1.50, "simple"),
-    (2.00, "medium"),
-    (5.00, "complex"),
-)
+_TIER_ORDER = _routing_candidate_specs.TIER_ORDER
 _bool_config = _routing_request_analysis.bool_config
 _int_config = _routing_request_analysis.int_config
 _jsonable_text = _routing_request_analysis.jsonable_text
@@ -74,14 +68,8 @@ class RoutingPolicyError(Exception):
         self.detail = detail
 
 
-@dataclass(frozen=True)
-class _CandidateSpec:
-    model: str
-    tier: str | None
-    input_price_per_million: float | None
-    output_price_per_million: float | None
-    quality_score: float | None
-    metadata: dict[str, Any]
+_CandidateSpec = _routing_candidate_specs.CandidateSpec
+split_model_selector = _routing_candidate_specs.split_model_selector
 
 
 @dataclass(frozen=True)
@@ -164,144 +152,6 @@ class _PolicyMatch:
     rollout: dict[str, Any] | None
 
 
-def _float_or_none(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    return None
-
-
-def _non_negative_float_or_none(value: Any) -> float | None:
-    parsed = _float_or_none(value)
-    if parsed is None or parsed < 0:
-        return None
-    return parsed
-
-
-def _score_or_none(value: Any) -> float | None:
-    parsed = _non_negative_float_or_none(value)
-    if parsed is None:
-        return None
-    if parsed <= 1.0:
-        return parsed
-    if parsed <= 100.0:
-        return parsed / 100.0
-    return None
-
-
-def _normalize_tier(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip().lower()
-    return normalized if normalized in _TIER_ORDER else None
-
-
-def _candidate_spec_from_item(item: Any, *, tier: str | None) -> _CandidateSpec | None:
-    if isinstance(item, str):
-        model = item.strip()
-        if not model:
-            return None
-        return _CandidateSpec(
-            model=model,
-            tier=tier,
-            input_price_per_million=None,
-            output_price_per_million=None,
-            quality_score=None,
-            metadata={},
-        )
-
-    if not isinstance(item, dict):
-        return None
-    model_value = item.get("model")
-    if not isinstance(model_value, str) or not model_value.strip():
-        return None
-
-    metadata_value = item.get("metadata")
-    metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
-    for key in ("region", "regions"):
-        if key in item and key not in metadata:
-            metadata[key] = item[key]
-    quality_score = _score_or_none(item.get("quality_score"))
-    if quality_score is None:
-        for key in ("benchmark_score", "score", "intelligence_score"):
-            quality_score = _score_or_none(item.get(key))
-            if quality_score is not None:
-                break
-    if quality_score is None:
-        for key in ("quality_score", "benchmark_score", "score", "intelligence_score"):
-            quality_score = _score_or_none(metadata.get(key))
-            if quality_score is not None:
-                break
-    return _CandidateSpec(
-        model=model_value.strip(),
-        tier=_normalize_tier(item.get("tier")) or tier,
-        input_price_per_million=_float_or_none(item.get("input_price_per_million")),
-        output_price_per_million=_float_or_none(item.get("output_price_per_million")),
-        quality_score=quality_score,
-        metadata=metadata,
-    )
-
-
-def _infer_tier_from_output_price(output_price_per_million: float | None) -> str | None:
-    """Infer an internal complexity tier from output-token pricing."""
-    if output_price_per_million is None:
-        return None
-    for max_output_price, tier in _INFERRED_TIER_BY_OUTPUT_PRICE:
-        if output_price_per_million < max_output_price:
-            return tier
-    return "reasoning"
-
-
-def _configured_candidate_specs(config: Mapping[str, Any]) -> list[_CandidateSpec]:
-    specs: list[_CandidateSpec] = []
-
-    candidates = config.get("candidates")
-    if isinstance(candidates, list):
-        for item in candidates:
-            spec = _candidate_spec_from_item(item, tier=None)
-            if spec is not None:
-                specs.append(spec)
-
-    tiers = config.get("tiers")
-    if isinstance(tiers, dict):
-        for tier_name, items in tiers.items():
-            tier = _normalize_tier(tier_name)
-            if tier is None or not isinstance(items, list):
-                continue
-            for item in items:
-                spec = _candidate_spec_from_item(item, tier=tier)
-                if spec is not None:
-                    specs.append(spec)
-
-    deduped: list[_CandidateSpec] = []
-    seen: set[str] = set()
-    for spec in specs:
-        provider, provider_model, normalized = split_model_selector(spec.model)
-        dedupe_key = f"{provider}:{provider_model}"
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-        deduped.append(
-            _CandidateSpec(
-                model=normalized,
-                tier=spec.tier,
-                input_price_per_million=spec.input_price_per_million,
-                output_price_per_million=spec.output_price_per_million,
-                quality_score=spec.quality_score,
-                metadata=spec.metadata,
-            )
-        )
-    return deduped
-
-
-def split_model_selector(model_selector: str) -> tuple[str, str, str]:
-    """Split and normalize a provider:model selector."""
-    provider, model_name = AnyLLM.split_model_provider(model_selector)
-    provider_name = provider.value
-    return provider_name, model_name, f"{provider_name}:{model_name}"
-
-
 async def _build_candidates(
     db: AsyncSession,
     specs: Sequence[_CandidateSpec],
@@ -331,7 +181,7 @@ async def _build_candidates(
                 provider=provider,
                 provider_model=provider_model,
                 position=index,
-                tier=spec.tier or _infer_tier_from_output_price(output_price),
+                tier=spec.tier or _routing_candidate_specs.infer_tier_from_output_price(output_price),
                 estimated_cost=estimated_cost,
                 input_price_per_million=input_price,
                 output_price_per_million=output_price,
@@ -537,7 +387,7 @@ async def resolve_routing_plan(
             f"Routing policy '{policy.policy_id}' guardrail blocked request: {violation_type}:{violation_rule}",
         )
     try:
-        specs = _configured_candidate_specs(config)
+        specs = _routing_candidate_specs.configured_candidate_specs(config)
     except ValueError as exc:
         raise RoutingPolicyError(422, f"Invalid routing policy candidate: {exc}") from exc
     if not specs:
