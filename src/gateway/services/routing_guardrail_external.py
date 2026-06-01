@@ -5,7 +5,12 @@ from typing import Any
 
 import httpx
 
-from gateway.services.routing_config_values import bool_config, non_negative_float_or_none, string_or_none
+from gateway.services.routing_config_values import (
+    bool_config,
+    coerced_string_or_none,
+    non_negative_float_or_none,
+    string_or_none,
+)
 from gateway.services.routing_guardrail_helpers import guardrail_violation
 
 ExternalClassifierPost = Callable[
@@ -31,7 +36,11 @@ def _external_classifier_headers(classifier: Mapping[str, Any]) -> dict[str, str
     headers = classifier.get("headers")
     if not isinstance(headers, dict):
         return None
-    normalized = {str(key): str(value) for key, value in headers.items() if str(key).strip()}
+    normalized = {
+        str(key): str(value)
+        for key, value in headers.items()
+        if coerced_string_or_none(key) is not None
+    }
     return normalized or None
 
 

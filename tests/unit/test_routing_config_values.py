@@ -3,6 +3,7 @@ import pytest
 from gateway.services.routing_config_values import (
     bool_config,
     coerced_lower_string,
+    coerced_string_or_none,
     comma_separated_string_list,
     dict_or_empty,
     float_or_none,
@@ -47,6 +48,10 @@ def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
 )
 def test_string_list(value: object, expected: list[str]) -> None:
     assert string_list(value) == expected
+
+
+def test_string_list_uses_coerced_string_items() -> None:
+    assert string_list([" team ", False, 0, " "]) == ["team", "False", "0"]
 
 
 @pytest.mark.parametrize(
@@ -100,6 +105,19 @@ def test_lower_string_or_none(value: object, expected: str | None) -> None:
 )
 def test_coerced_lower_string(value: object, expected: str) -> None:
     assert coerced_lower_string(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" Team ", "Team"),
+        (42, "42"),
+        (None, "None"),
+        (" ", None),
+    ],
+)
+def test_coerced_string_or_none(value: object, expected: str | None) -> None:
+    assert coerced_string_or_none(value) == expected
 
 
 @pytest.mark.parametrize(

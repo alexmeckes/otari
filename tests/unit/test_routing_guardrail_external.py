@@ -54,6 +54,36 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
 
 
 @pytest.mark.asyncio
+async def test_external_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None:
+    captured: list[dict[str, Any]] = []
+
+    async def post_classifier(
+        *,
+        url: str,
+        request_text: str,
+        timeout_seconds: float,
+        headers: dict[str, str] | None,
+    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+        captured.append({"headers": headers})
+        return 200, {"violations": []}, None
+
+    await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={
+            "external_classifiers": [
+                {
+                    "url": "https://classifier.example.test/check",
+                    "headers": {" Authorization ": "Bearer test", " ": "skip", 0: 42},
+                }
+            ]
+        },
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+
+    assert captured == [{"headers": {" Authorization ": "Bearer test", "0": "42"}}]
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> None:
     async def post_classifier(
         **kwargs: Any,

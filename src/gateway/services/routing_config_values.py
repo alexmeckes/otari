@@ -26,13 +26,18 @@ def coerced_lower_string(value: Any) -> str:
     return str(value).strip().lower()
 
 
+def coerced_string_or_none(value: Any) -> str | None:
+    parsed = str(value).strip()
+    return parsed or None
+
+
 def string_list(value: Any) -> list[str]:
     parsed = string_or_none(value)
     if parsed is not None:
         return [parsed]
     if not isinstance(value, list):
         return []
-    return [str(item).strip() for item in value if str(item).strip()]
+    return [item for value_item in value if (item := coerced_string_or_none(value_item)) is not None]
 
 
 def comma_separated_string_list(value: Any) -> list[str]:
