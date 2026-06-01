@@ -48,6 +48,21 @@ def test_named_patterns_trims_names_and_uses_default_for_blank_names() -> None:
     assert patterns[1][1].search("TOKEN")
 
 
+def test_named_patterns_skips_blank_pattern_values() -> None:
+    patterns = named_patterns(
+        [
+            {"name": "blank", "pattern": "   "},
+            {"name": "missing"},
+            {"name": "numeric", "pattern": 123},
+            {"name": "kept", "pattern": " secret "},
+        ]
+    )
+
+    assert [name for name, _ in patterns] == ["kept"]
+    assert patterns[0][1].search(" secret ")
+    assert not patterns[0][1].search("SECRET")
+
+
 def test_named_patterns_skips_invalid_regex() -> None:
     assert named_patterns([{"name": "bad", "pattern": "["}]) == []
 

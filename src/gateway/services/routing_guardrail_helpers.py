@@ -54,7 +54,7 @@ def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
         if isinstance(item, dict):
             name = string_or_none(item.get("name")) or name
             pattern_value = item.get("pattern")
-        if not isinstance(pattern_value, str) or not pattern_value.strip():
+        if string_or_none(pattern_value) is None:
             continue
         try:
             patterns.append((name, re.compile(pattern_value, re.IGNORECASE)))
