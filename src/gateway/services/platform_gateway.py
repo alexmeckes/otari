@@ -306,11 +306,7 @@ async def report_platform_usage(
                 body=payload,
                 timeout_seconds=timeout_ms / 1000,
             )
-            if response.status_code == 204:
-                return
-            if response.status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
-                return
-            should_retry = response.status_code >= 500
+            should_retry = _should_retry_usage_report_status(response.status_code)
         except (httpx.TimeoutException, httpx.NetworkError):
             should_retry = True
 
@@ -319,6 +315,14 @@ async def report_platform_usage(
 
         await asyncio.sleep(delay_seconds)
         delay_seconds *= 2
+
+
+def _should_retry_usage_report_status(status_code: int) -> bool:
+    if status_code == 204:
+        return False
+    if status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
+        return False
+    return status_code >= 500
 
 
 def _platform_usage_payload(
