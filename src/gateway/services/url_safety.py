@@ -26,6 +26,8 @@ import asyncio
 import ipaddress
 import os
 import socket
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 
@@ -57,11 +59,7 @@ def _allow_private_hosts() -> bool:
     return _env_flag("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", default=False)
 
 
-def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return []
+def _addresses_from_addrinfo(infos: Iterable[Any]) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     for info in infos:
         sockaddr = info[4]
@@ -70,6 +68,14 @@ def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Addres
         except ValueError:
             continue
     return out
+
+
+def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return []
+    return _addresses_from_addrinfo(infos)
 
 
 def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
@@ -154,14 +160,7 @@ async def _resolve_all_async(host: str) -> list[ipaddress.IPv4Address | ipaddres
         infos = await loop.getaddrinfo(host, None)
     except socket.gaierror:
         return []
-    out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    for info in infos:
-        sockaddr = info[4]
-        try:
-            out.append(ipaddress.ip_address(sockaddr[0]))
-        except ValueError:
-            continue
-    return out
+    return _addresses_from_addrinfo(infos)
 
 
 async def validate_outbound_fetch_url(url: str) -> None:

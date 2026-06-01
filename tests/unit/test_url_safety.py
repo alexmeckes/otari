@@ -7,6 +7,21 @@ import pytest
 from gateway.services.url_safety import UnsafeURLError, validate_mcp_url, validate_outbound_fetch_url
 
 
+def test_addrinfo_parser_returns_valid_addresses_and_skips_invalid_entries() -> None:
+    from gateway.services import url_safety
+
+    infos = [
+        (None, None, None, "", ("93.184.216.34", 0)),
+        (None, None, None, "", ("not-an-ip", 0)),
+        (None, None, None, "", ("2606:2800:220:1:248:1893:25c8:1946", 0, 0, 0)),
+    ]
+
+    assert url_safety._addresses_from_addrinfo(infos) == [
+        ipaddress.ip_address("93.184.216.34"),
+        ipaddress.ip_address("2606:2800:220:1:248:1893:25c8:1946"),
+    ]
+
+
 def test_public_https_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     from gateway.services import url_safety
 
