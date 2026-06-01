@@ -7,7 +7,6 @@ from gateway.services.routing_provider_health import (
     _provider_health_from_counts,
     _provider_health_mode,
     _provider_health_rate,
-    _provider_health_status_reason,
     _record_provider_outcome,
     apply_provider_health_gate,
     apply_provider_health_order,
@@ -63,6 +62,12 @@ def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds(
 
 
 def test_provider_health_from_counts_preserves_unknown_and_healthy_results() -> None:
+    no_samples = _provider_health_from_counts(
+        "openai",
+        success_count=0,
+        error_count=0,
+        health_config={"min_samples": 3},
+    )
     unknown = _provider_health_from_counts(
         "openai",
         success_count=1,
@@ -76,6 +81,10 @@ def test_provider_health_from_counts_preserves_unknown_and_healthy_results() -> 
         health_config={"min_samples": 3},
     )
 
+    assert no_samples.status == "unknown"
+    assert no_samples.sample_count == 0
+    assert no_samples.failure_rate is None
+    assert no_samples.reason == "insufficient_samples"
     assert unknown.status == "unknown"
     assert unknown.sample_count == 1
     assert unknown.failure_rate == 0.0
@@ -101,49 +110,6 @@ def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
     assert health.sample_count == 4
     assert health.failure_rate == 0.75
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
-
-
-def test_provider_health_status_reason_preserves_threshold_ordering() -> None:
-    assert (
-        _provider_health_status_reason(
-            sample_count=0,
-            failure_rate=None,
-            min_samples=3,
-            degraded_rate=0.25,
-            unhealthy_rate=0.50,
-        )
-        == ("unknown", "insufficient_samples")
-    )
-    assert (
-        _provider_health_status_reason(
-            sample_count=4,
-            failure_rate=0.75,
-            min_samples=3,
-            degraded_rate=0.25,
-            unhealthy_rate=0.50,
-        )
-        == ("unhealthy", "failure_rate_exceeds_unhealthy_threshold")
-    )
-    assert (
-        _provider_health_status_reason(
-            sample_count=4,
-            failure_rate=0.25,
-            min_samples=3,
-            degraded_rate=0.25,
-            unhealthy_rate=0.50,
-        )
-        == ("degraded", "failure_rate_exceeds_degraded_threshold")
-    )
-    assert (
-        _provider_health_status_reason(
-            sample_count=4,
-            failure_rate=0.0,
-            min_samples=3,
-            degraded_rate=0.25,
-            unhealthy_rate=0.50,
-        )
-        == ("healthy", "failure_rate_below_threshold")
-    )
 
 
 def test_record_provider_outcome_counts_known_success_and_error_only() -> None:
