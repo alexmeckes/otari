@@ -5,7 +5,13 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from gateway.services.routing_config_values import bool_config, dict_or_empty, int_config, non_negative_int_config
+from gateway.services.routing_config_values import (
+    bool_config,
+    dict_or_empty,
+    int_config,
+    non_negative_int_config,
+    string_or_none,
+)
 from gateway.services.routing_request_analysis import (
     estimate_prompt_tokens,
     jsonable_text,
@@ -29,8 +35,7 @@ def _context_enabled(config: Mapping[str, Any]) -> bool:
 def _message_role(message: Any) -> str:
     if not isinstance(message, dict):
         return ""
-    role = message.get("role")
-    return role.strip().lower() if isinstance(role, str) else ""
+    return (string_or_none(message.get("role")) or "").lower()
 
 
 def _message_token_estimate(message: Any) -> int:
@@ -70,11 +75,18 @@ def _context_kept_message_indexes(
 
 
 def _context_summary_role(value: Any) -> str:
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"system", "developer", "user"}:
-            return normalized
+    normalized = string_or_none(value)
+    if normalized is not None and (role := normalized.lower()) in {"system", "developer", "user"}:
+        return role
     return "system"
+
+
+def _context_strategy(value: Any) -> str | None:
+    strategy = string_or_none(value)
+    if strategy is None:
+        return None
+    normalized = strategy.lower()
+    return normalized if normalized in _CONTEXT_STRATEGIES else None
 
 
 def _summary_line_for_message(message: Any, *, max_chars: int) -> str:
@@ -140,15 +152,15 @@ def apply_context_policy(
         return body, None
 
     context_config = _context_config(config)
-    strategy = context_config.get("strategy", "trim_messages")
-    if not isinstance(strategy, str) or strategy.strip().lower() not in _CONTEXT_STRATEGIES:
+    strategy_raw = context_config.get("strategy", "trim_messages")
+    strategy = _context_strategy(strategy_raw)
+    if strategy is None:
         return body, {
             "enabled": True,
             "status": "skipped",
             "reason": "unsupported_strategy",
-            "strategy": str(strategy),
+            "strategy": str(strategy_raw),
         }
-    strategy = strategy.strip().lower()
 
     max_prompt_tokens = int_config(context_config.get("max_prompt_tokens"), 0)
     if max_prompt_tokens <= 0:
