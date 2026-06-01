@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from gateway.services.routing_candidate_specs import split_model_selector
@@ -37,6 +38,27 @@ def _constraint_model_set(value: Any) -> set[str]:
 
 def _region_set(value: Any) -> set[str]:
     return {item.lower() for item in _string_set(value)}
+
+
+@dataclass(frozen=True)
+class _ConstraintSets:
+    allowed_providers: set[str]
+    blocked_providers: set[str]
+    allowed_models: set[str]
+    blocked_models: set[str]
+    allowed_regions: set[str]
+    blocked_regions: set[str]
+
+
+def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
+    return _ConstraintSets(
+        allowed_providers=_string_set(_constraint_value(constraints, "allowed_providers")),
+        blocked_providers=_string_set(_constraint_value(constraints, "blocked_providers")),
+        allowed_models=_constraint_model_set(_constraint_value(constraints, "allowed_models")),
+        blocked_models=_constraint_model_set(_constraint_value(constraints, "blocked_models")),
+        allowed_regions=_region_set(_constraint_value(constraints, "allowed_regions")),
+        blocked_regions=_region_set(_constraint_value(constraints, "blocked_regions")),
+    )
 
 
 def _candidate_regions(candidate: Any) -> set[str]:
@@ -113,17 +135,12 @@ def _constraint_failure(
     *,
     tags: Mapping[str, str],
 ) -> str | None:
-    allowed_providers = _string_set(_constraint_value(constraints, "allowed_providers"))
-    blocked_providers = _string_set(_constraint_value(constraints, "blocked_providers"))
-    allowed_models = _constraint_model_set(_constraint_value(constraints, "allowed_models"))
-    blocked_models = _constraint_model_set(_constraint_value(constraints, "blocked_models"))
-    allowed_regions = _region_set(_constraint_value(constraints, "allowed_regions"))
-    blocked_regions = _region_set(_constraint_value(constraints, "blocked_regions"))
+    constraint_sets = _constraint_sets(constraints)
 
     failure = _membership_failure(
         candidate.provider,
-        allowed_values=allowed_providers,
-        blocked_values=blocked_providers,
+        allowed_values=constraint_sets.allowed_providers,
+        blocked_values=constraint_sets.blocked_providers,
         not_allowed_reason="provider_not_allowed",
         blocked_reason="provider_blocked",
     )
@@ -131,8 +148,8 @@ def _constraint_failure(
         return failure
     failure = _membership_failure(
         candidate.model,
-        allowed_values=allowed_models,
-        blocked_values=blocked_models,
+        allowed_values=constraint_sets.allowed_models,
+        blocked_values=constraint_sets.blocked_models,
         not_allowed_reason="model_not_allowed",
         blocked_reason="model_blocked",
     )
@@ -140,15 +157,15 @@ def _constraint_failure(
         return failure
 
     candidate_regions = _candidate_regions(candidate)
-    if allowed_regions:
+    if constraint_sets.allowed_regions:
         failure = _region_presence_failure(
             candidate_regions,
-            matches=bool(candidate_regions & allowed_regions),
+            matches=bool(candidate_regions & constraint_sets.allowed_regions),
             mismatch_reason="region_not_allowed",
         )
         if failure is not None:
             return failure
-    if blocked_regions and candidate_regions & blocked_regions:
+    if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
         return "region_blocked"
 
     if bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):

@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _constraint_sets,
     _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
@@ -25,6 +26,27 @@ def test_normalize_model_key_for_constraint_normalizes_legacy_slash_selector() -
 
 def test_normalize_model_key_for_constraint_preserves_invalid_selector() -> None:
     assert _normalize_model_key_for_constraint("gpt-4o") == "gpt-4o"
+
+
+def test_constraint_sets_normalize_provider_model_and_region_values() -> None:
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        constraint_sets = _constraint_sets(
+            {
+                "allowed_providers": [" openai "],
+                "blocked_providers": ["anthropic"],
+                "allowed_models": ["openai/gpt-4o"],
+                "blocked_models": ["openai:gpt-4o-mini"],
+                "allowed_regions": [" EU "],
+                "blocked_regions": ["us"],
+            }
+        )
+
+    assert constraint_sets.allowed_providers == {"openai"}
+    assert constraint_sets.blocked_providers == {"anthropic"}
+    assert constraint_sets.allowed_models == {"openai:gpt-4o"}
+    assert constraint_sets.blocked_models == {"openai:gpt-4o-mini"}
+    assert constraint_sets.allowed_regions == {"eu"}
+    assert constraint_sets.blocked_regions == {"us"}
 
 
 def test_candidate_regions_normalize_region_metadata() -> None:
