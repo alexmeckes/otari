@@ -14,17 +14,14 @@ def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return nested_dict_or_empty(config, "scoring", "score_weights")
 
 
-def _score_weight_value(scoring: Mapping[str, Any], key: str) -> Any:
+def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:
     weights = scoring.get("weights")
     if isinstance(weights, dict):
         weight_value = weights.get(key, weights.get(f"{key}_weight"))
         if weight_value is not None:
-            return weight_value
-    return scoring.get(f"{key}_weight", scoring.get(key))
-
-
-def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:
-    parsed = non_negative_float_or_none(_score_weight_value(scoring, key))
+            parsed = non_negative_float_or_none(weight_value)
+            return default if parsed is None else parsed
+    parsed = non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))
     return default if parsed is None else parsed
 
 
