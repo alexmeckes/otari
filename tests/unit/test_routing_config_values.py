@@ -9,6 +9,7 @@ from gateway.services.routing_config_values import (
     non_negative_int_config,
     score_or_none,
     string_list,
+    string_or_none,
 )
 
 
@@ -43,6 +44,19 @@ def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
 )
 def test_string_list(value: object, expected: list[str]) -> None:
     assert string_list(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" team ", "team"),
+        (" ", None),
+        (42, None),
+        (None, None),
+    ],
+)
+def test_string_or_none(value: object, expected: str | None) -> None:
+    assert string_or_none(value) == expected
 
 
 @pytest.mark.parametrize(

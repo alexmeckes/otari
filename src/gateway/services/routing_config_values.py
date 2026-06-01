@@ -11,9 +11,16 @@ def dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     return value
 
 
-def string_list(value: Any) -> list[str]:
+def string_or_none(value: Any) -> str | None:
     if isinstance(value, str) and value.strip():
-        return [value.strip()]
+        return value.strip()
+    return None
+
+
+def string_list(value: Any) -> list[str]:
+    parsed = string_or_none(value)
+    if parsed is not None:
+        return [parsed]
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]

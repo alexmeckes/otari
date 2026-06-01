@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from gateway.services.routing_config_values import bool_config, non_negative_float_or_none
+from gateway.services.routing_config_values import bool_config, non_negative_float_or_none, string_or_none
 from gateway.services.routing_guardrail_helpers import guardrail_violation
 
 ExternalClassifierPost = Callable[
@@ -24,10 +24,7 @@ def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[
 
 
 def _external_classifier_name(classifier: Mapping[str, Any], index: int) -> str:
-    name = classifier.get("name")
-    if isinstance(name, str) and name.strip():
-        return name.strip()
-    return f"classifier_{index}"
+    return string_or_none(classifier.get("name")) or f"classifier_{index}"
 
 
 def _external_classifier_headers(classifier: Mapping[str, Any]) -> dict[str, str] | None:
@@ -62,9 +59,9 @@ async def post_external_guardrail_classifier(
     if response.status_code < 200 or response.status_code >= 300:
         error = response.text
         if payload is not None:
-            detail = payload.get("detail") or payload.get("error")
-            if isinstance(detail, str) and detail.strip():
-                error = detail.strip()
+            detail = string_or_none(payload.get("detail")) or string_or_none(payload.get("error"))
+            if detail is not None:
+                error = detail
         return response.status_code, payload, f"HTTP {response.status_code}: {error}"
     if payload is None:
         return response.status_code, None, "classifier returned non-object JSON"
@@ -72,13 +69,14 @@ async def post_external_guardrail_classifier(
 
 
 def _classifier_rule(value: Any, *, fallback: str) -> str:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
+    rule = string_or_none(value)
+    if rule is not None:
+        return rule
     if isinstance(value, dict):
         for key in ("rule", "type", "label", "category", "name"):
-            item = value.get(key)
-            if isinstance(item, str) and item.strip():
-                return item.strip()
+            item = string_or_none(value.get(key))
+            if item is not None:
+                return item
     return fallback
 
 
@@ -109,14 +107,14 @@ async def evaluate_external_classifiers(
     classifier_results: list[dict[str, Any]] = []
     for index, classifier in enumerate(_external_classifier_configs(guardrails), start=1):
         name = _external_classifier_name(classifier, index)
-        url = classifier.get("url")
-        if not isinstance(url, str) or not url.strip():
+        url = string_or_none(classifier.get("url"))
+        if url is None:
             classifier_results.append({"name": name, "status": "skipped", "reason": "missing_url"})
             continue
         timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
         threshold = non_negative_float_or_none(classifier.get("threshold"))
         status_code, payload, error = await post_classifier(
-            url=url.strip(),
+            url=url,
             request_text=request_text,
             timeout_seconds=timeout_seconds,
             headers=_external_classifier_headers(classifier),
