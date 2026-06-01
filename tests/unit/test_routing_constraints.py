@@ -5,6 +5,7 @@ import pytest
 from gateway.services.routing_constraints import (
     _candidate_regions,
     _normalize_model_key_for_constraint,
+    _region_presence_failure,
     _request_region,
     apply_constraints,
 )
@@ -36,6 +37,15 @@ def test_request_region_uses_trimmed_region_tag_and_value() -> None:
 def test_request_region_ignores_blank_region_tag_and_value() -> None:
     assert _request_region({"region_tag": " "}, {"region": "eu"}) is None
     assert _request_region({"region_tag": "region"}, {"region": " "}) is None
+
+
+def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
+    assert _region_presence_failure(set(), matches=False, mismatch_reason="region_not_allowed") == "region_unknown"
+    assert (
+        _region_presence_failure({"eu"}, matches=False, mismatch_reason="region_not_supported")
+        == "region_not_supported"
+    )
+    assert _region_presence_failure({"eu"}, matches=True, mismatch_reason="region_not_allowed") is None
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:

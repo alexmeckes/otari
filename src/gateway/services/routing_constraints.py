@@ -56,6 +56,19 @@ def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> 
     return region.lower() if region is not None else None
 
 
+def _region_presence_failure(
+    candidate_regions: set[str],
+    *,
+    matches: bool,
+    mismatch_reason: str,
+) -> str | None:
+    if not candidate_regions:
+        return "region_unknown"
+    if not matches:
+        return mismatch_reason
+    return None
+
+
 def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
@@ -80,20 +93,26 @@ def _constraint_failure(
 
     candidate_regions = _candidate_regions(candidate)
     if allowed_regions:
-        if not candidate_regions:
-            return "region_unknown"
-        if not candidate_regions & allowed_regions:
-            return "region_not_allowed"
+        failure = _region_presence_failure(
+            candidate_regions,
+            matches=bool(candidate_regions & allowed_regions),
+            mismatch_reason="region_not_allowed",
+        )
+        if failure is not None:
+            return failure
     if blocked_regions and candidate_regions & blocked_regions:
         return "region_blocked"
 
     if bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
         requested_region = _request_region(constraints, tags)
         if requested_region is not None:
-            if not candidate_regions:
-                return "region_unknown"
-            if requested_region not in candidate_regions:
-                return "region_not_supported"
+            failure = _region_presence_failure(
+                candidate_regions,
+                matches=requested_region in candidate_regions,
+                mismatch_reason="region_not_supported",
+            )
+            if failure is not None:
+                return failure
 
     max_estimated_cost = non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost"))
     if max_estimated_cost is None:
