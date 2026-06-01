@@ -7,13 +7,12 @@ from gateway.services.routing_config_values import coerced_lower_string, dict_or
 
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
-    tags = dict_or_empty(policy_match_config(config).get("tags"))
+    tags = dict_or_empty(_policy_match_value(config, "tags"))
     return {str(key): str(value) for key, value in tags.items()}
 
 
 def policy_match_priority(config: Mapping[str, Any]) -> int:
-    match_config = policy_match_config(config)
-    priority = match_config.get("priority")
+    priority = _policy_match_value(config, "priority")
     if isinstance(priority, int) and not isinstance(priority, bool):
         return priority
     return 0
@@ -23,16 +22,23 @@ def policy_match_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(config.get("match"))
 
 
-def policy_match_rollout_percentage(config: Mapping[str, Any]) -> float:
+def _policy_match_value(config: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    return policy_match_config(config).get(key, default)
+
+
+def _policy_match_alias_value(config: Mapping[str, Any], primary_key: str, fallback_key: str) -> Any:
     match_config = policy_match_config(config)
-    value = match_config.get("rollout_percentage", match_config.get("percentage"))
+    return match_config.get(primary_key, match_config.get(fallback_key))
+
+
+def policy_match_rollout_percentage(config: Mapping[str, Any]) -> float:
+    value = _policy_match_alias_value(config, "rollout_percentage", "percentage")
     parsed = float_or_none(value)
     return 100.0 if parsed is None else min(max(parsed, 0.0), 100.0)
 
 
 def policy_match_bucket_key(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> str:
-    match_config = policy_match_config(config)
-    bucket_by = match_config.get("bucket_by")
+    bucket_by = _policy_match_value(config, "bucket_by")
     if isinstance(bucket_by, str) and bucket_by in request_tags:
         return f"{bucket_by}:{request_tags[bucket_by]}"
     if request_tags:
@@ -41,8 +47,7 @@ def policy_match_bucket_key(config: Mapping[str, Any], request_tags: Mapping[str
 
 
 def policy_match_bucket(config: Mapping[str, Any], policy_id: str, request_tags: Mapping[str, str]) -> float:
-    match_config = policy_match_config(config)
-    salt = match_config.get("salt")
+    salt = _policy_match_value(config, "salt")
     salt_value = salt if isinstance(salt, str) else policy_id
     bucket_key = policy_match_bucket_key(config, request_tags)
     digest = sha256(f"{salt_value}:{policy_id}:{bucket_key}".encode()).hexdigest()
