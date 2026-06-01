@@ -24,12 +24,8 @@ def _context_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return nested_dict_or_empty(config, "context", "context_policy")
 
 
-def _context_value(context_config: Mapping[str, Any], key: str, default: Any = None) -> Any:
-    return context_config.get(key, default)
-
-
 def _context_enabled(context_config: Mapping[str, Any]) -> bool:
-    return bool_config(_context_value(context_config, "enabled"), bool(context_config))
+    return bool_config(context_config.get("enabled"), bool(context_config))
 
 
 def _message_role(message: Any) -> str:
@@ -152,7 +148,7 @@ def apply_context_policy(
     if not _context_enabled(context_config):
         return body, None
 
-    strategy_raw = _context_value(context_config, "strategy", "trim_messages")
+    strategy_raw = context_config.get("strategy", "trim_messages")
     strategy = _context_strategy(strategy_raw)
     if strategy is None:
         return body, {
@@ -162,7 +158,7 @@ def apply_context_policy(
             "strategy": str(strategy_raw),
         }
 
-    max_prompt_tokens = int_config(_context_value(context_config, "max_prompt_tokens"), 0)
+    max_prompt_tokens = int_config(context_config.get("max_prompt_tokens"), 0)
     if max_prompt_tokens <= 0:
         return body, {
             "enabled": True,
@@ -183,8 +179,8 @@ def apply_context_policy(
 
     original_prompt_tokens = estimate_prompt_tokens(body)
     original_message_count = len(messages)
-    preserve_system_messages = bool_config(_context_value(context_config, "preserve_system_messages"), True)
-    preserve_last_messages = non_negative_int_config(_context_value(context_config, "preserve_last_messages"), 4)
+    preserve_system_messages = bool_config(context_config.get("preserve_system_messages"), True)
+    preserve_last_messages = non_negative_int_config(context_config.get("preserve_last_messages"), 4)
     if original_prompt_tokens <= max_prompt_tokens:
         return body, {
             "enabled": True,
@@ -230,7 +226,7 @@ def apply_context_policy(
         )
         summary_token_budget = max_prompt_tokens - kept_tokens
         configured_summary_tokens = int_config(
-            _context_value(context_config, "summary_max_tokens"),
+            context_config.get("summary_max_tokens"),
             min(512, max(1, max_prompt_tokens // 4)),
         )
         summary_token_budget = min(configured_summary_tokens, summary_token_budget)
@@ -238,10 +234,10 @@ def apply_context_policy(
             messages,
             summarized_indexes,
             max_chars=max(0, summary_token_budget * 4),
-            prefix=str(_context_value(context_config, "summary_prefix") or "Earlier conversation summary:"),
-            max_message_chars=int_config(_context_value(context_config, "summary_message_max_chars"), 240),
+            prefix=str(context_config.get("summary_prefix") or "Earlier conversation summary:"),
+            max_message_chars=int_config(context_config.get("summary_message_max_chars"), 240),
         )
-        summary_role = _context_summary_role(_context_value(context_config, "summary_role"))
+        summary_role = _context_summary_role(context_config.get("summary_role"))
         summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
         body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
         final_prompt_tokens = estimate_prompt_tokens(body)
