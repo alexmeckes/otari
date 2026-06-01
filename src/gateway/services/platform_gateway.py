@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from gateway.core.config import GatewayConfig
 from gateway.models.mcp import McpServerConfig
+from gateway.services.platform_config import platform_int_setting, platform_timeout_seconds, platform_url
 from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
@@ -81,10 +82,6 @@ def extract_platform_user_token(request: Request) -> str:
     return token
 
 
-def _platform_url(base_url: str, path: str) -> str:
-    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
-
-
 def _platform_base_url_or_raise(config: GatewayConfig) -> str:
     platform_base_url = config.platform.get("base_url")
     if not platform_base_url:
@@ -105,16 +102,8 @@ def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, 
     return headers
 
 
-def _platform_int_setting(config: GatewayConfig, key: str, default: int) -> int:
-    return int(config.platform.get(key, default))
-
-
-def _platform_timeout_seconds(config: GatewayConfig, key: str, default_ms: int = 5000) -> float:
-    return _platform_int_setting(config, key, default_ms) / 1000
-
-
 def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
-    return _platform_timeout_seconds(config, "resolve_timeout_ms")
+    return platform_timeout_seconds(config, "resolve_timeout_ms")
 
 
 def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
@@ -158,7 +147,7 @@ async def _post_platform_resolution(
     body: dict[str, Any],
 ) -> httpx.Response:
     platform_base_url = _platform_base_url_or_raise(config)
-    resolve_url = _platform_url(platform_base_url, path)
+    resolve_url = platform_url(platform_base_url, path)
     headers = _platform_user_headers(config, user_token)
     try:
         return await _post_platform(
@@ -338,10 +327,10 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
         return None
 
     return _PlatformUsageReportRequest(
-        url=_platform_url(platform_base_url, "/gateway/usage"),
+        url=platform_url(platform_base_url, "/gateway/usage"),
         headers=_platform_gateway_headers(config),
-        timeout_seconds=_platform_timeout_seconds(config, "usage_timeout_ms"),
-        max_retries=_platform_int_setting(config, "usage_max_retries", 3),
+        timeout_seconds=platform_timeout_seconds(config, "usage_timeout_ms"),
+        max_retries=platform_int_setting(config, "usage_max_retries", 3),
     )
 
 

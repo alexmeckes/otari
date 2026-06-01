@@ -21,10 +21,10 @@ from gateway.services.chat_tool_config import (
 )
 from gateway.services.mcp_client import MCPClientPool
 from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, mcp_tool_loop_stream, tool_loop_completion_kwargs
+from gateway.services.platform_config import platform_timeout_seconds
 from gateway.services.platform_gateway import (
     ResolvedAttempt,
     ResolvedRoute,
-    _platform_timeout_seconds,
     classify_upstream_error,
     report_platform_usage,
 )
@@ -39,12 +39,12 @@ _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms
 
 def _first_chunk_timeout_seconds(config: GatewayConfig, *, tool_mode: bool) -> float:
     if tool_mode:
-        return _platform_timeout_seconds(
+        return platform_timeout_seconds(
             config,
             _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY,
             _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP,
         )
-    return _platform_timeout_seconds(config, _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY, _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS)
+    return platform_timeout_seconds(config, _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY, _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS)
 
 
 async def run_streaming_with_fallback(
