@@ -14,6 +14,7 @@ from gateway.services.routing_constraints import (
     _region_presence_failure,
     _rejected_candidate_payload,
     _request_region,
+    _required_request_region,
     apply_constraints,
 )
 
@@ -65,6 +66,17 @@ def test_request_region_uses_trimmed_region_tag_and_value() -> None:
 def test_request_region_ignores_blank_region_tag_and_value() -> None:
     assert _request_region({"region_tag": " "}, {"region": "eu"}) is None
     assert _request_region({"region_tag": "region"}, {"region": " "}) is None
+
+
+def test_required_request_region_only_returns_region_when_match_is_required() -> None:
+    assert _required_request_region({"region_tag": "request_region"}, {"request_region": "EU"}) is None
+    assert (
+        _required_request_region(
+            {"require_region_match": "true", "region_tag": "request_region"},
+            {"request_region": "EU"},
+        )
+        == "eu"
+    )
 
 
 def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
@@ -153,21 +165,20 @@ def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior()
 
 
 def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> None:
-    assert _region_failure(set(), _constraint_sets({"allowed_regions": ["eu"]}), {}, tags={}) == "region_unknown"
+    assert _region_failure(set(), _constraint_sets({"allowed_regions": ["eu"]}), None) == "region_unknown"
     assert (
-        _region_failure({"us"}, _constraint_sets({"allowed_regions": ["eu"]}), {}, tags={})
+        _region_failure({"us"}, _constraint_sets({"allowed_regions": ["eu"]}), None)
         == "region_not_allowed"
     )
     assert (
-        _region_failure({"us"}, _constraint_sets({"blocked_regions": ["us"]}), {}, tags={})
+        _region_failure({"us"}, _constraint_sets({"blocked_regions": ["us"]}), None)
         == "region_blocked"
     )
     assert (
         _region_failure(
             {"us"},
             _constraint_sets({}),
-            {"require_region_match": "true", "region_tag": "request_region"},
-            tags={"request_region": "EU"},
+            "eu",
         )
         == "region_not_supported"
     )
@@ -175,8 +186,7 @@ def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> 
         _region_failure(
             {"eu"},
             _constraint_sets({"allowed_regions": ["eu"]}),
-            {"require_region_match": "true", "region_tag": "request_region"},
-            tags={"request_region": "EU"},
+            "eu",
         )
         is None
     )
@@ -214,7 +224,7 @@ def test_constraint_failure_reuses_precomputed_constraint_sets() -> None:
     }
 
     assert (
-        _constraint_failure(candidate, constraints, _constraint_sets(constraints), tags={})
+        _constraint_failure(candidate, constraints, _constraint_sets(constraints), None)
         == "estimated_cost_exceeds_max"
     )
 

@@ -78,6 +78,12 @@ def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> 
     return region.lower() if region is not None else None
 
 
+def _required_request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
+    if not bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
+        return None
+    return _request_region(constraints, tags)
+
+
 def _region_presence_failure(
     candidate_regions: set[str],
     *,
@@ -142,9 +148,7 @@ def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> s
 def _region_failure(
     candidate_regions: set[str],
     constraint_sets: _ConstraintSets,
-    constraints: Mapping[str, Any],
-    *,
-    tags: Mapping[str, str],
+    requested_region: str | None,
 ) -> str | None:
     if constraint_sets.allowed_regions:
         failure = _region_presence_failure(
@@ -157,16 +161,14 @@ def _region_failure(
     if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
         return "region_blocked"
 
-    if bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
-        requested_region = _request_region(constraints, tags)
-        if requested_region is not None:
-            failure = _region_presence_failure(
-                candidate_regions,
-                matches=requested_region in candidate_regions,
-                mismatch_reason="region_not_supported",
-            )
-            if failure is not None:
-                return failure
+    if requested_region is not None:
+        failure = _region_presence_failure(
+            candidate_regions,
+            matches=requested_region in candidate_regions,
+            mismatch_reason="region_not_supported",
+        )
+        if failure is not None:
+            return failure
 
     return None
 
@@ -185,14 +187,13 @@ def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
     constraint_sets: _ConstraintSets,
-    *,
-    tags: Mapping[str, str],
+    requested_region: str | None,
 ) -> str | None:
     failure = _provider_model_failure(candidate, constraint_sets)
     if failure is not None:
         return failure
 
-    failure = _region_failure(_candidate_regions(candidate), constraint_sets, constraints, tags=tags)
+    failure = _region_failure(_candidate_regions(candidate), constraint_sets, requested_region)
     if failure is not None:
         return failure
 
@@ -210,10 +211,11 @@ def apply_constraints(
         return list(candidates), []
 
     constraint_sets = _constraint_sets(constraints)
+    requested_region = _required_request_region(constraints, tags)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        reason = _constraint_failure(candidate, constraints, constraint_sets, tags=tags)
+        reason = _constraint_failure(candidate, constraints, constraint_sets, requested_region)
         if reason is None:
             allowed.append(candidate)
             continue
