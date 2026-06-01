@@ -5,6 +5,7 @@ from typing import Any
 
 from gateway.services import routing_policy_shape
 from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_quality_scores import candidate_quality_score as _candidate_quality_score_value
 
 
 class RoutingPolicyEvalScoreError(ValueError):
@@ -89,13 +90,7 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
 def _candidate_quality_score(candidate: Any) -> float | None:
     if not isinstance(candidate, dict):
         return None
-    score = routing_policy_shape.score_value(candidate.get("quality_score"))
-    if score is not None:
-        return score
-    metadata = candidate.get("metadata")
-    if isinstance(metadata, dict):
-        return routing_policy_shape.score_value(metadata.get("quality_score"))
-    return None
+    return _candidate_quality_score_value(candidate)
 
 
 def _candidate_model_key(candidate: Any) -> str | None:

@@ -5,7 +5,8 @@ from typing import Any
 from any_llm import AnyLLM
 
 from gateway.services.pricing_service import pricing_model_ref
-from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
+from gateway.services.routing_config_values import dict_or_empty, float_or_none
+from gateway.services.routing_quality_scores import candidate_quality_score
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
 _INFERRED_TIER_BY_OUTPUT_PRICE = (
@@ -14,7 +15,6 @@ _INFERRED_TIER_BY_OUTPUT_PRICE = (
     (2.00, "medium"),
     (5.00, "complex"),
 )
-_QUALITY_SCORE_KEYS = ("quality_score", "benchmark_score", "score", "intelligence_score")
 
 
 @dataclass(frozen=True)
@@ -32,21 +32,6 @@ def _normalize_tier(value: Any) -> str | None:
         return None
     normalized = value.strip().lower()
     return normalized if normalized in TIER_ORDER else None
-
-
-def _first_score_value(item: Mapping[str, Any], keys: tuple[str, ...]) -> float | None:
-    for key in keys:
-        value = score_or_none(item.get(key))
-        if value is not None:
-            return value
-    return None
-
-
-def _candidate_quality_score(item: Mapping[str, Any], metadata: Mapping[str, Any]) -> float | None:
-    item_score = _first_score_value(item, _QUALITY_SCORE_KEYS)
-    if item_score is not None:
-        return item_score
-    return _first_score_value(metadata, _QUALITY_SCORE_KEYS)
 
 
 def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec | None:
@@ -73,7 +58,7 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
     for key in ("region", "regions"):
         if key in item and key not in metadata:
             metadata[key] = item[key]
-    quality_score = _candidate_quality_score(item, metadata)
+    quality_score = candidate_quality_score(item, metadata=metadata)
     return CandidateSpec(
         model=model_value.strip(),
         tier=_normalize_tier(item.get("tier")) or tier,
