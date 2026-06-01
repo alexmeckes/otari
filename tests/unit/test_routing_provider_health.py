@@ -4,7 +4,6 @@ from gateway.services.routing_provider_health import (
     ProviderHealth,
     _provider_health_config,
     _provider_health_enabled,
-    _provider_health_enabled_for_mode,
     _provider_health_from_counts,
     _provider_health_gate_rejection,
     _provider_health_mode,
@@ -12,6 +11,7 @@ from gateway.services.routing_provider_health import (
     _provider_health_status_reason,
     _record_provider_outcome,
     apply_provider_health_gate,
+    apply_provider_health_order,
 )
 
 
@@ -40,20 +40,6 @@ def test_provider_health_helpers_read_shared_health_config_values() -> None:
     assert _provider_health_enabled(health_config) is True
     assert _provider_health_mode(health_config) == "skip_unhealthy"
     assert _provider_health_rate(health_config, "degraded_failure_rate", 0.25) == 1.0
-
-
-def test_provider_health_enabled_for_mode_requires_enabled_matching_mode() -> None:
-    health_config = _provider_health_config({"health": {"enabled": True, "mode": "skip_unhealthy"}})
-
-    assert _provider_health_enabled_for_mode(health_config, "skip_unhealthy") is True
-    assert _provider_health_enabled_for_mode(health_config, "downrank") is False
-    assert (
-        _provider_health_enabled_for_mode(
-            _provider_health_config({"health": {"mode": "skip_unhealthy"}}),
-            "skip_unhealthy",
-        )
-        is False
-    )
 
 
 def test_provider_health_mode_defaults_for_unknown_mode() -> None:
@@ -232,3 +218,40 @@ def test_apply_provider_health_gate_partitions_unhealthy_candidates() -> None:
     assert [(item["model"], item["reason"]) for item in rejected] == [
         ("anthropic:claude-3-5-haiku-latest", "provider_unhealthy")
     ]
+
+
+def test_apply_provider_health_gate_requires_enabled_skip_mode() -> None:
+    unhealthy_candidate = SimpleNamespace(
+        model="openai:gpt-4o-mini",
+        provider="openai",
+        estimated_cost=0.002,
+        provider_health=_health("unhealthy"),
+    )
+
+    assert apply_provider_health_gate(
+        [unhealthy_candidate],
+        config={"health": {"enabled": True, "mode": "downrank"}},
+    ) == ([unhealthy_candidate], [])
+    assert apply_provider_health_gate(
+        [unhealthy_candidate],
+        config={"health": {"mode": "skip_unhealthy"}},
+    ) == ([unhealthy_candidate], [])
+
+
+def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
+    unhealthy_candidate = SimpleNamespace(position=1, provider_health=_health("unhealthy"))
+    healthy_candidate = SimpleNamespace(position=2, provider_health=_health("healthy"))
+    candidates = [unhealthy_candidate, healthy_candidate]
+
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": {"enabled": True, "mode": "downrank"}},
+    ) == [healthy_candidate, unhealthy_candidate]
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": {"enabled": True, "mode": "skip_unhealthy"}},
+    ) == candidates
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": {"mode": "downrank"}},
+    ) == candidates
