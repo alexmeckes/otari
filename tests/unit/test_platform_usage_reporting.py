@@ -4,6 +4,7 @@ from any_llm.types.completion import CompletionUsage
 from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
 from gateway.services.platform_gateway import (
     _platform_gateway_headers,
+    _platform_timeout_seconds,
     _platform_usage_payload,
     _platform_usage_report_request,
     _should_retry_usage_report_status,
@@ -63,6 +64,20 @@ def test_platform_gateway_headers_default_missing_token_to_empty(monkeypatch: py
         monkeypatch.delenv(env_var, raising=False)
 
     assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": ""}
+
+
+def test_platform_timeout_seconds_uses_default_when_missing() -> None:
+    assert _platform_timeout_seconds(GatewayConfig(platform={}), "usage_timeout_ms") == 5
+
+
+def test_platform_timeout_seconds_uses_configured_milliseconds() -> None:
+    assert _platform_timeout_seconds(GatewayConfig(platform={"usage_timeout_ms": 2500}), "usage_timeout_ms") == 2.5
+
+
+def test_platform_timeout_seconds_converts_string_values() -> None:
+    assert (
+        _platform_timeout_seconds(GatewayConfig(platform={"resolve_timeout_ms": "1500"}), "resolve_timeout_ms") == 1.5
+    )
 
 
 def test_platform_usage_report_request_uses_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:

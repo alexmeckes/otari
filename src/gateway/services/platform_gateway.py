@@ -105,8 +105,12 @@ def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, 
     return headers
 
 
+def _platform_timeout_seconds(config: GatewayConfig, key: str, default_ms: int = 5000) -> float:
+    return int(config.platform.get(key, default_ms)) / 1000
+
+
 def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
-    return int(config.platform.get("resolve_timeout_ms", 5000)) / 1000
+    return _platform_timeout_seconds(config, "resolve_timeout_ms")
 
 
 def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
@@ -329,11 +333,10 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
     if not platform_base_url:
         return None
 
-    timeout_ms = int(config.platform.get("usage_timeout_ms", 5000))
     return _PlatformUsageReportRequest(
         url=_platform_url(platform_base_url, "/gateway/usage"),
         headers=_platform_gateway_headers(config),
-        timeout_seconds=timeout_ms / 1000,
+        timeout_seconds=_platform_timeout_seconds(config, "usage_timeout_ms"),
         max_retries=int(config.platform.get("usage_max_retries", 3)),
     )
 
