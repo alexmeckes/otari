@@ -240,6 +240,35 @@ async def test_blocked_domains_filter_in_gateway(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+async def test_domain_filters_match_subdomains_without_crossing_host_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = {
+        "results": [
+            {"url": "https://docs.example.com/a", "title": "Allowed subdomain", "content": "a"},
+            {"url": "https://notexample.com/b", "title": "Boundary mismatch", "content": "b"},
+            {"url": "https://api.blocked.example.com/c", "title": "Blocked subdomain", "content": "c"},
+        ]
+    }
+    _patched_async_client(
+        {("searxng", "/search"): httpx.Response(200, json=body)},
+        monkeypatch,
+    )
+
+    async with WebSearchBackend(
+        base_url="http://searxng:8080",
+        extract_content=False,
+        allowed_domains=("example.com",),
+        blocked_domains=("blocked.example.com",),
+    ) as backend:
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "domain filters"})
+
+    assert "Allowed subdomain" in result
+    assert "Boundary mismatch" not in result
+    assert "Blocked subdomain" not in result
+
+
+@pytest.mark.asyncio
 async def test_max_results_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
     body = {
         "results": [
