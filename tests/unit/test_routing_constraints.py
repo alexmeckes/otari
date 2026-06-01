@@ -8,6 +8,7 @@ from gateway.services.routing_constraints import (
     _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
+    _provider_model_failure,
     _region_failure,
     _region_presence_failure,
     _rejected_candidate_payload,
@@ -102,6 +103,37 @@ def test_membership_failure_reuses_allowed_and_blocked_reasons() -> None:
             blocked_values=set(),
             not_allowed_reason="provider_not_allowed",
             blocked_reason="provider_blocked",
+        )
+        is None
+    )
+
+
+def test_provider_model_failure_preserves_provider_before_model_order() -> None:
+    candidate = SimpleNamespace(provider="anthropic", model="anthropic:claude-3-5-haiku-latest")
+
+    assert (
+        _provider_model_failure(
+            candidate,
+            _constraint_sets({"allowed_providers": ["openai"], "blocked_models": [candidate.model]}),
+        )
+        == "provider_not_allowed"
+    )
+    assert (
+        _provider_model_failure(candidate, _constraint_sets({"blocked_providers": ["anthropic"]}))
+        == "provider_blocked"
+    )
+    assert (
+        _provider_model_failure(candidate, _constraint_sets({"allowed_models": ["openai:gpt-4o"]}))
+        == "model_not_allowed"
+    )
+    assert (
+        _provider_model_failure(candidate, _constraint_sets({"blocked_models": [candidate.model]}))
+        == "model_blocked"
+    )
+    assert (
+        _provider_model_failure(
+            candidate,
+            _constraint_sets({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}),
         )
         is None
     )

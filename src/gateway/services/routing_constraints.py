@@ -106,6 +106,26 @@ def _membership_failure(
     return None
 
 
+def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) -> str | None:
+    failure = _membership_failure(
+        candidate.provider,
+        allowed_values=constraint_sets.allowed_providers,
+        blocked_values=constraint_sets.blocked_providers,
+        not_allowed_reason="provider_not_allowed",
+        blocked_reason="provider_blocked",
+    )
+    if failure is not None:
+        return failure
+
+    return _membership_failure(
+        candidate.model,
+        allowed_values=constraint_sets.allowed_models,
+        blocked_values=constraint_sets.blocked_models,
+        not_allowed_reason="model_not_allowed",
+        blocked_reason="model_blocked",
+    )
+
+
 def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> str | None:
     max_estimated_cost = non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost"))
     if max_estimated_cost is None:
@@ -169,22 +189,7 @@ def _constraint_failure(
 ) -> str | None:
     constraint_sets = _constraint_sets(constraints)
 
-    failure = _membership_failure(
-        candidate.provider,
-        allowed_values=constraint_sets.allowed_providers,
-        blocked_values=constraint_sets.blocked_providers,
-        not_allowed_reason="provider_not_allowed",
-        blocked_reason="provider_blocked",
-    )
-    if failure is not None:
-        return failure
-    failure = _membership_failure(
-        candidate.model,
-        allowed_values=constraint_sets.allowed_models,
-        blocked_values=constraint_sets.blocked_models,
-        not_allowed_reason="model_not_allowed",
-        blocked_reason="model_blocked",
-    )
+    failure = _provider_model_failure(candidate, constraint_sets)
     if failure is not None:
         return failure
 
