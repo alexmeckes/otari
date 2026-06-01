@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from gateway.services import routing_policy_shape
-from gateway.services.routing_config_values import dict_or_empty
+from gateway.services.routing_config_values import dict_or_empty, string_or_none
 from gateway.services.routing_quality_scores import candidate_quality_score as _candidate_quality_score_value
 
 
@@ -97,8 +97,8 @@ def _candidate_model_key(candidate: Any) -> str | None:
     if isinstance(candidate, str):
         return routing_policy_shape.normalized_model_selector(None, candidate)
     if isinstance(candidate, dict):
-        model = candidate.get("model")
-        if isinstance(model, str) and model.strip():
+        model = string_or_none(candidate.get("model"))
+        if model is not None:
             return routing_policy_shape.normalized_model_selector(None, model)
     return None
 
