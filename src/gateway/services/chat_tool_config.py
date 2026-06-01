@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from gateway.log_config import logger
-from gateway.services.routing_config_values import comma_separated_string_list
+from gateway.services.routing_config_values import bool_config, comma_separated_string_list
 from gateway.services.web_search_backend import WebSearchBackend
 
 # Gateway-internal fields the provider SDKs (any-llm, anthropic, openai, ...)
@@ -137,7 +137,7 @@ def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> We
 
     extract_env = os.environ.get("GATEWAY_WEB_SEARCH_EXTRACT")
     if extract_env is not None:
-        kwargs["extract_content"] = extract_env.lower() not in {"0", "false", "no", "off"}
+        kwargs["extract_content"] = bool_config(extract_env, True, coerce_strings=True)
 
     allowed = tool_entry.get("allowed_domains")
     if isinstance(allowed, list) and allowed:

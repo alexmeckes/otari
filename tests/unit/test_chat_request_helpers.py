@@ -154,6 +154,29 @@ def test_build_web_search_backend_ignores_blank_env_engines(monkeypatch: pytest.
     assert backend._engines == default_backend._engines
 
 
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [
+        ("false", False),
+        (" NO ", False),
+        ("true", True),
+        (" yes ", True),
+        ("", True),
+        ("maybe", True),
+    ],
+)
+def test_build_web_search_backend_uses_shared_extract_env_bool_parsing(
+    env_value: str,
+    expected: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_EXTRACT", env_value)
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._extract_content is expected
+
+
 # --- route-level tool selection ----------------------------------------------
 
 
