@@ -6,6 +6,7 @@ from gateway.services.routing_constraints import (
     _candidate_regions,
     _constraint_failure,
     _constraint_sets,
+    _cost_constraint,
     _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
@@ -152,16 +153,34 @@ def test_provider_model_failure_preserves_provider_before_model_order() -> None:
     )
 
 
+def test_cost_constraint_parses_max_cost_and_unknown_cost_behavior() -> None:
+    assert _cost_constraint({}).max_estimated_cost is None
+    cost_constraint = _cost_constraint({"max_estimated_cost": 0.01, "allow_unknown_cost": "true"})
+
+    assert cost_constraint.max_estimated_cost == 0.01
+    assert cost_constraint.allow_unknown_cost is True
+
+
 def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior() -> None:
     unknown_cost = SimpleNamespace(estimated_cost=None)
     expensive = SimpleNamespace(estimated_cost=0.02)
     cheap = SimpleNamespace(estimated_cost=0.001)
 
-    assert _estimated_cost_failure(expensive, {}) is None
-    assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01}) == "estimated_cost_unknown"
-    assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01, "allow_unknown_cost": "true"}) is None
-    assert _estimated_cost_failure(expensive, {"max_estimated_cost": 0.01}) == "estimated_cost_exceeds_max"
-    assert _estimated_cost_failure(cheap, {"max_estimated_cost": 0.01}) is None
+    assert _estimated_cost_failure(expensive, _cost_constraint({})) is None
+    assert _estimated_cost_failure(unknown_cost, _cost_constraint({"max_estimated_cost": 0.01})) == (
+        "estimated_cost_unknown"
+    )
+    assert (
+        _estimated_cost_failure(
+            unknown_cost,
+            _cost_constraint({"max_estimated_cost": 0.01, "allow_unknown_cost": "true"}),
+        )
+        is None
+    )
+    assert _estimated_cost_failure(expensive, _cost_constraint({"max_estimated_cost": 0.01})) == (
+        "estimated_cost_exceeds_max"
+    )
+    assert _estimated_cost_failure(cheap, _cost_constraint({"max_estimated_cost": 0.01})) is None
 
 
 def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> None:
@@ -224,7 +243,7 @@ def test_constraint_failure_reuses_precomputed_constraint_sets() -> None:
     }
 
     assert (
-        _constraint_failure(candidate, constraints, _constraint_sets(constraints), None)
+        _constraint_failure(candidate, _constraint_sets(constraints), None, _cost_constraint(constraints))
         == "estimated_cost_exceeds_max"
     )
 

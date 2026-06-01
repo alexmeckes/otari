@@ -50,6 +50,12 @@ class _ConstraintSets:
     blocked_regions: set[str]
 
 
+@dataclass(frozen=True)
+class _CostConstraint:
+    max_estimated_cost: float | None
+    allow_unknown_cost: bool
+
+
 def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     return _ConstraintSets(
         allowed_providers=_string_set(_constraint_value(constraints, "allowed_providers")),
@@ -58,6 +64,17 @@ def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
         blocked_models=_constraint_model_set(_constraint_value(constraints, "blocked_models")),
         allowed_regions=_region_set(_constraint_value(constraints, "allowed_regions")),
         blocked_regions=_region_set(_constraint_value(constraints, "blocked_regions")),
+    )
+
+
+def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
+    return _CostConstraint(
+        max_estimated_cost=non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost")),
+        allow_unknown_cost=bool_config(
+            _constraint_value(constraints, "allow_unknown_cost"),
+            False,
+            coerce_strings=True,
+        ),
     )
 
 
@@ -132,15 +149,13 @@ def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) ->
     )
 
 
-def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> str | None:
-    max_estimated_cost = non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost"))
-    if max_estimated_cost is None:
+def _estimated_cost_failure(candidate: Any, cost_constraint: _CostConstraint) -> str | None:
+    if cost_constraint.max_estimated_cost is None:
         return None
 
-    allow_unknown_cost = bool_config(_constraint_value(constraints, "allow_unknown_cost"), False, coerce_strings=True)
     if candidate.estimated_cost is None:
-        return None if allow_unknown_cost else "estimated_cost_unknown"
-    if candidate.estimated_cost > max_estimated_cost:
+        return None if cost_constraint.allow_unknown_cost else "estimated_cost_unknown"
+    if candidate.estimated_cost > cost_constraint.max_estimated_cost:
         return "estimated_cost_exceeds_max"
     return None
 
@@ -185,9 +200,9 @@ def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
 
 def _constraint_failure(
     candidate: Any,
-    constraints: Mapping[str, Any],
     constraint_sets: _ConstraintSets,
     requested_region: str | None,
+    cost_constraint: _CostConstraint,
 ) -> str | None:
     failure = _provider_model_failure(candidate, constraint_sets)
     if failure is not None:
@@ -197,7 +212,7 @@ def _constraint_failure(
     if failure is not None:
         return failure
 
-    return _estimated_cost_failure(candidate, constraints)
+    return _estimated_cost_failure(candidate, cost_constraint)
 
 
 def apply_constraints(
@@ -212,10 +227,11 @@ def apply_constraints(
 
     constraint_sets = _constraint_sets(constraints)
     requested_region = _required_request_region(constraints, tags)
+    cost_constraint = _cost_constraint(constraints)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        reason = _constraint_failure(candidate, constraints, constraint_sets, requested_region)
+        reason = _constraint_failure(candidate, constraint_sets, requested_region, cost_constraint)
         if reason is None:
             allowed.append(candidate)
             continue
