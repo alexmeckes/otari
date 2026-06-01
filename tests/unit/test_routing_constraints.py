@@ -6,6 +6,7 @@ from gateway.services.routing_constraints import (
     _candidate_regions,
     _normalize_model_key_for_constraint,
     _request_region,
+    apply_constraints,
 )
 
 
@@ -35,3 +36,52 @@ def test_request_region_uses_trimmed_region_tag_and_value() -> None:
 def test_request_region_ignores_blank_region_tag_and_value() -> None:
     assert _request_region({"region_tag": " "}, {"region": "eu"}) is None
     assert _request_region({"region_tag": "region"}, {"region": " "}) is None
+
+
+def test_apply_constraints_uses_configured_constraint_values() -> None:
+    allowed, rejected = apply_constraints(
+        [
+            SimpleNamespace(
+                model="openai:gpt-4o",
+                provider="openai",
+                estimated_cost=None,
+                metadata={"region": "eu"},
+            ),
+            SimpleNamespace(
+                model="anthropic:claude-3-5-haiku-latest",
+                provider="anthropic",
+                estimated_cost=0.001,
+                metadata={"region": "eu"},
+            ),
+            SimpleNamespace(
+                model="openai:gpt-4o-mini",
+                provider="openai",
+                estimated_cost=0.001,
+                metadata={"region": "eu"},
+            ),
+            SimpleNamespace(
+                model="openai:gpt-4o-large",
+                provider="openai",
+                estimated_cost=0.02,
+                metadata={"regions": ["eu"]},
+            ),
+        ],
+        config={
+            "constraints": {
+                "allowed_providers": ["openai"],
+                "blocked_models": ["openai:gpt-4o-mini"],
+                "region_tag": "request_region",
+                "require_region_match": "true",
+                "max_estimated_cost": 0.01,
+                "allow_unknown_cost": "true",
+            }
+        },
+        tags={"request_region": " EU "},
+    )
+
+    assert [candidate.model for candidate in allowed] == ["openai:gpt-4o"]
+    assert [(item["model"], item["reason"]) for item in rejected] == [
+        ("anthropic:claude-3-5-haiku-latest", "provider_not_allowed"),
+        ("openai:gpt-4o-mini", "model_blocked"),
+        ("openai:gpt-4o-large", "estimated_cost_exceeds_max"),
+    ]
