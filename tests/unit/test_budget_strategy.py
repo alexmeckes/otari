@@ -11,6 +11,7 @@ from gateway.services.budget_tags import normalize_budget_strategy
         ("disabled", "disabled"),
         (" CAS ", "cas"),
         ("", "for_update"),
+        (" ", "for_update"),
         ("unknown", "for_update"),
     ],
 )

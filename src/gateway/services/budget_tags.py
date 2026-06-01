@@ -16,6 +16,7 @@ from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.services.budget_alerts import record_budget_alerts
 from gateway.services.budget_periods import budget_period_window, budget_reset_due
 from gateway.services.budget_reset_logs import new_budget_reset_log
+from gateway.services.routing_config_values import lower_string_or_none
 
 TAG_BUDGET_SCOPE = "tag"
 
@@ -23,8 +24,7 @@ IsModelFree = Callable[[AsyncSession, str], Awaitable[bool]]
 
 
 def normalize_budget_strategy(strategy: str) -> str:
-    normalized_strategy = strategy or "for_update"
-    normalized_strategy = normalized_strategy.strip().lower()
+    normalized_strategy = lower_string_or_none(strategy) or "for_update"
     if normalized_strategy not in {"for_update", "cas", "disabled"}:
         return "for_update"
     return normalized_strategy

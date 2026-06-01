@@ -12,6 +12,7 @@ from gateway.services.budget_service import (
     normalize_alert_thresholds,
     normalize_alert_webhook_url,
 )
+from gateway.services.routing_config_values import lower_string_or_none
 
 
 def _budget_match_tags(budget: Budget) -> dict[str, Any]:
@@ -35,7 +36,7 @@ def _budget_alert_thresholds(budget: Budget) -> list[float]:
 
 
 def normalize_budget_scope_type(value: str) -> str:
-    normalized = value.strip().lower()
+    normalized = lower_string_or_none(value)
     if normalized not in {"entity", TAG_BUDGET_SCOPE}:
         raise ValueError("scope_type must be 'entity' or 'tag'")
     return normalized

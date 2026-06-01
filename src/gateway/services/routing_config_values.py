@@ -17,6 +17,11 @@ def string_or_none(value: Any) -> str | None:
     return None
 
 
+def lower_string_or_none(value: Any) -> str | None:
+    parsed = string_or_none(value)
+    return parsed.lower() if parsed is not None else None
+
+
 def string_list(value: Any) -> list[str]:
     parsed = string_or_none(value)
     if parsed is not None:
@@ -48,8 +53,8 @@ def non_negative_int_config(value: Any, default: int) -> int:
 def bool_config(value: Any, default: bool, *, coerce_strings: bool = False) -> bool:
     if isinstance(value, bool):
         return value
-    if coerce_strings and isinstance(value, str):
-        lowered = value.strip().lower()
+    if coerce_strings:
+        lowered = lower_string_or_none(value)
         if lowered in {"1", "true", "yes", "on"}:
             return True
         if lowered in {"0", "false", "no", "off"}:

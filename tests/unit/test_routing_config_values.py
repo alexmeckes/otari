@@ -6,6 +6,7 @@ from gateway.services.routing_config_values import (
     dict_or_empty,
     float_or_none,
     int_config,
+    lower_string_or_none,
     non_negative_float_or_none,
     non_negative_int_config,
     score_or_none,
@@ -75,6 +76,19 @@ def test_string_or_none(value: object, expected: str | None) -> None:
 
 
 @pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" Team ", "team"),
+        (" ", None),
+        (42, None),
+        (None, None),
+    ],
+)
+def test_lower_string_or_none(value: object, expected: str | None) -> None:
+    assert lower_string_or_none(value) == expected
+
+
+@pytest.mark.parametrize(
     ("value", "default", "expected"),
     [
         (True, False, True),
@@ -94,6 +108,7 @@ def test_bool_config_strict(value: object, default: bool, expected: bool) -> Non
         (" yes ", False, True),
         ("0", True, False),
         ("off", True, False),
+        (" ", True, True),
         ("maybe", True, True),
         (None, False, False),
     ],

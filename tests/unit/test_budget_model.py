@@ -23,6 +23,8 @@ def test_budget_request_scope_normalization_rejects_unsupported_values() -> None
         CreateBudgetRequest(scope_type="workspace")
     with pytest.raises(ValidationError, match="scope_type must be 'entity' or 'tag'"):
         UpdateBudgetRequest(scope_type="workspace")
+    with pytest.raises(ValidationError, match="scope_type must be 'entity' or 'tag'"):
+        CreateBudgetRequest(scope_type=" ")
 
 
 def test_budget_requests_normalize_alert_fields() -> None:
