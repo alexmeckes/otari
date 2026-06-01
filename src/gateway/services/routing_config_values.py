@@ -22,6 +22,10 @@ def lower_string_or_none(value: Any) -> str | None:
     return parsed.lower() if parsed is not None else None
 
 
+def coerced_lower_string(value: Any) -> str:
+    return str(value).strip().lower()
+
+
 def string_list(value: Any) -> list[str]:
     parsed = string_or_none(value)
     if parsed is not None:

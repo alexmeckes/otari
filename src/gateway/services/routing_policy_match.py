@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from hashlib import sha256
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty, float_or_none
+from gateway.services.routing_config_values import coerced_lower_string, dict_or_empty, float_or_none
 
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
@@ -92,7 +92,7 @@ def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[
     if tag_key is None:
         return False
     operator = condition.get("operator", condition.get("op", "eq"))
-    op = str(operator).strip().lower()
+    op = coerced_lower_string(operator)
     expected = condition.get("value")
     exists = tag_key in request_tags
     actual = request_tags.get(tag_key)
@@ -168,7 +168,7 @@ def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Map
     if "conditions" not in match_config:
         return False
     logic_value = match_config.get("logic", "and")
-    logic = str(logic_value).strip().lower()
+    logic = coerced_lower_string(logic_value)
     return _evaluate_condition_group(conditions, request_tags, logic="or" if logic in {"or", "any"} else "and")
 
 

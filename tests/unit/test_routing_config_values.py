@@ -2,6 +2,7 @@ import pytest
 
 from gateway.services.routing_config_values import (
     bool_config,
+    coerced_lower_string,
     comma_separated_string_list,
     dict_or_empty,
     float_or_none,
@@ -86,6 +87,19 @@ def test_string_or_none(value: object, expected: str | None) -> None:
 )
 def test_lower_string_or_none(value: object, expected: str | None) -> None:
     assert lower_string_or_none(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" Team ", "team"),
+        (42, "42"),
+        (None, "none"),
+        (True, "true"),
+    ],
+)
+def test_coerced_lower_string(value: object, expected: str) -> None:
+    assert coerced_lower_string(value) == expected
 
 
 @pytest.mark.parametrize(
