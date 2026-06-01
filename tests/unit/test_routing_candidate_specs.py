@@ -33,6 +33,30 @@ def test_configured_candidate_specs_dedupes_with_normalized_selector() -> None:
     assert specs[0].quality_score == 0.9
 
 
+def test_configured_candidate_specs_trims_models_skips_blanks_and_normalizes_tiers() -> None:
+    specs = configured_candidate_specs(
+        {
+            "candidates": [
+                " openai:gpt-4o-mini ",
+                " ",
+                {
+                    "model": " anthropic:claude-3-5-haiku-latest ",
+                    "tier": " Complex ",
+                },
+                {
+                    "model": " ",
+                    "tier": "reasoning",
+                },
+            ]
+        }
+    )
+
+    assert [(spec.model, spec.tier) for spec in specs] == [
+        ("openai:gpt-4o-mini", None),
+        ("anthropic:claude-3-5-haiku-latest", "complex"),
+    ]
+
+
 def test_configured_candidate_specs_reads_quality_score_aliases_from_metadata() -> None:
     specs = configured_candidate_specs(
         {

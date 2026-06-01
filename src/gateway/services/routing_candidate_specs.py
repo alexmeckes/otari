@@ -5,7 +5,7 @@ from typing import Any
 from any_llm import AnyLLM
 
 from gateway.services.pricing_service import pricing_model_ref
-from gateway.services.routing_config_values import dict_or_empty, float_or_none
+from gateway.services.routing_config_values import dict_or_empty, float_or_none, string_or_none
 from gateway.services.routing_quality_scores import candidate_quality_score
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
@@ -28,17 +28,16 @@ class CandidateSpec:
 
 
 def _normalize_tier(value: Any) -> str | None:
-    if not isinstance(value, str):
+    tier = string_or_none(value)
+    if tier is None:
         return None
-    normalized = value.strip().lower()
+    normalized = tier.lower()
     return normalized if normalized in TIER_ORDER else None
 
 
 def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec | None:
-    if isinstance(item, str):
-        model = item.strip()
-        if not model:
-            return None
+    model = string_or_none(item)
+    if model is not None:
         return CandidateSpec(
             model=model,
             tier=tier,
@@ -50,8 +49,8 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
 
     if not isinstance(item, dict):
         return None
-    model_value = item.get("model")
-    if not isinstance(model_value, str) or not model_value.strip():
+    model_value = string_or_none(item.get("model"))
+    if model_value is None:
         return None
 
     metadata = dict_or_empty(item.get("metadata"), copy_value=True)
@@ -60,7 +59,7 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
             metadata[key] = item[key]
     quality_score = candidate_quality_score(item, metadata=metadata)
     return CandidateSpec(
-        model=model_value.strip(),
+        model=model_value,
         tier=_normalize_tier(item.get("tier")) or tier,
         input_price_per_million=float_or_none(item.get("input_price_per_million")),
         output_price_per_million=float_or_none(item.get("output_price_per_million")),
