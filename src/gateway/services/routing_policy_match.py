@@ -5,6 +5,8 @@ from typing import Any
 
 from gateway.services.routing_config_values import coerced_lower_string, dict_or_empty, float_or_none
 
+_CONDITION_GROUP_KEYS = (("any", "or"), ("or", "or"), ("all", "and"), ("and", "and"))
+
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
     tags = dict_or_empty(_policy_match_value(config, "tags"))
@@ -151,24 +153,28 @@ def _evaluate_condition_group(
     return any(results) if logic == "or" else all(results)
 
 
+def _condition_group(config: Mapping[str, Any]) -> tuple[Any, str] | None:
+    for key, logic in _CONDITION_GROUP_KEYS:
+        if key in config:
+            return config[key], logic
+    return None
+
+
 def matches_tag_condition(condition: Any, request_tags: Mapping[str, str]) -> bool:
     if not isinstance(condition, dict):
         return False
-    for key, logic in (("any", "or"), ("or", "or"), ("all", "and"), ("and", "and")):
-        if key in condition:
-            return _evaluate_condition_group(condition[key], request_tags, logic=logic)
+    group = _condition_group(condition)
+    if group is not None:
+        conditions, logic = group
+        return _evaluate_condition_group(conditions, request_tags, logic=logic)
     return _evaluate_tag_condition(condition, request_tags)
 
 
 def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
-    if "any" in match_config:
-        return _evaluate_condition_group(match_config["any"], request_tags, logic="or")
-    if "or" in match_config:
-        return _evaluate_condition_group(match_config["or"], request_tags, logic="or")
-    if "all" in match_config:
-        return _evaluate_condition_group(match_config["all"], request_tags, logic="and")
-    if "and" in match_config:
-        return _evaluate_condition_group(match_config["and"], request_tags, logic="and")
+    group = _condition_group(match_config)
+    if group is not None:
+        conditions, logic = group
+        return _evaluate_condition_group(conditions, request_tags, logic=logic)
     conditions = match_config.get("conditions")
     if "conditions" not in match_config:
         return False

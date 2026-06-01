@@ -84,6 +84,19 @@ def test_matches_policy_match_config_trims_and_lowers_condition_logic() -> None:
     assert matches_policy_match_config(config, {"tier": "silver", "team": "platform"})
 
 
+def test_condition_group_aliases_preserve_order_for_nested_and_policy_configs() -> None:
+    condition = {
+        "any": [{"tag": "tier", "value": "gold"}],
+        "all": [{"tag": "team", "value": "platform"}],
+    }
+    request_tags = {"team": "platform"}
+
+    assert not matches_tag_condition(condition, request_tags)
+    assert not matches_policy_match_config({"match": condition}, request_tags)
+    assert matches_tag_condition({"or": [{"tag": "team", "value": "platform"}]}, request_tags)
+    assert matches_policy_match_config({"match": {"and": [{"tag": "team", "value": "platform"}]}}, request_tags)
+
+
 def test_matches_policy_match_config_preserves_non_or_logic_as_and() -> None:
     config = {
         "match": {
