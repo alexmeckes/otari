@@ -10,10 +10,6 @@ _DEFAULT_UNKNOWN_COST_SCORE = 0.0
 _DEFAULT_UNKNOWN_LATENCY_SCORE = 0.5
 
 
-def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return nested_dict_or_empty(config, "scoring", "score_weights")
-
-
 def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:
     weights = scoring.get("weights")
     if isinstance(weights, dict):
@@ -62,7 +58,7 @@ def attach_weighted_scores(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    scoring = _weighted_scoring_config(config)
+    scoring = nested_dict_or_empty(config, "scoring", "score_weights")
     weights = _weighted_score_weights(scoring)
     weight_total = sum(weights.values())
     default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
