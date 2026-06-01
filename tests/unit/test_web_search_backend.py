@@ -114,6 +114,21 @@ async def test_call_tool_returns_formatted_results_without_extraction(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_call_tool_trims_query_before_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = _patched_async_client(
+        {("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY)},
+        monkeypatch,
+    )
+
+    async with WebSearchBackend(base_url="http://searxng:8080", extract_content=False) as backend:
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": " claude code "})
+
+    assert "[1] Post A" in result
+    search_request = next(r for r in transport.captured if r.url.path == "/search")
+    assert search_request.url.params["q"] == "claude code"
+
+
+@pytest.mark.asyncio
 async def test_call_tool_extracts_content_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     from gateway.services import url_safety
 
@@ -257,8 +272,9 @@ async def test_backend_unreachable_raises(monkeypatch: pytest.MonkeyPatch) -> No
             await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "x"})
 
 
+@pytest.mark.parametrize("query_value", ["   ", "", None, 0, False])
 @pytest.mark.asyncio
-async def test_empty_query_returns_error_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_empty_query_returns_error_message(query_value: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     # No HTTP call should be made for an empty query — backend short-circuits.
     transport = _patched_async_client(
         {("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY)},
@@ -266,7 +282,7 @@ async def test_empty_query_returns_error_message(monkeypatch: pytest.MonkeyPatch
     )
 
     async with WebSearchBackend(base_url="http://searxng:8080") as backend:
-        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "   "})
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": query_value})
 
     assert "[tool error]" in result
     # Should not have hit /search.

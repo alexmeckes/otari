@@ -184,7 +184,7 @@ class WebSearchBackend:
         if self._client is None:
             raise RuntimeError("WebSearchBackend not entered as an async context manager")
 
-        query = (arguments.get("query") or "").strip()
+        query = _coerced_text(arguments.get("query"))
         if not query:
             return "[tool error] empty query"
 
@@ -355,7 +355,7 @@ class WebSearchBackend:
         return None
 
 
-def _result_text(value: Any, *, default: str = "") -> str:
+def _coerced_text(value: Any, *, default: str = "") -> str:
     if not value:
         return default
     return coerced_string_or_none(value) or ""
@@ -373,10 +373,10 @@ def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
 
     parts: list[str] = []
     for i, r in enumerate(results, start=1):
-        title = _result_text(r.get("title"), default="(untitled)")
-        url = _result_text(r.get("url"))
-        snippet = _result_text(r.get("content"))
-        extracted = _result_text(r.get("extracted_content"))
+        title = _coerced_text(r.get("title"), default="(untitled)")
+        url = _coerced_text(r.get("url"))
+        snippet = _coerced_text(r.get("content"))
+        extracted = _coerced_text(r.get("extracted_content"))
         body = extracted or snippet
         if len(body) > _CONTENT_TRUNCATE_CHARS:
             body = body[:_CONTENT_TRUNCATE_CHARS].rstrip() + "…"
