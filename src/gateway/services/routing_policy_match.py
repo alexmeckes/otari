@@ -137,8 +137,8 @@ def _evaluate_condition_group(
 ) -> bool:
     if not isinstance(conditions, list) or not conditions:
         return False
-    results = [matches_tag_condition(condition, request_tags) for condition in conditions]
-    return any(results) if logic == "or" else all(results)
+    matches = (matches_tag_condition(condition, request_tags) for condition in conditions)
+    return any(matches) if logic == "or" else all(matches)
 
 
 def _condition_group(config: Mapping[str, Any]) -> tuple[Any, str] | None:
