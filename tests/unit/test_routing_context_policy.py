@@ -1,6 +1,20 @@
 from gateway.services.routing_context_policy import apply_context_policy
 
 
+def test_context_policy_enabled_defaults_follow_config_presence() -> None:
+    request_body = {"messages": [{"role": "user", "content": "hello"}]}
+
+    assert apply_context_policy({}, request_body) == (request_body, None)
+    assert apply_context_policy({"context": {"enabled": False, "max_prompt_tokens": 1}}, request_body) == (
+        request_body,
+        None,
+    )
+    _, trace = apply_context_policy({"context": {"max_prompt_tokens": 1}}, request_body)
+
+    assert trace is not None
+    assert trace["status"] == "unchanged"
+
+
 def test_context_policy_summarizes_with_normalized_string_settings() -> None:
     messages = [
         {"role": " USER ", "content": "alpha " * 80},
