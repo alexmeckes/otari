@@ -84,6 +84,33 @@ async def test_external_classifier_headers_skip_blank_keys_without_trimming_kept
 
 
 @pytest.mark.asyncio
+async def test_external_classifier_threshold_uses_shared_score_parsing() -> None:
+    async def post_classifier(
+        **_kwargs: Any,
+    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+        return 200, {"score": 0.82, "label": " prompt_injection "}, None
+
+    violations, results = await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={
+            "external_classifiers": [
+                {
+                    "name": "prompt-shield",
+                    "url": "https://classifier.example.test/check",
+                    "threshold": 0.8,
+                }
+            ]
+        },
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+
+    assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
+    assert results[0]["status"] == "flagged"
+    assert results[0]["score"] == 0.82
+    assert results[0]["threshold"] == 0.8
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> None:
     async def post_classifier(
         **kwargs: Any,
