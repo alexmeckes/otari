@@ -67,7 +67,9 @@ def test_eval_score_pipeline_loads_jsonl_csv_and_nested_json(tmp_path: Path) -> 
     jsonl_path.write_text(
         "\n".join(
             [
+                " ",
                 json.dumps({"model": "openai:gpt-4o", "score": 0.9}),
+                "",
                 json.dumps({"model": "openai:gpt-4o-mini", "benchmark_score": 72}),
             ]
         ),
@@ -110,6 +112,26 @@ def test_eval_score_pipeline_rejects_non_object_json_row_lists(tmp_path: Path) -
 def test_eval_score_pipeline_rejects_rows_without_score() -> None:
     with pytest.raises(EvalScorePipelineError, match="must include score"):
         normalize_eval_score_row({"model": "openai:gpt-4o"})
+
+
+def test_eval_score_pipeline_metadata_presence_omits_blank_values_and_preserves_scalars() -> None:
+    item = normalize_eval_score_row(
+        {
+            "model": "openai:gpt-4o",
+            "score": 0.9,
+            "blank": " ",
+            "empty": "",
+            "none_value": None,
+            "passed": False,
+            "attempts": 0,
+        }
+    )
+
+    assert item["metadata"] == {
+        "passed": False,
+        "attempts": 0,
+        "row_number": 1,
+    }
 
 
 def test_eval_score_pipeline_string_alias_lookup_trims_and_preserves_numeric_values() -> None:

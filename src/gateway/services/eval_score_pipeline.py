@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, TypeVar
 
-from gateway.services.routing_config_values import float_or_none, string_or_none
+from gateway.services.routing_config_values import coerced_string_or_none, float_or_none, string_or_none
 
 _ParsedValue = TypeVar("_ParsedValue")
 
@@ -36,7 +36,7 @@ class EvalScorePipelineError(ValueError):
 
 
 def _is_present(value: Any) -> bool:
-    return value is not None and str(value).strip() != ""
+    return value is not None and coerced_string_or_none(value) is not None
 
 
 def _coerce_string(value: Any) -> str | None:
@@ -172,9 +172,10 @@ def load_eval_score_rows(path: Path) -> list[Mapping[str, Any]]:
         rows: list[Mapping[str, Any]] = []
         with path.open(encoding="utf-8") as handle:
             for line_number, line in enumerate(handle, start=1):
-                if not line.strip():
+                parsed_line = string_or_none(line)
+                if parsed_line is None:
                     continue
-                parsed = json.loads(line)
+                parsed = json.loads(parsed_line)
                 if not isinstance(parsed, dict):
                     raise EvalScorePipelineError(f"JSONL line {line_number} must be an object")
                 rows.append(parsed)
