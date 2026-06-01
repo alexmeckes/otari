@@ -24,13 +24,9 @@ def policy_match_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(config.get("match"))
 
 
-def _policy_match_alias_value(config: Mapping[str, Any], primary_key: str, fallback_key: str) -> Any:
-    match_config = policy_match_config(config)
-    return match_config.get(primary_key, match_config.get(fallback_key))
-
-
 def policy_match_rollout_percentage(config: Mapping[str, Any]) -> float:
-    value = _policy_match_alias_value(config, "rollout_percentage", "percentage")
+    match_config = policy_match_config(config)
+    value = match_config.get("rollout_percentage", match_config.get("percentage"))
     parsed = float_or_none(value)
     return 100.0 if parsed is None else min(max(parsed, 0.0), 100.0)
 
