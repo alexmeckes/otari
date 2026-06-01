@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.api.deps import get_config, get_db_if_needed
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
+from gateway.services.platform_gateway import _platform_timeout_seconds, _platform_url
 from gateway.version import __version__
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -19,11 +20,10 @@ async def _check_platform_reachability(config: GatewayConfig) -> bool:
         return False
 
     health_path = config.platform.get("health_path", "/utils/health-check/")
-    timeout_ms = int(config.platform.get("resolve_timeout_ms", 5000))
-    health_url = f"{platform_base_url.rstrip('/')}/{health_path.lstrip('/')}"
+    health_url = _platform_url(platform_base_url, health_path)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_ms / 1000) as client:
+        async with httpx.AsyncClient(timeout=_platform_timeout_seconds(config, "resolve_timeout_ms")) as client:
             response = await client.get(health_url)
         return response.status_code < 500
     except (httpx.TimeoutException, httpx.NetworkError):
