@@ -1,0 +1,46 @@
+from gateway.services.routing_guardrails import (
+    _combine_guardrail_list,
+    _guardrail_list_items,
+    _guardrail_preset_expansion,
+    _guardrail_preset_values,
+    _normalize_guardrail_preset_name,
+    guardrail_action,
+)
+
+
+def test_normalize_guardrail_preset_name_trims_and_applies_aliases() -> None:
+    assert _normalize_guardrail_preset_name(" prompt-shield ") == "prompt_injection"
+    assert _normalize_guardrail_preset_name({"preset": " credential "}) == "credential_leak"
+    assert _normalize_guardrail_preset_name({"name": " "}) is None
+
+
+def test_guardrail_preset_values_accepts_trimmed_string_sources() -> None:
+    assert _guardrail_preset_values({"presets": " pii "}) == ["pii"]
+    assert _guardrail_preset_values({"managed_presets": " dlp "}) == ["dlp"]
+    assert _guardrail_preset_values({"presets": " "}) == []
+
+
+def test_guardrail_list_items_accepts_trimmed_string_values() -> None:
+    assert _guardrail_list_items(" token ") == ["token"]
+    assert _guardrail_list_items(" ") == []
+
+
+def test_combine_guardrail_list_keeps_existing_deduping_behavior() -> None:
+    combined = _combine_guardrail_list(
+        [{"name": "secret", "pattern": "token"}],
+        [{"name": "secret", "pattern": "token"}, "openai"],
+    )
+
+    assert combined == [{"name": "secret", "pattern": "token"}, "openai"]
+
+
+def test_guardrail_preset_expansion_reports_applied_and_ignored_presets() -> None:
+    _config, metadata = _guardrail_preset_expansion({"presets": [" pii ", "unknown-preset", "pii"]})
+
+    assert metadata == {"applied": ["pii"], "ignored": ["unknown_preset"]}
+
+
+def test_guardrail_action_trims_known_actions_and_defaults_to_block() -> None:
+    assert guardrail_action({"guardrails": {"action": " observe "}}) == "observe"
+    assert guardrail_action({"guardrails": {"action": "audit"}}) == "block"
+    assert guardrail_action({"guardrails": {"action": " "}}) == "block"

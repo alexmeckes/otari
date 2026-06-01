@@ -7,7 +7,7 @@ from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
-from gateway.services.routing_config_values import bool_config, string_list
+from gateway.services.routing_config_values import bool_config, string_list, string_or_none
 from gateway.services.routing_guardrail_helpers import (
     guardrail_violation,
     guardrails_config,
@@ -72,9 +72,10 @@ def _normalize_guardrail_preset_name(value: Any) -> str | None:
     name: Any = value
     if isinstance(value, dict):
         name = value.get("name") or value.get("preset")
-    if not isinstance(name, str) or not name.strip():
+    name_value = string_or_none(name)
+    if name_value is None:
         return None
-    normalized = name.strip().lower().replace("-", "_")
+    normalized = name_value.lower().replace("-", "_")
     return _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
 
 
@@ -84,8 +85,9 @@ def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
         presets = guardrails.get("managed_presets")
     if isinstance(presets, list):
         return presets
-    if isinstance(presets, str) and presets.strip():
-        return [presets]
+    preset = string_or_none(presets)
+    if preset is not None:
+        return [preset]
     return []
 
 
@@ -94,8 +96,9 @@ def _guardrail_list_items(value: Any) -> list[Any]:
         return value
     if isinstance(value, dict):
         return [value]
-    if isinstance(value, str) and value.strip():
-        return [value]
+    item = string_or_none(value)
+    if item is not None:
+        return [item]
     return []
 
 
@@ -171,9 +174,9 @@ def _guardrails_enabled(config: Mapping[str, Any]) -> bool:
 
 
 def guardrail_action(config: Mapping[str, Any]) -> str:
-    action = guardrails_config(config).get("action")
-    if isinstance(action, str) and action.strip().lower() in _GUARDRAIL_ACTIONS:
-        return action.strip().lower()
+    action = string_or_none(guardrails_config(config).get("action"))
+    if action is not None and action.lower() in _GUARDRAIL_ACTIONS:
+        return action.lower()
     return "block"
 
 
