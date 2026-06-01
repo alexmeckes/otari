@@ -13,22 +13,24 @@ def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(guardrails_config(config).get("redactions"))
 
 
-def _redactions_enabled(config: Mapping[str, Any]) -> bool:
-    redactions = _redactions_config(config)
-    return bool_config(redactions.get("enabled"), bool(redactions))
+def _redaction_value(redactions: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    return redactions.get(key, default)
 
 
-def _redaction_rules(config: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
-    redactions = _redactions_config(config)
+def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
+    return bool_config(_redaction_value(redactions, "enabled"), bool(redactions))
+
+
+def _redaction_rules(redactions: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
     rules: list[tuple[str, str, re.Pattern[str]]] = []
 
     for pii_type, pattern in pii_patterns_from_config(
-        redactions.get("pii"),
-        fallback_types=redactions.get("pii_types"),
+        _redaction_value(redactions, "pii"),
+        fallback_types=_redaction_value(redactions, "pii_types"),
     ):
         rules.append(("pii", pii_type, pattern))
 
-    for name, pattern in named_patterns(redactions.get("patterns")):
+    for name, pattern in named_patterns(_redaction_value(redactions, "patterns")):
         rules.append(("pattern", name, pattern))
     return rules
 
@@ -68,8 +70,8 @@ def _redact_content(
     return value
 
 
-def _redaction_replacement(config: Mapping[str, Any]) -> str:
-    replacement = _redactions_config(config).get("replacement")
+def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
+    replacement = _redaction_value(redactions, "replacement")
     if isinstance(replacement, str):
         return replacement
     return "[REDACTED]"
@@ -81,12 +83,12 @@ def apply_guardrail_redactions(
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Apply policy redactions to provider-bound request content."""
     body = copy.deepcopy(dict(request_body))
-    if not _redactions_enabled(config):
+    redactions = _redactions_config(config)
+    if not _redactions_enabled(redactions):
         return body, None
 
-    rules = _redaction_rules(config)
-    redactions = _redactions_config(config)
-    replacement = _redaction_replacement(config)
+    rules = _redaction_rules(redactions)
+    replacement = _redaction_replacement(redactions)
     if not rules:
         return body, {
             "enabled": True,
@@ -128,5 +130,5 @@ def apply_guardrail_redactions(
         "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": count_items,
-        "pattern_count": len(named_patterns(redactions.get("patterns"))),
+        "pattern_count": len(named_patterns(_redaction_value(redactions, "patterns"))),
     }
