@@ -79,3 +79,31 @@ async def test_evaluate_guardrails_matches_blocked_terms_and_prompt_phrases_case
         {"type": "blocked_term", "rule": "Exfiltrate Data"},
         {"type": "prompt_injection", "rule": "Reveal Admin Token"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_evaluate_guardrails_matches_blocked_patterns_and_pii() -> None:
+    result = await evaluate_guardrails(
+        {
+            "guardrails": {
+                "enabled": True,
+                "blocked_patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+                "pii": {"enabled": True, "types": ["email"]},
+            }
+        },
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Email ada@example.com about token-123.",
+                }
+            ]
+        },
+    )
+
+    assert result is not None
+    assert result["status"] == "blocked"
+    assert result["violations"] == [
+        {"type": "blocked_pattern", "rule": "token"},
+        {"type": "pii", "rule": "email"},
+    ]

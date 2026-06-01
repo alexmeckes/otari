@@ -69,6 +69,10 @@ _GUARDRAIL_PRESET_ALIASES = {
 }
 
 
+def _guardrail_value(guardrails: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    return guardrails.get(key, default)
+
+
 def _normalize_guardrail_preset_name(value: Any) -> str | None:
     name: Any = value
     if isinstance(value, dict):
@@ -81,9 +85,9 @@ def _normalize_guardrail_preset_name(value: Any) -> str | None:
 
 
 def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
-    presets = guardrails.get("presets")
+    presets = _guardrail_value(guardrails, "presets")
     if presets is None:
-        presets = guardrails.get("managed_presets")
+        presets = _guardrail_value(guardrails, "managed_presets")
     if isinstance(presets, list):
         return presets
     preset = string_or_none(presets)
@@ -171,11 +175,11 @@ def _effective_guardrails_config(
 
 def _guardrails_enabled(config: Mapping[str, Any]) -> bool:
     guardrails = guardrails_config(config)
-    return bool_config(guardrails.get("enabled"), bool(guardrails))
+    return bool_config(_guardrail_value(guardrails, "enabled"), bool(guardrails))
 
 
 def guardrail_action(config: Mapping[str, Any]) -> str:
-    action = string_or_none(guardrails_config(config).get("action"))
+    action = string_or_none(_guardrail_value(guardrails_config(config), "action"))
     if action is not None and action.lower() in _GUARDRAIL_ACTIONS:
         return action.lower()
     return "block"
@@ -216,20 +220,20 @@ async def evaluate_guardrails(
     violations.extend(
         _case_insensitive_text_violations(
             "blocked_term",
-            string_list(guardrails.get("blocked_terms")),
+            string_list(_guardrail_value(guardrails, "blocked_terms")),
             normalized_text,
         )
     )
 
-    for name, pattern in named_patterns(guardrails.get("blocked_patterns")):
+    for name, pattern in named_patterns(_guardrail_value(guardrails, "blocked_patterns")):
         if pattern.search(request_text):
             violations.append(guardrail_violation("blocked_pattern", name))
 
-    for pii_type, pii_pattern in pii_patterns_from_config(guardrails.get("pii")):
+    for pii_type, pii_pattern in pii_patterns_from_config(_guardrail_value(guardrails, "pii")):
         if pii_pattern.search(request_text):
             violations.append(guardrail_violation("pii", pii_type))
 
-    injection_config = guardrails.get("prompt_injection")
+    injection_config = _guardrail_value(guardrails, "prompt_injection")
     injection_enabled = bool_config(
         guardrail_config_value(injection_config, "enabled", scalar_value=injection_config),
         False,
