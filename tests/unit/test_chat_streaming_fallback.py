@@ -11,10 +11,12 @@ from gateway.core.config import GatewayConfig
         ({}, True, 30.0),
         ({"streaming_first_chunk_timeout_ms": 750}, False, 0.75),
         ({"streaming_first_chunk_timeout_ms_tool_loop": 1250}, True, 1.25),
+        ({"streaming_first_chunk_timeout_ms": "1750"}, False, 1.75),
+        ({"streaming_first_chunk_timeout_ms_tool_loop": "45000"}, True, 45.0),
     ],
 )
 def test_first_chunk_timeout_seconds_defaults_and_overrides(
-    platform: dict[str, int],
+    platform: dict[str, int | str],
     tool_mode: bool,
     expected_seconds: float,
 ) -> None:

@@ -24,6 +24,7 @@ from gateway.services.mcp_loop import DEFAULT_MAX_TOOL_ITERATIONS, mcp_tool_loop
 from gateway.services.platform_gateway import (
     ResolvedAttempt,
     ResolvedRoute,
+    _platform_timeout_seconds,
     classify_upstream_error,
     report_platform_usage,
 )
@@ -38,16 +39,12 @@ _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms
 
 def _first_chunk_timeout_seconds(config: GatewayConfig, *, tool_mode: bool) -> float:
     if tool_mode:
-        timeout_ms = config.platform.get(
+        return _platform_timeout_seconds(
+            config,
             _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY,
             _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP,
         )
-    else:
-        timeout_ms = config.platform.get(
-            _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY,
-            _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS,
-        )
-    return int(timeout_ms) / 1000
+    return _platform_timeout_seconds(config, _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY, _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS)
 
 
 async def run_streaming_with_fallback(
