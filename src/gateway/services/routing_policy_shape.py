@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from gateway.services.pricing_service import pricing_model_ref
-from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none
+from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none, string_or_none
 
 DEFAULT_STRATEGY_TYPES = {"fallback", "intelligent", "weighted_score"}
 INTELLIGENT_AXES = {"cost", "performance", "intelligence"}
@@ -75,14 +75,14 @@ def _provider_priority(item: Mapping[str, Any], position: int) -> float:
 
 
 def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[str, Any]:
-    provider = item.get("provider")
-    model = item.get("model")
-    if not isinstance(model, str) or not model.strip():
+    provider = string_or_none(item.get("provider"))
+    model = string_or_none(item.get("model"))
+    if model is None:
         raise _shape_error("default_strategy.providers entries must include a non-empty model")
-    if provider is not None and (not isinstance(provider, str) or not provider.strip()):
+    if "provider" in item and provider is None:
         raise _shape_error("default_strategy.providers entries must include a non-empty provider when set")
 
-    candidate: dict[str, Any] = {"model": model_selector(provider if isinstance(provider, str) else None, model)}
+    candidate: dict[str, Any] = {"model": model_selector(provider, model)}
     for key in ("tier", "input_price_per_million", "output_price_per_million"):
         if key in item:
             candidate[key] = item[key]
@@ -112,13 +112,14 @@ def config_from_default_strategy(
     *,
     base_config: Mapping[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    strategy_type_value = default_strategy.get("type")
-    if not isinstance(strategy_type_value, str):
+    strategy_type_raw = default_strategy.get("type")
+    strategy_type_value = string_or_none(strategy_type_raw)
+    if strategy_type_value is None:
         raise _shape_error("default_strategy.type is required")
-    strategy_type = strategy_type_value.strip().lower()
+    strategy_type = strategy_type_value.lower()
     if strategy_type not in DEFAULT_STRATEGY_TYPES:
         supported = ", ".join(sorted(DEFAULT_STRATEGY_TYPES))
-        raise _shape_error(f"Unsupported default_strategy.type '{strategy_type_value}'. Supported types: {supported}")
+        raise _shape_error(f"Unsupported default_strategy.type '{strategy_type_raw}'. Supported types: {supported}")
 
     provider_items = _default_strategy_providers(default_strategy)
     config = dict(base_config or {})
@@ -152,13 +153,14 @@ def config_from_default_strategy(
         config.setdefault("fallback_enabled", True)
         return "weighted_score", config
 
-    axis_value = default_strategy.get("axis", "performance")
-    if not isinstance(axis_value, str):
+    axis_raw = default_strategy.get("axis", "performance")
+    axis_value = string_or_none(axis_raw)
+    if axis_value is None:
         raise _shape_error("default_strategy.axis must be a string")
-    axis = axis_value.strip().lower()
+    axis = axis_value.lower()
     if axis not in INTELLIGENT_AXES:
         supported = ", ".join(sorted(INTELLIGENT_AXES))
-        raise _shape_error(f"Unsupported default_strategy.axis '{axis_value}'. Supported axes: {supported}")
+        raise _shape_error(f"Unsupported default_strategy.axis '{axis_raw}'. Supported axes: {supported}")
     config["candidates"] = [
         _candidate_from_default_strategy_provider(provider_item) for provider_item in provider_items
     ]
@@ -169,17 +171,16 @@ def config_from_default_strategy(
 
 
 def _candidate_item_to_provider(item: Any, *, position: int, tier: str | None = None) -> dict[str, Any] | None:
-    if isinstance(item, str):
-        model_selector_value = item
+    model_selector_value = string_or_none(item)
+    if model_selector_value is not None:
         metadata: Mapping[str, Any] = {}
         input_price = None
         output_price = None
         candidate_tier = tier
     elif isinstance(item, dict):
-        model_value = item.get("model")
-        if not isinstance(model_value, str) or not model_value.strip():
+        model_selector_value = string_or_none(item.get("model"))
+        if model_selector_value is None:
             return None
-        model_selector_value = model_value
         metadata = dict_or_empty(item.get("metadata"))
         input_price = item.get("input_price_per_million")
         output_price = item.get("output_price_per_million")

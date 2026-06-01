@@ -1,3 +1,5 @@
+import pytest
+
 from gateway.services import routing_policy_shape
 from gateway.services.routing_config_values import float_or_none, score_or_none
 
@@ -12,3 +14,54 @@ def test_score_value_reuses_shared_score_parser() -> None:
     assert routing_policy_shape.score_value is score_or_none
     assert routing_policy_shape.score_value(72) == 0.72
     assert routing_policy_shape.score_value(101) is None
+
+
+def test_default_strategy_parsing_trims_strategy_axis_provider_and_model() -> None:
+    strategy, config = routing_policy_shape.config_from_default_strategy(
+        {
+            "type": " Intelligent ",
+            "axis": " Intelligence ",
+            "providers": [{"provider": " openai ", "model": " gpt-4o-mini "}],
+        }
+    )
+
+    assert strategy == "intelligent"
+    assert config["axis"] == "intelligence"
+    assert config["candidates"] == [{"model": "openai:gpt-4o-mini"}]
+
+
+def test_default_strategy_provider_validation_preserves_error_messages() -> None:
+    with pytest.raises(
+        routing_policy_shape.RoutingPolicyShapeError,
+        match="default_strategy.providers entries must include a non-empty model",
+    ):
+        routing_policy_shape.config_from_default_strategy(
+            {"type": "fallback", "providers": [{"provider": "openai", "model": " "}]}
+        )
+
+    with pytest.raises(
+        routing_policy_shape.RoutingPolicyShapeError,
+        match="default_strategy.providers entries must include a non-empty provider when set",
+    ):
+        routing_policy_shape.config_from_default_strategy(
+            {"type": "fallback", "providers": [{"provider": " ", "model": "gpt-4o"}]}
+        )
+
+
+def test_default_strategy_from_internal_trims_candidate_models_and_skips_blanks() -> None:
+    default_strategy = routing_policy_shape.default_strategy_from_internal(
+        "priority",
+        {
+            "candidates": [
+                " openai:gpt-4o-mini ",
+                " ",
+                {"model": " anthropic:claude-3-5-haiku-latest ", "metadata": {"priority": 3}},
+            ]
+        },
+    )
+
+    assert default_strategy is not None
+    assert default_strategy["providers"] == [
+        {"provider": "openai", "model": "gpt-4o-mini", "priority": 1},
+        {"provider": "anthropic", "model": "claude-3-5-haiku-latest", "priority": 3},
+    ]
