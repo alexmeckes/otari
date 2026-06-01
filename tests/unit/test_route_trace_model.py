@@ -104,3 +104,37 @@ def test_summarize_route_trace_logs_groups_counts_cost_and_latency() -> None:
     assert summary.by_model[1].error_count == 1
     assert summary.by_model[1].average_latency_ms is None
     assert [bucket.key for bucket in summary.by_policy] == ["policy-a", "policy-b"]
+    assert [bucket.key for bucket in summary.by_policy_source] == ["default", "canary_match"]
+    assert [bucket.key for bucket in summary.by_endpoint] == ["/v1/chat/completions", "/v1/messages"]
+    assert [bucket.key for bucket in summary.by_provider] == ["openai", "anthropic"]
+    assert [bucket.key for bucket in summary.by_strategy] == ["priority", "weighted_score"]
+
+
+def test_summarize_route_trace_logs_groups_unknown_values() -> None:
+    summary = summarize_route_trace_logs(
+        [
+            RouteTrace(
+                requested_model="gpt-4o",
+                selected_model=None,
+                selected_provider=None,
+                policy_id=None,
+                policy_source=None,
+                endpoint="",
+                strategy=None,
+                status="error",
+                estimated_cost=None,
+                attempts=[],
+            ),
+        ],
+    )
+
+    assert summary.total_count == 1
+    assert summary.error_count == 1
+    assert summary.estimated_cost == 0.0
+    assert summary.average_latency_ms is None
+    assert [bucket.key for bucket in summary.by_model] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_policy] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_policy_source] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_endpoint] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_provider] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_strategy] == ["unknown"]

@@ -138,6 +138,17 @@ def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[RouteTraceSumm
     return [_bucket_response(bucket) for bucket in buckets.values()]
 
 
+def _route_trace_summary_keys(trace: RouteTrace) -> tuple[str, str, str, str, str, str]:
+    return (
+        trace.selected_model or "unknown",
+        trace.policy_id or "unknown",
+        trace.policy_source or "unknown",
+        trace.endpoint or "unknown",
+        trace.selected_provider or "unknown",
+        trace.strategy or "unknown",
+    )
+
+
 def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryResponse:
     model_buckets: dict[str, dict[str, Any]] = {}
     policy_buckets: dict[str, dict[str, Any]] = {}
@@ -151,19 +162,17 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
         latency_ms = _trace_latency_ms(trace)
         _add_trace_to_bucket(total_bucket, trace, latency_ms)
 
-        model_key = trace.selected_model or "unknown"
-        policy_key = trace.policy_id or "unknown"
-        policy_source_key = trace.policy_source or "unknown"
-        endpoint_key = trace.endpoint or "unknown"
-        provider_key = trace.selected_provider or "unknown"
-        strategy_key = trace.strategy or "unknown"
-        for buckets, key in (
-            (model_buckets, model_key),
-            (policy_buckets, policy_key),
-            (policy_source_buckets, policy_source_key),
-            (endpoint_buckets, endpoint_key),
-            (provider_buckets, provider_key),
-            (strategy_buckets, strategy_key),
+        for buckets, key in zip(
+            (
+                model_buckets,
+                policy_buckets,
+                policy_source_buckets,
+                endpoint_buckets,
+                provider_buckets,
+                strategy_buckets,
+            ),
+            _route_trace_summary_keys(trace),
+            strict=True,
         ):
             bucket = summary_bucket(buckets, key, _new_bucket)
             _add_trace_to_bucket(bucket, trace, latency_ms)
