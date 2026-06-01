@@ -132,6 +132,17 @@ def _tag_bucket_key(tag_key: str, tag_value: Any) -> str:
     return f"{tag_key}={tag_value}"
 
 
+def _usage_summary_keys(log: UsageLog) -> tuple[str, str, str, str, str, str]:
+    return (
+        log.project_id or "unknown",
+        log.user_id or "unknown",
+        log.model or "unknown",
+        log.provider or "unknown",
+        log.endpoint or "unknown",
+        log.status or "unknown",
+    )
+
+
 def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
     total_bucket = _new_bucket("__total__")
     project_buckets: dict[str, dict[str, Any]] = {}
@@ -144,13 +155,17 @@ def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
 
     for log in logs:
         _add_log_to_bucket(total_bucket, log)
-        for buckets, key in (
-            (project_buckets, log.project_id or "unknown"),
-            (user_buckets, log.user_id or "unknown"),
-            (model_buckets, log.model or "unknown"),
-            (provider_buckets, log.provider or "unknown"),
-            (endpoint_buckets, log.endpoint or "unknown"),
-            (status_buckets, log.status or "unknown"),
+        for buckets, key in zip(
+            (
+                project_buckets,
+                user_buckets,
+                model_buckets,
+                provider_buckets,
+                endpoint_buckets,
+                status_buckets,
+            ),
+            _usage_summary_keys(log),
+            strict=True,
         ):
             bucket = summary_bucket(buckets, key, _new_bucket)
             _add_log_to_bucket(bucket, log)
