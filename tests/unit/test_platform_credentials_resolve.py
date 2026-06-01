@@ -2,9 +2,33 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
 
 from gateway.core.config import GatewayConfig
 from gateway.services import platform_gateway
+
+
+def _request_with_authorization(value: str | None) -> Request:
+    headers = []
+    if value is not None:
+        headers.append((b"authorization", value.encode("utf-8")))
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": headers})
+
+
+def test_extract_platform_user_token_trims_bearer_value() -> None:
+    request = _request_with_authorization("Bearer  user-token  ")
+
+    assert platform_gateway.extract_platform_user_token(request) == "user-token"
+
+
+@pytest.mark.parametrize("authorization", [None, "Basic user-token", "Bearer   "])
+def test_extract_platform_user_token_rejects_missing_or_blank_bearer_value(authorization: str | None) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        platform_gateway.extract_platform_user_token(_request_with_authorization(authorization))
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Missing authentication token"
 
 
 @pytest.mark.asyncio

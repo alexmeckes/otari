@@ -20,6 +20,7 @@ from gateway.services.platform_config import (
     platform_url,
 )
 from gateway.services.pricing_service import pricing_model_ref
+from gateway.services.routing_config_values import string_or_none
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
 _USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
@@ -78,8 +79,8 @@ def extract_platform_user_token(request: Request) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token",
         )
-    token = auth_header[7:].strip()
-    if not token:
+    token = string_or_none(auth_header[7:])
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token",
