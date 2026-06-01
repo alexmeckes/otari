@@ -37,6 +37,7 @@ from urllib.parse import urlparse
 import httpx
 import trafilatura
 
+from gateway.services.routing_config_values import coerced_string_or_none
 from gateway.services.url_safety import UnsafeURLError, validate_outbound_fetch_url
 
 if TYPE_CHECKING:
@@ -354,6 +355,12 @@ class WebSearchBackend:
         return None
 
 
+def _result_text(value: Any, *, default: str = "") -> str:
+    if not value:
+        return default
+    return coerced_string_or_none(value) or ""
+
+
 def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
     """Render results as compact Markdown for tool-message consumption.
 
@@ -366,10 +373,10 @@ def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
 
     parts: list[str] = []
     for i, r in enumerate(results, start=1):
-        title = str(r.get("title") or "(untitled)").strip()
-        url = str(r.get("url") or "").strip()
-        snippet = str(r.get("content") or "").strip()
-        extracted = str(r.get("extracted_content") or "").strip()
+        title = _result_text(r.get("title"), default="(untitled)")
+        url = _result_text(r.get("url"))
+        snippet = _result_text(r.get("content"))
+        extracted = _result_text(r.get("extracted_content"))
         body = extracted or snippet
         if len(body) > _CONTENT_TRUNCATE_CHARS:
             body = body[:_CONTENT_TRUNCATE_CHARS].rstrip() + "…"

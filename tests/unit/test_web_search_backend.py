@@ -17,6 +17,7 @@ from gateway.services.web_search_backend import (
     WEB_SEARCH_TOOL_NAME,
     WebSearchBackend,
     WebSearchNotReachableError,
+    _format_results_for_model,
 )
 
 
@@ -144,6 +145,28 @@ async def test_call_tool_extracts_content_when_enabled(monkeypatch: pytest.Monke
     # Original snippets should NOT be present since extracted content wins.
     assert "snippet about A" not in result
     assert "snippet about B" not in result
+
+
+def test_format_results_for_model_normalizes_result_fields_and_preserves_falsey_defaults() -> None:
+    result = _format_results_for_model(
+        "query",
+        [
+            {
+                "url": " https://example.com/a ",
+                "title": " Result A ",
+                "content": " snippet ",
+                "extracted_content": " extracted ",
+            },
+            {
+                "url": " https://example.com/b ",
+                "title": 0,
+                "content": False,
+                "extracted_content": " ",
+            },
+        ],
+    )
+
+    assert result == "[1] Result A\nhttps://example.com/a\nextracted\n\n[2] (untitled)\nhttps://example.com/b"
 
 
 @pytest.mark.asyncio
