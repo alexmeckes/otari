@@ -57,6 +57,39 @@ def test_default_strategy_parsing_preserves_controls_and_weighted_scoring_aliase
     }
 
 
+def test_default_strategy_candidate_ordering_preserves_strategy_semantics() -> None:
+    providers = [
+        {"provider": "openai", "model": "gpt-4o", "priority": 2},
+        {"provider": "anthropic", "model": "claude-3-5-sonnet-latest", "priority": 1},
+    ]
+
+    fallback_strategy, fallback_config = routing_policy_shape.config_from_default_strategy(
+        {"type": "fallback", "providers": providers}
+    )
+    weighted_strategy, weighted_config = routing_policy_shape.config_from_default_strategy(
+        {"type": "weighted_score", "providers": providers}
+    )
+    intelligent_strategy, intelligent_config = routing_policy_shape.config_from_default_strategy(
+        {"type": "intelligent", "providers": providers}
+    )
+
+    assert fallback_strategy == "priority"
+    assert [candidate["model"] for candidate in fallback_config["candidates"]] == [
+        "anthropic:claude-3-5-sonnet-latest",
+        "openai:gpt-4o",
+    ]
+    assert weighted_strategy == "weighted_score"
+    assert intelligent_strategy == "intelligent"
+    assert [candidate["model"] for candidate in weighted_config["candidates"]] == [
+        "openai:gpt-4o",
+        "anthropic:claude-3-5-sonnet-latest",
+    ]
+    assert [candidate["model"] for candidate in intelligent_config["candidates"]] == [
+        "openai:gpt-4o",
+        "anthropic:claude-3-5-sonnet-latest",
+    ]
+
+
 def test_default_strategy_provider_validation_preserves_error_messages() -> None:
     with pytest.raises(
         routing_policy_shape.RoutingPolicyShapeError,
