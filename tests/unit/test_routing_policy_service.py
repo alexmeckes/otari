@@ -1,5 +1,7 @@
 from gateway.services.routing_policy_service import (
     ROUTING_STRATEGIES,
+    RoutingCandidate,
+    _order_candidates,
     classify_request_tier,
     estimate_output_tokens,
     estimate_prompt_tokens,
@@ -53,3 +55,66 @@ def test_supported_strategies_include_default_strategy_names() -> None:
         "intelligent",
         "weighted_score",
     } <= ROUTING_STRATEGIES
+
+
+def _candidate(
+    model: str,
+    *,
+    position: int,
+    estimated_cost: float | None = None,
+    average_latency_ms: float | None = None,
+    routing_score: float | None = None,
+) -> RoutingCandidate:
+    return RoutingCandidate(
+        model=model,
+        provider="openai",
+        provider_model=model,
+        position=position,
+        tier=None,
+        estimated_cost=estimated_cost,
+        input_price_per_million=None,
+        output_price_per_million=None,
+        quality_score=None,
+        average_latency_ms=average_latency_ms,
+        latency_sample_count=0,
+        routing_score=routing_score,
+        score_components=None,
+        provider_health=None,
+        metadata={},
+    )
+
+
+def test_order_candidates_sorts_unknown_cost_and_latency_last() -> None:
+    cost_order = _order_candidates(
+        [
+            _candidate("unknown", position=1),
+            _candidate("cheap", position=2, estimated_cost=0.01),
+        ],
+        strategy="lowest_cost",
+        target_tier="simple",
+    )
+    latency_order = _order_candidates(
+        [
+            _candidate("unknown", position=1),
+            _candidate("fast", position=2, average_latency_ms=20.0),
+        ],
+        strategy="least_latency",
+        target_tier="simple",
+    )
+
+    assert [candidate.model for candidate in cost_order] == ["cheap", "unknown"]
+    assert [candidate.model for candidate in latency_order] == ["fast", "unknown"]
+
+
+def test_order_candidates_sorts_weighted_scores_descending_with_unknown_last() -> None:
+    candidates = _order_candidates(
+        [
+            _candidate("unknown", position=1),
+            _candidate("lower", position=2, routing_score=0.2),
+            _candidate("higher", position=3, routing_score=0.9),
+        ],
+        strategy="weighted_score",
+        target_tier="simple",
+    )
+
+    assert [candidate.model for candidate in candidates] == ["higher", "lower", "unknown"]

@@ -205,16 +205,23 @@ async def _build_candidates(
     return candidates
 
 
+def _numeric_order_key(value: float | None, position: int, *, descending: bool = False) -> tuple[bool, float, int]:
+    order_value = value or 0.0
+    if descending:
+        order_value = -order_value
+    return (value is None, order_value, position)
+
+
 def _by_cost(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return (candidate.estimated_cost is None, candidate.estimated_cost or 0.0, candidate.position)
+    return _numeric_order_key(candidate.estimated_cost, candidate.position)
 
 
 def _by_latency(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return (candidate.average_latency_ms is None, candidate.average_latency_ms or 0.0, candidate.position)
+    return _numeric_order_key(candidate.average_latency_ms, candidate.position)
 
 
 def _by_weighted_score(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return (candidate.routing_score is None, -(candidate.routing_score or 0.0), candidate.position)
+    return _numeric_order_key(candidate.routing_score, candidate.position, descending=True)
 
 
 def _tier_fallback_order(target_tier: str) -> list[str]:
