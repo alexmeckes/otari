@@ -33,12 +33,28 @@ class UnsafeURLError(ValueError):
     """Raised when an MCP server URL is rejected by the safety checks."""
 
 
+_ENV_TRUE_VALUES = {"1", "true", "yes"}
+_ENV_FALSE_VALUES = {"0", "false", "no"}
+
+
+def _env_flag(name: str, *, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.lower()
+    if normalized in _ENV_TRUE_VALUES:
+        return True
+    if normalized in _ENV_FALSE_VALUES:
+        return False
+    return default
+
+
 def _allow_loopback() -> bool:
-    return os.environ.get("GATEWAY_MCP_ALLOW_LOOPBACK", "true").lower() not in {"0", "false", "no"}
+    return _env_flag("GATEWAY_MCP_ALLOW_LOOPBACK", default=True)
 
 
 def _allow_private_hosts() -> bool:
-    return os.environ.get("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "false").lower() in {"1", "true", "yes"}
+    return _env_flag("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", default=False)
 
 
 def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -125,7 +141,7 @@ def _blocked_reason(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str 
 
 
 def _allow_web_search_private_hosts() -> bool:
-    return os.environ.get("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", "false").lower() in {"1", "true", "yes"}
+    return _env_flag("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", default=False)
 
 
 async def _resolve_all_async(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
