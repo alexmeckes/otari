@@ -66,27 +66,6 @@ def _provider_health_rate(config: Mapping[str, Any], key: str, default: float) -
     return min(rate, 1.0)
 
 
-def _provider_health_result(
-    provider: str,
-    *,
-    status: str,
-    reason: str,
-    sample_count: int,
-    success_count: int,
-    error_count: int,
-    failure_rate: float | None,
-) -> ProviderHealth:
-    return ProviderHealth(
-        provider=provider,
-        status=status,
-        sample_count=sample_count,
-        success_count=success_count,
-        error_count=error_count,
-        failure_rate=failure_rate,
-        reason=reason,
-    )
-
-
 def _record_provider_outcome(
     counts_by_provider: dict[str, dict[str, int]],
     provider: str | None,
@@ -134,14 +113,14 @@ def _provider_health_from_counts(
         unhealthy_rate=unhealthy_rate,
     )
 
-    return _provider_health_result(
+    return ProviderHealth(
         provider=provider,
         status=status,
-        reason=reason,
         sample_count=sample_count,
         success_count=success_count,
         error_count=error_count,
         failure_rate=failure_rate,
+        reason=reason,
     )
 
 
