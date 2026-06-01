@@ -13,24 +13,20 @@ def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(guardrails_config(config).get("redactions"))
 
 
-def _redaction_value(redactions: Mapping[str, Any], key: str, default: Any = None) -> Any:
-    return redactions.get(key, default)
-
-
 def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
-    return bool_config(_redaction_value(redactions, "enabled"), bool(redactions))
+    return bool_config(redactions.get("enabled"), bool(redactions))
 
 
 def _redaction_rules(redactions: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
     rules: list[tuple[str, str, re.Pattern[str]]] = []
 
     for pii_type, pattern in pii_patterns_from_config(
-        _redaction_value(redactions, "pii"),
-        fallback_types=_redaction_value(redactions, "pii_types"),
+        redactions.get("pii"),
+        fallback_types=redactions.get("pii_types"),
     ):
         rules.append(("pii", pii_type, pattern))
 
-    for name, pattern in named_patterns(_redaction_value(redactions, "patterns")):
+    for name, pattern in named_patterns(redactions.get("patterns")):
         rules.append(("pattern", name, pattern))
     return rules
 
@@ -71,7 +67,7 @@ def _redact_content(
 
 
 def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
-    replacement = _redaction_value(redactions, "replacement")
+    replacement = redactions.get("replacement")
     if isinstance(replacement, str):
         return replacement
     return "[REDACTED]"
@@ -130,5 +126,5 @@ def apply_guardrail_redactions(
         "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": count_items,
-        "pattern_count": len(named_patterns(_redaction_value(redactions, "patterns"))),
+        "pattern_count": len(named_patterns(redactions.get("patterns"))),
     }
