@@ -8,6 +8,7 @@ from gateway.services.routing_constraints import (
     _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
+    _region_failure,
     _region_presence_failure,
     _rejected_candidate_payload,
     _request_region,
@@ -116,6 +117,36 @@ def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior()
     assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01, "allow_unknown_cost": "true"}) is None
     assert _estimated_cost_failure(expensive, {"max_estimated_cost": 0.01}) == "estimated_cost_exceeds_max"
     assert _estimated_cost_failure(cheap, {"max_estimated_cost": 0.01}) is None
+
+
+def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> None:
+    assert _region_failure(set(), _constraint_sets({"allowed_regions": ["eu"]}), {}, tags={}) == "region_unknown"
+    assert (
+        _region_failure({"us"}, _constraint_sets({"allowed_regions": ["eu"]}), {}, tags={})
+        == "region_not_allowed"
+    )
+    assert (
+        _region_failure({"us"}, _constraint_sets({"blocked_regions": ["us"]}), {}, tags={})
+        == "region_blocked"
+    )
+    assert (
+        _region_failure(
+            {"us"},
+            _constraint_sets({}),
+            {"require_region_match": "true", "region_tag": "request_region"},
+            tags={"request_region": "EU"},
+        )
+        == "region_not_supported"
+    )
+    assert (
+        _region_failure(
+            {"eu"},
+            _constraint_sets({"allowed_regions": ["eu"]}),
+            {"require_region_match": "true", "region_tag": "request_region"},
+            tags={"request_region": "EU"},
+        )
+        is None
+    )
 
 
 def test_rejected_candidate_payload_preserves_public_shape_and_sorted_regions() -> None:

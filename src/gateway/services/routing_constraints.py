@@ -119,6 +119,38 @@ def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> s
     return None
 
 
+def _region_failure(
+    candidate_regions: set[str],
+    constraint_sets: _ConstraintSets,
+    constraints: Mapping[str, Any],
+    *,
+    tags: Mapping[str, str],
+) -> str | None:
+    if constraint_sets.allowed_regions:
+        failure = _region_presence_failure(
+            candidate_regions,
+            matches=bool(candidate_regions & constraint_sets.allowed_regions),
+            mismatch_reason="region_not_allowed",
+        )
+        if failure is not None:
+            return failure
+    if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
+        return "region_blocked"
+
+    if bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
+        requested_region = _request_region(constraints, tags)
+        if requested_region is not None:
+            failure = _region_presence_failure(
+                candidate_regions,
+                matches=requested_region in candidate_regions,
+                mismatch_reason="region_not_supported",
+            )
+            if failure is not None:
+                return failure
+
+    return None
+
+
 def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
     return {
         "model": candidate.model,
@@ -156,28 +188,9 @@ def _constraint_failure(
     if failure is not None:
         return failure
 
-    candidate_regions = _candidate_regions(candidate)
-    if constraint_sets.allowed_regions:
-        failure = _region_presence_failure(
-            candidate_regions,
-            matches=bool(candidate_regions & constraint_sets.allowed_regions),
-            mismatch_reason="region_not_allowed",
-        )
-        if failure is not None:
-            return failure
-    if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
-        return "region_blocked"
-
-    if bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
-        requested_region = _request_region(constraints, tags)
-        if requested_region is not None:
-            failure = _region_presence_failure(
-                candidate_regions,
-                matches=requested_region in candidate_regions,
-                mismatch_reason="region_not_supported",
-            )
-            if failure is not None:
-                return failure
+    failure = _region_failure(_candidate_regions(candidate), constraint_sets, constraints, tags=tags)
+    if failure is not None:
+        return failure
 
     return _estimated_cost_failure(candidate, constraints)
 
