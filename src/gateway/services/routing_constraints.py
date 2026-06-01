@@ -228,13 +228,6 @@ def _constraint_failure(
     return _estimated_cost_failure(candidate, prepared_constraints.cost_constraint)
 
 
-def _candidate_rejection(candidate: Any, prepared_constraints: _PreparedConstraints) -> dict[str, Any] | None:
-    reason = _constraint_failure(candidate, prepared_constraints)
-    if reason is None:
-        return None
-    return _rejected_candidate_payload(candidate, reason)
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -249,9 +242,9 @@ def apply_constraints(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        rejection = _candidate_rejection(candidate, prepared_constraints)
-        if rejection is None:
+        reason = _constraint_failure(candidate, prepared_constraints)
+        if reason is None:
             allowed.append(candidate)
             continue
-        rejected.append(rejection)
+        rejected.append(_rejected_candidate_payload(candidate, reason))
     return allowed, rejected

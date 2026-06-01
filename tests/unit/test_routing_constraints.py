@@ -4,7 +4,6 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
-    _candidate_rejection,
     _constraint_failure,
     _constraint_sets,
     _cost_constraint,
@@ -270,31 +269,6 @@ def test_constraint_failure_reuses_precomputed_constraint_sets() -> None:
     )
 
 
-def test_candidate_rejection_returns_payload_only_for_rejected_candidates() -> None:
-    allowed_candidate = SimpleNamespace(
-        model="openai:gpt-4o",
-        provider="openai",
-        estimated_cost=0.001,
-        metadata={"region": "eu"},
-    )
-    rejected_candidate = SimpleNamespace(
-        model="openai:gpt-4o-mini",
-        provider="openai",
-        estimated_cost=0.001,
-        metadata={"region": "eu"},
-    )
-    prepared_constraints = _prepared_constraints({"blocked_models": ["openai:gpt-4o-mini"]}, {})
-
-    assert _candidate_rejection(allowed_candidate, prepared_constraints) is None
-    assert _candidate_rejection(rejected_candidate, prepared_constraints) == {
-        "model": "openai:gpt-4o-mini",
-        "provider": "openai",
-        "reason": "model_blocked",
-        "estimated_cost": 0.001,
-        "regions": ["eu"],
-    }
-
-
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
@@ -337,8 +311,26 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
     )
 
     assert [candidate.model for candidate in allowed] == ["openai:gpt-4o"]
-    assert [(item["model"], item["reason"]) for item in rejected] == [
-        ("anthropic:claude-3-5-haiku-latest", "provider_not_allowed"),
-        ("openai:gpt-4o-mini", "model_blocked"),
-        ("openai:gpt-4o-large", "estimated_cost_exceeds_max"),
+    assert rejected == [
+        {
+            "model": "anthropic:claude-3-5-haiku-latest",
+            "provider": "anthropic",
+            "reason": "provider_not_allowed",
+            "estimated_cost": 0.001,
+            "regions": ["eu"],
+        },
+        {
+            "model": "openai:gpt-4o-mini",
+            "provider": "openai",
+            "reason": "model_blocked",
+            "estimated_cost": 0.001,
+            "regions": ["eu"],
+        },
+        {
+            "model": "openai:gpt-4o-large",
+            "provider": "openai",
+            "reason": "estimated_cost_exceeds_max",
+            "estimated_cost": 0.02,
+            "regions": ["eu"],
+        },
     ]
