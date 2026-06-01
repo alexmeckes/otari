@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from gateway.api.deps import _as_utc
 from gateway.api.routes._response_datetime import datetime_isoformat
-from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket
+from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket, summary_bucket
 from gateway.models.entities import UsageLog
 
 
@@ -152,12 +152,12 @@ def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
             (endpoint_buckets, log.endpoint or "unknown"),
             (status_buckets, log.status or "unknown"),
         ):
-            bucket = buckets.setdefault(key, _new_bucket(key))
+            bucket = summary_bucket(buckets, key, _new_bucket)
             _add_log_to_bucket(bucket, log)
 
         for key, value in log.tag_dict().items():
             tag_bucket_key = _tag_bucket_key(str(key), value)
-            bucket = tag_buckets.setdefault(tag_bucket_key, _new_bucket(tag_bucket_key))
+            bucket = summary_bucket(tag_buckets, tag_bucket_key, _new_bucket)
             _add_log_to_bucket(bucket, log)
 
     total = _bucket_response(total_bucket)

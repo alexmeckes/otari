@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from gateway.api.routes._response_datetime import datetime_isoformat
-from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket
+from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket, summary_bucket
 from gateway.models.entities import RouteTrace
 from gateway.services.routing_trace_attempts import attempt_duration_ms
 
@@ -161,7 +161,7 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
             (provider_buckets, provider_key),
             (strategy_buckets, strategy_key),
         ):
-            bucket = buckets.setdefault(key, _new_bucket(key))
+            bucket = summary_bucket(buckets, key, _new_bucket)
             _add_trace_to_bucket(bucket, trace, latency_ms)
 
     total = _bucket_response(total_bucket)

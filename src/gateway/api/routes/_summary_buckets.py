@@ -1,5 +1,6 @@
 """Shared helpers for API summary bucket aggregation."""
 
+from collections.abc import Callable
 from typing import Any
 
 
@@ -19,3 +20,15 @@ def add_status_counts(bucket: dict[str, Any], status: str | None) -> None:
         bucket["success_count"] += 1
     elif status == "error":
         bucket["error_count"] += 1
+
+
+def summary_bucket(
+    buckets: dict[str, dict[str, Any]],
+    key: str,
+    create_bucket: Callable[[str], dict[str, Any]],
+) -> dict[str, Any]:
+    bucket = buckets.get(key)
+    if bucket is None:
+        bucket = create_bucket(key)
+        buckets[key] = bucket
+    return bucket
