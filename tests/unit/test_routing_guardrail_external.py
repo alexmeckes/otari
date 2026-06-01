@@ -111,6 +111,55 @@ async def test_external_classifier_threshold_uses_shared_score_parsing() -> None
 
 
 @pytest.mark.asyncio
+async def test_external_classifier_float_config_preserves_timeout_and_threshold_fallbacks() -> None:
+    captured: list[dict[str, Any]] = []
+
+    async def post_classifier(
+        *,
+        url: str,
+        request_text: str,
+        timeout_seconds: float,
+        headers: dict[str, str] | None,
+    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+        captured.append(
+            {
+                "url": url,
+                "request_text": request_text,
+                "timeout_seconds": timeout_seconds,
+                "headers": headers,
+            }
+        )
+        return 200, {"score": 0.9}, None
+
+    violations, results = await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={
+            "external_classifiers": [
+                {
+                    "url": "https://classifier.example.test/check",
+                    "timeout_seconds": 0,
+                    "threshold": -1,
+                }
+            ]
+        },
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+
+    assert captured == [
+        {
+            "url": "https://classifier.example.test/check",
+            "request_text": "hello",
+            "timeout_seconds": 2.0,
+            "headers": None,
+        }
+    ]
+    assert violations == []
+    assert results[0]["score"] == 0.9
+    assert results[0]["threshold"] is None
+    assert results[0]["status"] == "passed"
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> None:
     async def post_classifier(
         **kwargs: Any,
