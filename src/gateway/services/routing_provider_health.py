@@ -176,24 +176,19 @@ def apply_provider_health_gate(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        rejection = _provider_health_gate_rejection(candidate)
-        if rejection is None:
+        if candidate.provider_health is None or candidate.provider_health.status != "unhealthy":
             allowed.append(candidate)
             continue
-        rejected.append(rejection)
+        rejected.append(
+            {
+                "model": candidate.model,
+                "provider": candidate.provider,
+                "reason": "provider_unhealthy",
+                "estimated_cost": candidate.estimated_cost,
+                "provider_health": candidate.provider_health.to_dict(),
+            }
+        )
     return allowed, rejected
-
-
-def _provider_health_gate_rejection(candidate: Any) -> dict[str, Any] | None:
-    if candidate.provider_health is None or candidate.provider_health.status != "unhealthy":
-        return None
-    return {
-        "model": candidate.model,
-        "provider": candidate.provider,
-        "reason": "provider_unhealthy",
-        "estimated_cost": candidate.estimated_cost,
-        "provider_health": candidate.provider_health.to_dict(),
-    }
 
 
 def _by_health(candidate: Any) -> tuple[int, int]:

@@ -5,7 +5,6 @@ from gateway.services.routing_provider_health import (
     _provider_health_config,
     _provider_health_enabled,
     _provider_health_from_counts,
-    _provider_health_gate_rejection,
     _provider_health_mode,
     _provider_health_rate,
     _provider_health_status_reason,
@@ -15,9 +14,9 @@ from gateway.services.routing_provider_health import (
 )
 
 
-def _health(status: str) -> ProviderHealth:
+def _health(status: str, provider: str = "openai") -> ProviderHealth:
     return ProviderHealth(
-        provider="openai",
+        provider=provider,
         status=status,
         sample_count=4,
         success_count=1,
@@ -166,35 +165,6 @@ def test_record_provider_outcome_counts_known_success_and_error_only() -> None:
     }
 
 
-def test_provider_health_gate_rejection_returns_payload_only_for_unhealthy_candidates() -> None:
-    healthy_candidate = SimpleNamespace(provider_health=_health("healthy"))
-    unknown_candidate = SimpleNamespace(provider_health=None)
-    unhealthy_candidate = SimpleNamespace(
-        model="openai:gpt-4o-mini",
-        provider="openai",
-        estimated_cost=0.002,
-        provider_health=_health("unhealthy"),
-    )
-
-    assert _provider_health_gate_rejection(healthy_candidate) is None
-    assert _provider_health_gate_rejection(unknown_candidate) is None
-    assert _provider_health_gate_rejection(unhealthy_candidate) == {
-        "model": "openai:gpt-4o-mini",
-        "provider": "openai",
-        "reason": "provider_unhealthy",
-        "estimated_cost": 0.002,
-        "provider_health": {
-            "provider": "openai",
-            "status": "unhealthy",
-            "sample_count": 4,
-            "success_count": 1,
-            "error_count": 3,
-            "failure_rate": 0.75,
-            "reason": "failure_rate_exceeds_unhealthy_threshold",
-        },
-    }
-
-
 def test_apply_provider_health_gate_partitions_unhealthy_candidates() -> None:
     healthy_candidate = SimpleNamespace(
         model="openai:gpt-4o",
@@ -202,21 +172,36 @@ def test_apply_provider_health_gate_partitions_unhealthy_candidates() -> None:
         estimated_cost=0.001,
         provider_health=_health("healthy"),
     )
+    unknown_candidate = SimpleNamespace(provider_health=None)
     unhealthy_candidate = SimpleNamespace(
         model="anthropic:claude-3-5-haiku-latest",
         provider="anthropic",
         estimated_cost=0.003,
-        provider_health=_health("unhealthy"),
+        provider_health=_health("unhealthy", provider="anthropic"),
     )
 
     allowed, rejected = apply_provider_health_gate(
-        [healthy_candidate, unhealthy_candidate],
+        [healthy_candidate, unknown_candidate, unhealthy_candidate],
         config={"health": {"enabled": True, "mode": "skip_unhealthy"}},
     )
 
-    assert allowed == [healthy_candidate]
-    assert [(item["model"], item["reason"]) for item in rejected] == [
-        ("anthropic:claude-3-5-haiku-latest", "provider_unhealthy")
+    assert allowed == [healthy_candidate, unknown_candidate]
+    assert rejected == [
+        {
+            "model": "anthropic:claude-3-5-haiku-latest",
+            "provider": "anthropic",
+            "reason": "provider_unhealthy",
+            "estimated_cost": 0.003,
+            "provider_health": {
+                "provider": "anthropic",
+                "status": "unhealthy",
+                "sample_count": 4,
+                "success_count": 1,
+                "error_count": 3,
+                "failure_rate": 0.75,
+                "reason": "failure_rate_exceeds_unhealthy_threshold",
+            },
+        }
     ]
 
 
