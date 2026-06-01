@@ -226,12 +226,27 @@ def test_apply_provider_health_gate_requires_enabled_skip_mode() -> None:
 def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
     unhealthy_candidate = SimpleNamespace(position=1, provider_health=_health("unhealthy"))
     healthy_candidate = SimpleNamespace(position=2, provider_health=_health("healthy"))
-    candidates = [unhealthy_candidate, healthy_candidate]
+    unknown_first_candidate = SimpleNamespace(position=0, provider_health=None)
+    unknown_later_candidate = SimpleNamespace(position=3, provider_health=None)
+    degraded_candidate = SimpleNamespace(position=4, provider_health=_health("degraded"))
+    candidates = [
+        unhealthy_candidate,
+        degraded_candidate,
+        unknown_later_candidate,
+        healthy_candidate,
+        unknown_first_candidate,
+    ]
 
     assert apply_provider_health_order(
         candidates,
         config={"health": {"enabled": True, "mode": "downrank"}},
-    ) == [healthy_candidate, unhealthy_candidate]
+    ) == [
+        healthy_candidate,
+        unknown_first_candidate,
+        unknown_later_candidate,
+        degraded_candidate,
+        unhealthy_candidate,
+    ]
     assert apply_provider_health_order(
         candidates,
         config={"health": {"enabled": True, "mode": "skip_unhealthy"}},

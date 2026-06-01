@@ -191,11 +191,6 @@ def apply_provider_health_gate(
     return allowed, rejected
 
 
-def _by_health(candidate: Any) -> tuple[int, int]:
-    status_value = candidate.provider_health.status if candidate.provider_health else "unknown"
-    return (_HEALTH_RANK.get(status_value, _HEALTH_RANK["unknown"]), candidate.position)
-
-
 def apply_provider_health_order(
     candidates: Sequence[Any],
     *,
@@ -204,4 +199,13 @@ def apply_provider_health_order(
     health_config = _provider_health_config(config)
     if not _provider_health_enabled(health_config) or _provider_health_mode(health_config) != "downrank":
         return list(candidates)
-    return sorted(candidates, key=_by_health)
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            _HEALTH_RANK.get(
+                candidate.provider_health.status if candidate.provider_health else "unknown",
+                _HEALTH_RANK["unknown"],
+            ),
+            candidate.position,
+        ),
+    )
