@@ -56,6 +56,13 @@ class _CostConstraint:
     allow_unknown_cost: bool
 
 
+@dataclass(frozen=True)
+class _PreparedConstraints:
+    constraint_sets: _ConstraintSets
+    requested_region: str | None
+    cost_constraint: _CostConstraint
+
+
 def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     return _ConstraintSets(
         allowed_providers=_string_set(_constraint_value(constraints, "allowed_providers")),
@@ -75,6 +82,14 @@ def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
             False,
             coerce_strings=True,
         ),
+    )
+
+
+def _prepared_constraints(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
+    return _PreparedConstraints(
+        constraint_sets=_constraint_sets(constraints),
+        requested_region=_required_request_region(constraints, tags),
+        cost_constraint=_cost_constraint(constraints),
     )
 
 
@@ -200,19 +215,21 @@ def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
 
 def _constraint_failure(
     candidate: Any,
-    constraint_sets: _ConstraintSets,
-    requested_region: str | None,
-    cost_constraint: _CostConstraint,
+    prepared_constraints: _PreparedConstraints,
 ) -> str | None:
-    failure = _provider_model_failure(candidate, constraint_sets)
+    failure = _provider_model_failure(candidate, prepared_constraints.constraint_sets)
     if failure is not None:
         return failure
 
-    failure = _region_failure(_candidate_regions(candidate), constraint_sets, requested_region)
+    failure = _region_failure(
+        _candidate_regions(candidate),
+        prepared_constraints.constraint_sets,
+        prepared_constraints.requested_region,
+    )
     if failure is not None:
         return failure
 
-    return _estimated_cost_failure(candidate, cost_constraint)
+    return _estimated_cost_failure(candidate, prepared_constraints.cost_constraint)
 
 
 def apply_constraints(
@@ -225,13 +242,11 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
-    constraint_sets = _constraint_sets(constraints)
-    requested_region = _required_request_region(constraints, tags)
-    cost_constraint = _cost_constraint(constraints)
+    prepared_constraints = _prepared_constraints(constraints, tags)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        reason = _constraint_failure(candidate, constraint_sets, requested_region, cost_constraint)
+        reason = _constraint_failure(candidate, prepared_constraints)
         if reason is None:
             allowed.append(candidate)
             continue
