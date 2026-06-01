@@ -128,6 +128,28 @@ def test_eval_score_pipeline_string_alias_lookup_trims_and_preserves_numeric_val
     assert item["score"] == 0.8
 
 
+def test_eval_score_pipeline_omits_blank_default_metric_and_change_note() -> None:
+    payload = build_eval_scores_payload(
+        [{"model": "openai:gpt-4o", "score": 0.9}],
+        default_metric=" ",
+        change_note=" ",
+    )
+
+    assert "metric" not in payload["scores"][0]
+    assert "change_note" not in payload
+
+
+def test_eval_score_pipeline_trims_default_metric_and_change_note() -> None:
+    payload = build_eval_scores_payload(
+        [{"model": "openai:gpt-4o", "score": 0.9}],
+        default_metric=" nightly_eval ",
+        change_note=" import nightly eval artifact ",
+    )
+
+    assert payload["scores"][0]["metric"] == "nightly_eval"
+    assert payload["change_note"] == "import nightly eval artifact"
+
+
 def test_apply_eval_scores_script_dry_run_outputs_endpoint_payload(tmp_path: Path) -> None:
     input_path = tmp_path / "scores.json"
     input_path.write_text(

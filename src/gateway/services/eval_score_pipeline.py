@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, TypeVar
 
-from gateway.services.routing_config_values import float_or_none
+from gateway.services.routing_config_values import float_or_none, string_or_none
 
 _ParsedValue = TypeVar("_ParsedValue")
 
@@ -40,8 +40,9 @@ def _is_present(value: Any) -> bool:
 
 
 def _coerce_string(value: Any) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
+    parsed = string_or_none(value)
+    if parsed is not None:
+        return parsed
     if isinstance(value, int | float) and not isinstance(value, bool):
         return str(value)
     return None
@@ -137,9 +138,9 @@ def normalize_eval_score_row(
     else:
         item["score"] = score
 
-    metric = _first_string(row, _METRIC_KEYS) or default_metric
-    if metric is not None and metric.strip():
-        item["metric"] = metric.strip()
+    metric = _first_string(row, _METRIC_KEYS) or string_or_none(default_metric)
+    if metric is not None:
+        item["metric"] = metric
     sample_count = _first_int(row, _SAMPLE_COUNT_KEYS)
     if sample_count is not None:
         item["sample_count"] = sample_count
@@ -207,6 +208,7 @@ def build_eval_scores_payload(
     if not scores:
         raise EvalScorePipelineError("Eval artifact did not contain any score rows")
     payload: dict[str, Any] = {"scores": scores}
-    if change_note is not None and change_note.strip():
-        payload["change_note"] = change_note.strip()
+    change_note_value = string_or_none(change_note)
+    if change_note_value is not None:
+        payload["change_note"] = change_note_value
     return payload
