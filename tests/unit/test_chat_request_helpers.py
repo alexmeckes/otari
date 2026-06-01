@@ -177,6 +177,20 @@ def test_build_web_search_backend_uses_shared_extract_env_bool_parsing(
     assert backend._extract_content is expected
 
 
+def test_build_web_search_backend_normalizes_domain_lists_with_shared_helper() -> None:
+    backend = build_web_search_backend(
+        base_url="http://search.local",
+        tool_entry={
+            "type": "web_search",
+            "allowed_domains": ["Docs.Python.org", 7],
+            "blocked_domains": ["Example.com", False],
+        },
+    )
+
+    assert backend._allowed_domains == ("docs.python.org", "7")
+    assert backend._blocked_domains == ("example.com", "false")
+
+
 # --- route-level tool selection ----------------------------------------------
 
 
