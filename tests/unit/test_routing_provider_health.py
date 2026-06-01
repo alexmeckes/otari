@@ -8,6 +8,7 @@ from gateway.services.routing_provider_health import (
     _provider_health_gate_rejection,
     _provider_health_mode,
     _provider_health_rate,
+    _provider_health_status_reason,
     _record_provider_outcome,
     apply_provider_health_gate,
 )
@@ -111,6 +112,49 @@ def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
     assert health.sample_count == 4
     assert health.failure_rate == 0.75
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
+
+
+def test_provider_health_status_reason_preserves_threshold_ordering() -> None:
+    assert (
+        _provider_health_status_reason(
+            sample_count=0,
+            failure_rate=None,
+            min_samples=3,
+            degraded_rate=0.25,
+            unhealthy_rate=0.50,
+        )
+        == ("unknown", "insufficient_samples")
+    )
+    assert (
+        _provider_health_status_reason(
+            sample_count=4,
+            failure_rate=0.75,
+            min_samples=3,
+            degraded_rate=0.25,
+            unhealthy_rate=0.50,
+        )
+        == ("unhealthy", "failure_rate_exceeds_unhealthy_threshold")
+    )
+    assert (
+        _provider_health_status_reason(
+            sample_count=4,
+            failure_rate=0.25,
+            min_samples=3,
+            degraded_rate=0.25,
+            unhealthy_rate=0.50,
+        )
+        == ("degraded", "failure_rate_exceeds_degraded_threshold")
+    )
+    assert (
+        _provider_health_status_reason(
+            sample_count=4,
+            failure_rate=0.0,
+            min_samples=3,
+            degraded_rate=0.25,
+            unhealthy_rate=0.50,
+        )
+        == ("healthy", "failure_rate_below_threshold")
+    )
 
 
 def test_record_provider_outcome_counts_known_success_and_error_only() -> None:

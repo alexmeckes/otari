@@ -97,6 +97,23 @@ def _record_provider_outcome(
     counts_by_provider[provider][outcome] += 1
 
 
+def _provider_health_status_reason(
+    *,
+    sample_count: int,
+    failure_rate: float | None,
+    min_samples: int,
+    degraded_rate: float,
+    unhealthy_rate: float,
+) -> tuple[str, str]:
+    if sample_count < min_samples or failure_rate is None:
+        return "unknown", "insufficient_samples"
+    if failure_rate >= unhealthy_rate:
+        return "unhealthy", "failure_rate_exceeds_unhealthy_threshold"
+    if failure_rate >= degraded_rate:
+        return "degraded", "failure_rate_exceeds_degraded_threshold"
+    return "healthy", "failure_rate_below_threshold"
+
+
 def _provider_health_from_counts(
     provider: str,
     *,
@@ -109,41 +126,18 @@ def _provider_health_from_counts(
     degraded_rate = _provider_health_rate(config, "degraded_failure_rate", 0.25)
     unhealthy_rate = _provider_health_rate(config, "unhealthy_failure_rate", 0.50)
     failure_rate = None if sample_count == 0 else error_count / sample_count
+    status, reason = _provider_health_status_reason(
+        sample_count=sample_count,
+        failure_rate=failure_rate,
+        min_samples=min_samples,
+        degraded_rate=degraded_rate,
+        unhealthy_rate=unhealthy_rate,
+    )
 
-    if sample_count < min_samples or failure_rate is None:
-        return _provider_health_result(
-            provider=provider,
-            status="unknown",
-            reason="insufficient_samples",
-            sample_count=sample_count,
-            success_count=success_count,
-            error_count=error_count,
-            failure_rate=failure_rate,
-        )
-    if failure_rate >= unhealthy_rate:
-        return _provider_health_result(
-            provider=provider,
-            status="unhealthy",
-            reason="failure_rate_exceeds_unhealthy_threshold",
-            sample_count=sample_count,
-            success_count=success_count,
-            error_count=error_count,
-            failure_rate=failure_rate,
-        )
-    if failure_rate >= degraded_rate:
-        return _provider_health_result(
-            provider=provider,
-            status="degraded",
-            reason="failure_rate_exceeds_degraded_threshold",
-            sample_count=sample_count,
-            success_count=success_count,
-            error_count=error_count,
-            failure_rate=failure_rate,
-        )
     return _provider_health_result(
         provider=provider,
-        status="healthy",
-        reason="failure_rate_below_threshold",
+        status=status,
+        reason=reason,
         sample_count=sample_count,
         success_count=success_count,
         error_count=error_count,
