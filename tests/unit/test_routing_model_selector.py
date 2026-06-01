@@ -21,9 +21,10 @@ def test_require_routing_model_selector_normalizes_supported_values(value: objec
     assert require_routing_model_selector(value) == expected
 
 
-def test_require_routing_model_selector_rejects_blank_value() -> None:
+@pytest.mark.parametrize("value", ["", "   "])
+def test_require_routing_model_selector_rejects_blank_value(value: str) -> None:
     with pytest.raises(ValueError, match="model must not be blank"):
-        require_routing_model_selector("   ")
+        require_routing_model_selector(value)
 
 
 def test_request_models_use_required_routing_model_selector() -> None:

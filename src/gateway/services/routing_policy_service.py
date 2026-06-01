@@ -21,7 +21,7 @@ from gateway.services import routing_provider_health as _routing_provider_health
 from gateway.services import routing_request_analysis as _routing_request_analysis
 from gateway.services import routing_weighted_scoring as _routing_weighted_scoring
 from gateway.services.pricing_service import find_model_pricing
-from gateway.services.routing_config_values import bool_config
+from gateway.services.routing_config_values import bool_config, string_or_none
 from gateway.services.routing_context_policy import apply_context_policy as apply_context_policy
 from gateway.services.routing_provider_health import ProviderHealth as ProviderHealth
 
@@ -53,7 +53,7 @@ def normalize_routing_model_selector(model: Any) -> str:
         return DEFAULT_ROUTING_MODEL
     if not isinstance(model, str):
         return str(model)
-    normalized = model.strip()
+    normalized = string_or_none(model) or ""
     if normalized.lower() == DEFAULT_ROUTING_MODEL:
         return DEFAULT_ROUTING_MODEL
     return normalized
