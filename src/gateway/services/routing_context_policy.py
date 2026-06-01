@@ -62,13 +62,6 @@ def _context_kept_message_indexes(
     return kept_indexes
 
 
-def _context_summary_role(value: Any) -> str:
-    normalized = string_or_none(value)
-    if normalized is not None and (role := normalized.lower()) in {"system", "developer", "user"}:
-        return role
-    return "system"
-
-
 def _summary_line_for_message(message: Any, *, max_chars: int) -> str:
     role = _message_role(message) or "message"
     text = jsonable_text(message.get("content") if isinstance(message, dict) else message)
@@ -222,7 +215,10 @@ def apply_context_policy(
             prefix=str(context_config.get("summary_prefix") or "Earlier conversation summary:"),
             max_message_chars=int_config(context_config.get("summary_message_max_chars"), 240),
         )
-        summary_role = _context_summary_role(context_config.get("summary_role"))
+        configured_summary_role = string_or_none(context_config.get("summary_role"))
+        summary_role = configured_summary_role.lower() if configured_summary_role is not None else "system"
+        if summary_role not in {"system", "developer", "user"}:
+            summary_role = "system"
         summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
         body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
         final_prompt_tokens = estimate_prompt_tokens(body)

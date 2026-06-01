@@ -71,6 +71,8 @@ def test_context_policy_blank_summary_prefix_uses_default() -> None:
 
     assert trace is not None
     assert trace["status"] == "summarized"
+    assert trace["summary_message_role"] == "system"
+    assert body["messages"][0]["role"] == "system"
     assert body["messages"][0]["content"].startswith("Earlier conversation summary:")
 
 
