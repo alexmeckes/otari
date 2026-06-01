@@ -209,25 +209,6 @@ def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
     }
 
 
-def _constraint_failure(
-    candidate: Any,
-    prepared_constraints: _PreparedConstraints,
-) -> str | None:
-    failure = _provider_model_failure(candidate, prepared_constraints.constraint_sets)
-    if failure is not None:
-        return failure
-
-    failure = _region_failure(
-        _candidate_regions(candidate),
-        prepared_constraints.constraint_sets,
-        prepared_constraints.requested_region,
-    )
-    if failure is not None:
-        return failure
-
-    return _estimated_cost_failure(candidate, prepared_constraints.cost_constraint)
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -242,7 +223,15 @@ def apply_constraints(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        reason = _constraint_failure(candidate, prepared_constraints)
+        reason = _provider_model_failure(candidate, prepared_constraints.constraint_sets)
+        if reason is None:
+            reason = _region_failure(
+                _candidate_regions(candidate),
+                prepared_constraints.constraint_sets,
+                prepared_constraints.requested_region,
+            )
+        if reason is None:
+            reason = _estimated_cost_failure(candidate, prepared_constraints.cost_constraint)
         if reason is None:
             allowed.append(candidate)
             continue

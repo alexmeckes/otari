@@ -4,7 +4,6 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
-    _constraint_failure,
     _constraint_sets,
     _cost_constraint,
     _estimated_cost_failure,
@@ -249,26 +248,6 @@ def test_rejected_candidate_payload_preserves_public_shape_and_sorted_regions() 
     }
 
 
-def test_constraint_failure_reuses_precomputed_constraint_sets() -> None:
-    candidate = SimpleNamespace(
-        model="openai:gpt-4o",
-        provider="openai",
-        estimated_cost=0.02,
-        metadata={"region": "eu"},
-    )
-    constraints = {
-        "allowed_providers": ["openai"],
-        "allowed_models": ["openai:gpt-4o"],
-        "allowed_regions": ["eu"],
-        "max_estimated_cost": 0.01,
-    }
-
-    assert (
-        _constraint_failure(candidate, _prepared_constraints(constraints, {}))
-        == "estimated_cost_exceeds_max"
-    )
-
-
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
@@ -289,6 +268,12 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
                 provider="openai",
                 estimated_cost=0.001,
                 metadata={"region": "eu"},
+            ),
+            SimpleNamespace(
+                model="openai:gpt-4o-regional",
+                provider="openai",
+                estimated_cost=0.001,
+                metadata={"region": "us"},
             ),
             SimpleNamespace(
                 model="openai:gpt-4o-large",
@@ -325,6 +310,13 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
             "reason": "model_blocked",
             "estimated_cost": 0.001,
             "regions": ["eu"],
+        },
+        {
+            "model": "openai:gpt-4o-regional",
+            "provider": "openai",
+            "reason": "region_not_supported",
+            "estimated_cost": 0.001,
+            "regions": ["us"],
         },
         {
             "model": "openai:gpt-4o-large",
