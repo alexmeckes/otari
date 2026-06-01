@@ -9,6 +9,7 @@ from gateway.services.routing_config_values import (
     float_or_none,
     int_config,
     lower_string_or_none,
+    nested_dict_or_empty,
     non_negative_float_or_none,
     non_negative_int_config,
     score_or_none,
@@ -34,6 +35,31 @@ def test_dict_or_empty_can_copy_dict() -> None:
 @pytest.mark.parametrize("value", [None, [], "enabled"])
 def test_dict_or_empty_returns_empty_dict_for_non_dict(value: object) -> None:
     assert dict_or_empty(value) == {}
+
+
+def test_nested_dict_or_empty_prefers_primary_dict_over_fallback() -> None:
+    primary = {"enabled": False}
+    fallback = {"enabled": True}
+
+    assert (
+        nested_dict_or_empty({"context": primary, "context_policy": fallback}, "context", "context_policy")
+        is primary
+    )
+    assert (
+        nested_dict_or_empty({"context": {}, "context_policy": fallback}, "context", "context_policy")
+        == {}
+    )
+
+
+def test_nested_dict_or_empty_uses_fallback_dict_when_primary_missing_or_not_dict() -> None:
+    fallback = {"quality": 1}
+
+    assert nested_dict_or_empty({"score_weights": fallback}, "scoring", "score_weights") is fallback
+    assert (
+        nested_dict_or_empty({"scoring": "weighted", "score_weights": fallback}, "scoring", "score_weights")
+        is fallback
+    )
+    assert nested_dict_or_empty({"scoring": "weighted", "score_weights": []}, "scoring", "score_weights") == {}
 
 
 @pytest.mark.parametrize(

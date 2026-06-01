@@ -54,3 +54,21 @@ def test_attach_weighted_scores_falls_back_when_configured_weights_sum_to_zero()
     assert scored[0].score_components["quality_weight"] == 0.5
     assert scored[0].score_components["cost_weight"] == 0.3
     assert scored[0].score_components["latency_weight"] == 0.2
+
+
+def test_attach_weighted_scores_uses_score_weights_fallback_when_scoring_is_not_dict() -> None:
+    scored = attach_weighted_scores(
+        [_candidate(quality_score=1.0, estimated_cost=1.0, average_latency_ms=20.0)],
+        config={
+            "scoring": "weighted",
+            "score_weights": {
+                "quality_weight": 1.0,
+                "cost_weight": 0.0,
+                "latency_weight": 0.0,
+            },
+        },
+    )
+
+    assert scored[0].routing_score == pytest.approx(1.0)
+    assert scored[0].score_components is not None
+    assert scored[0].score_components["quality_weight"] == 1.0

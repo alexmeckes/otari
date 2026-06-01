@@ -1,5 +1,6 @@
 """Shared config value parsers for gateway services."""
 
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -9,6 +10,13 @@ def dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     if copy_value:
         return dict(value)
     return value
+
+
+def nested_dict_or_empty(config: Mapping[str, Any], primary_key: str, fallback_key: str) -> dict[str, Any]:
+    primary = config.get(primary_key)
+    if isinstance(primary, dict):
+        return primary
+    return dict_or_empty(config.get(fallback_key))
 
 
 def string_or_none(value: Any) -> str | None:

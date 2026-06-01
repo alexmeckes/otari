@@ -60,6 +60,31 @@ def test_context_policy_blank_summary_prefix_uses_default() -> None:
     assert body["messages"][0]["content"].startswith("Earlier conversation summary:")
 
 
+def test_context_policy_uses_context_policy_fallback_when_context_is_not_dict() -> None:
+    messages = [
+        {"role": "user", "content": "alpha " * 80},
+        {"role": "user", "content": "final"},
+    ]
+
+    body, trace = apply_context_policy(
+        {
+            "context": "summarize",
+            "context_policy": {
+                "enabled": True,
+                "strategy": "trim_messages",
+                "max_prompt_tokens": 30,
+                "preserve_system_messages": False,
+                "preserve_last_messages": 1,
+            },
+        },
+        {"messages": messages},
+    )
+
+    assert trace is not None
+    assert trace["status"] == "trimmed"
+    assert body["messages"] == [messages[-1]]
+
+
 def test_context_policy_unsupported_blank_strategy_reports_original_value() -> None:
     request_body = {"messages": [{"role": "user", "content": "hello"}]}
 

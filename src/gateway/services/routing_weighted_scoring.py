@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
-from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none, score_or_none
+from gateway.services.routing_config_values import nested_dict_or_empty, non_negative_float_or_none, score_or_none
 
 _DEFAULT_SCORE_WEIGHTS = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
 _DEFAULT_QUALITY_SCORE = 0.5
@@ -11,10 +11,7 @@ _DEFAULT_UNKNOWN_LATENCY_SCORE = 0.5
 
 
 def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    scoring = config.get("scoring")
-    if isinstance(scoring, dict):
-        return dict_or_empty(scoring)
-    return dict_or_empty(config.get("score_weights"))
+    return nested_dict_or_empty(config, "scoring", "score_weights")
 
 
 def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:

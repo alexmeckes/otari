@@ -7,8 +7,8 @@ from typing import Any
 
 from gateway.services.routing_config_values import (
     bool_config,
-    dict_or_empty,
     int_config,
+    nested_dict_or_empty,
     non_negative_int_config,
     string_or_none,
 )
@@ -21,10 +21,7 @@ _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
 
 
 def _context_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    context = config.get("context")
-    if isinstance(context, dict):
-        return dict_or_empty(context)
-    return dict_or_empty(config.get("context_policy"))
+    return nested_dict_or_empty(config, "context", "context_policy")
 
 
 def _context_enabled(config: Mapping[str, Any]) -> bool:
