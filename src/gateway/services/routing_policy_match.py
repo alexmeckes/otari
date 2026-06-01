@@ -68,14 +68,6 @@ def policy_rollout_info(
     }
 
 
-def _condition_tag_key(condition: Mapping[str, Any]) -> str | None:
-    for key in ("tag", "key", "field", "name"):
-        value = condition.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
-
-
 def _tag_values(value: Any) -> set[str]:
     if isinstance(value, list | tuple | set):
         return {str(item) for item in value}
@@ -83,7 +75,12 @@ def _tag_values(value: Any) -> set[str]:
 
 
 def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
-    tag_key = _condition_tag_key(condition)
+    tag_key = None
+    for key in ("tag", "key", "field", "name"):
+        value = condition.get(key)
+        if isinstance(value, str) and value:
+            tag_key = value
+            break
     if tag_key is None:
         return False
     operator = condition.get("operator", condition.get("op", "eq"))

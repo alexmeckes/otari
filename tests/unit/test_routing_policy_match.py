@@ -59,6 +59,16 @@ def test_matches_tag_condition_trims_and_lowers_operator() -> None:
     )
 
 
+def test_matches_tag_condition_supports_key_aliases() -> None:
+    request_tags = {"tier": "gold", "team": "platform", "region": "us-east"}
+
+    assert matches_tag_condition({"key": "tier", "value": "gold"}, request_tags)
+    assert matches_tag_condition({"field": "team", "value": "platform"}, request_tags)
+    assert matches_tag_condition({"name": "region", "value": "us-east"}, request_tags)
+    assert not matches_tag_condition({"value": "gold"}, request_tags)
+    assert not matches_tag_condition({"tag": "", "value": "gold"}, request_tags)
+
+
 def test_matches_tag_condition_preserves_missing_and_non_string_operator_behavior() -> None:
     assert matches_tag_condition(
         {"tag": "tier", "value": "gold"},
