@@ -196,6 +196,8 @@ def test_float_or_none(value: object, expected: float | None) -> None:
     [
         ("1.25", 1.25),
         (" 72% ", 72.0),
+        (" 72 % ", 72.0),
+        ("%", None),
         ("", None),
         ("not-number", None),
         (True, None),

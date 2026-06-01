@@ -77,11 +77,13 @@ def float_or_none(value: Any, *, coerce_strings: bool = False, allow_percent: bo
     if isinstance(value, int | float):
         return float(value)
     if coerce_strings and isinstance(value, str):
-        normalized = value.strip()
-        if not normalized:
+        normalized = string_or_none(value)
+        if normalized is None:
             return None
         if allow_percent and normalized.endswith("%"):
-            normalized = normalized[:-1].strip()
+            normalized = string_or_none(normalized[:-1])
+            if normalized is None:
+                return None
         try:
             return float(normalized)
         except ValueError:
