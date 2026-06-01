@@ -199,16 +199,6 @@ def _region_failure(
     return None
 
 
-def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
-    return {
-        "model": candidate.model,
-        "provider": candidate.provider,
-        "reason": reason,
-        "estimated_cost": candidate.estimated_cost,
-        "regions": sorted(_candidate_regions(candidate)),
-    }
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -235,5 +225,13 @@ def apply_constraints(
         if reason is None:
             allowed.append(candidate)
             continue
-        rejected.append(_rejected_candidate_payload(candidate, reason))
+        rejected.append(
+            {
+                "model": candidate.model,
+                "provider": candidate.provider,
+                "reason": reason,
+                "estimated_cost": candidate.estimated_cost,
+                "regions": sorted(_candidate_regions(candidate)),
+            }
+        )
     return allowed, rejected

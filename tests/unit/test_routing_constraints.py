@@ -13,7 +13,6 @@ from gateway.services.routing_constraints import (
     _provider_model_failure,
     _region_failure,
     _region_presence_failure,
-    _rejected_candidate_payload,
     _request_region,
     _required_request_region,
     apply_constraints,
@@ -231,23 +230,6 @@ def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> 
     )
 
 
-def test_rejected_candidate_payload_preserves_public_shape_and_sorted_regions() -> None:
-    candidate = SimpleNamespace(
-        model="openai:gpt-4o",
-        provider="openai",
-        estimated_cost=0.02,
-        metadata={"regions": ["us", "eu"]},
-    )
-
-    assert _rejected_candidate_payload(candidate, "estimated_cost_exceeds_max") == {
-        "model": "openai:gpt-4o",
-        "provider": "openai",
-        "reason": "estimated_cost_exceeds_max",
-        "estimated_cost": 0.02,
-        "regions": ["eu", "us"],
-    }
-
-
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
@@ -279,7 +261,7 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
                 model="openai:gpt-4o-large",
                 provider="openai",
                 estimated_cost=0.02,
-                metadata={"regions": ["eu"]},
+                metadata={"regions": ["us", "eu"]},
             ),
         ],
         config={
@@ -323,6 +305,6 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
             "provider": "openai",
             "reason": "estimated_cost_exceeds_max",
             "estimated_cost": 0.02,
-            "regions": ["eu"],
+            "regions": ["eu", "us"],
         },
     ]
