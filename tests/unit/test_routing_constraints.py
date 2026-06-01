@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _membership_failure,
     _normalize_model_key_for_constraint,
     _region_presence_failure,
     _request_region,
@@ -46,6 +47,39 @@ def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
         == "region_not_supported"
     )
     assert _region_presence_failure({"eu"}, matches=True, mismatch_reason="region_not_allowed") is None
+
+
+def test_membership_failure_reuses_allowed_and_blocked_reasons() -> None:
+    assert (
+        _membership_failure(
+            "anthropic",
+            allowed_values={"openai"},
+            blocked_values=set(),
+            not_allowed_reason="provider_not_allowed",
+            blocked_reason="provider_blocked",
+        )
+        == "provider_not_allowed"
+    )
+    assert (
+        _membership_failure(
+            "openai:gpt-4o-mini",
+            allowed_values=set(),
+            blocked_values={"openai:gpt-4o-mini"},
+            not_allowed_reason="model_not_allowed",
+            blocked_reason="model_blocked",
+        )
+        == "model_blocked"
+    )
+    assert (
+        _membership_failure(
+            "openai",
+            allowed_values={"openai"},
+            blocked_values=set(),
+            not_allowed_reason="provider_not_allowed",
+            blocked_reason="provider_blocked",
+        )
+        is None
+    )
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:

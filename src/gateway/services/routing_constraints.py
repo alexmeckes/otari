@@ -69,6 +69,21 @@ def _region_presence_failure(
     return None
 
 
+def _membership_failure(
+    value: str,
+    *,
+    allowed_values: set[str],
+    blocked_values: set[str],
+    not_allowed_reason: str,
+    blocked_reason: str,
+) -> str | None:
+    if allowed_values and value not in allowed_values:
+        return not_allowed_reason
+    if value in blocked_values:
+        return blocked_reason
+    return None
+
+
 def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
@@ -82,14 +97,24 @@ def _constraint_failure(
     allowed_regions = _region_set(_constraint_value(constraints, "allowed_regions"))
     blocked_regions = _region_set(_constraint_value(constraints, "blocked_regions"))
 
-    if allowed_providers and candidate.provider not in allowed_providers:
-        return "provider_not_allowed"
-    if candidate.provider in blocked_providers:
-        return "provider_blocked"
-    if allowed_models and candidate.model not in allowed_models:
-        return "model_not_allowed"
-    if candidate.model in blocked_models:
-        return "model_blocked"
+    failure = _membership_failure(
+        candidate.provider,
+        allowed_values=allowed_providers,
+        blocked_values=blocked_providers,
+        not_allowed_reason="provider_not_allowed",
+        blocked_reason="provider_blocked",
+    )
+    if failure is not None:
+        return failure
+    failure = _membership_failure(
+        candidate.model,
+        allowed_values=allowed_models,
+        blocked_values=blocked_models,
+        not_allowed_reason="model_not_allowed",
+        blocked_reason="model_blocked",
+    )
+    if failure is not None:
+        return failure
 
     candidate_regions = _candidate_regions(candidate)
     if allowed_regions:
