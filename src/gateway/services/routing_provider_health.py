@@ -42,25 +42,25 @@ def _provider_health_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(config.get("health"))
 
 
-def _provider_health_value(config: Mapping[str, Any], key: str) -> Any:
-    return _provider_health_config(config).get(key)
+def _provider_health_value(health_config: Mapping[str, Any], key: str) -> Any:
+    return health_config.get(key)
 
 
-def _provider_health_enabled(config: Mapping[str, Any]) -> bool:
-    return bool_config(_provider_health_value(config, "enabled"), False)
+def _provider_health_enabled(health_config: Mapping[str, Any]) -> bool:
+    return bool_config(_provider_health_value(health_config, "enabled"), False)
 
 
-def _provider_health_mode(config: Mapping[str, Any]) -> str:
-    mode = _provider_health_value(config, "mode")
+def _provider_health_mode(health_config: Mapping[str, Any]) -> str:
+    mode = _provider_health_value(health_config, "mode")
     return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
 
 
-def _provider_health_enabled_for_mode(config: Mapping[str, Any], mode: str) -> bool:
-    return _provider_health_enabled(config) and _provider_health_mode(config) == mode
+def _provider_health_enabled_for_mode(health_config: Mapping[str, Any], mode: str) -> bool:
+    return _provider_health_enabled(health_config) and _provider_health_mode(health_config) == mode
 
 
-def _provider_health_rate(config: Mapping[str, Any], key: str, default: float) -> float:
-    rate = non_negative_float_or_none(_provider_health_value(config, key))
+def _provider_health_rate(health_config: Mapping[str, Any], key: str, default: float) -> float:
+    rate = non_negative_float_or_none(_provider_health_value(health_config, key))
     if rate is None:
         return default
     return min(rate, 1.0)
@@ -98,12 +98,12 @@ def _provider_health_from_counts(
     *,
     success_count: int,
     error_count: int,
-    config: Mapping[str, Any],
+    health_config: Mapping[str, Any],
 ) -> ProviderHealth:
     sample_count = success_count + error_count
-    min_samples = int_config(_provider_health_value(config, "min_samples"), 3)
-    degraded_rate = _provider_health_rate(config, "degraded_failure_rate", 0.25)
-    unhealthy_rate = _provider_health_rate(config, "unhealthy_failure_rate", 0.50)
+    min_samples = int_config(_provider_health_value(health_config, "min_samples"), 3)
+    degraded_rate = _provider_health_rate(health_config, "degraded_failure_rate", 0.25)
+    unhealthy_rate = _provider_health_rate(health_config, "unhealthy_failure_rate", 0.50)
     failure_rate = None if sample_count == 0 else error_count / sample_count
     status, reason = _provider_health_status_reason(
         sample_count=sample_count,
@@ -130,14 +130,15 @@ async def attach_provider_health(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    if not _provider_health_enabled(config):
+    health_config = _provider_health_config(config)
+    if not _provider_health_enabled(health_config):
         return list(candidates)
 
     candidate_providers = {candidate.provider for candidate in candidates}
     if not candidate_providers:
         return list(candidates)
 
-    sample_limit = int_config(_provider_health_value(config, "sample_limit"), 200)
+    sample_limit = int_config(_provider_health_value(health_config, "sample_limit"), 200)
     counts_by_provider = {
         provider: {"success": 0, "error": 0}
         for provider in candidate_providers
@@ -161,7 +162,7 @@ async def attach_provider_health(
             provider,
             success_count=counts["success"],
             error_count=counts["error"],
-            config=config,
+            health_config=health_config,
         )
         for provider, counts in counts_by_provider.items()
     }
@@ -176,7 +177,8 @@ def apply_provider_health_gate(
     *,
     config: Mapping[str, Any],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    if not _provider_health_enabled_for_mode(config, "skip_unhealthy"):
+    health_config = _provider_health_config(config)
+    if not _provider_health_enabled_for_mode(health_config, "skip_unhealthy"):
         return list(candidates), []
 
     allowed: list[Any] = []
@@ -212,6 +214,7 @@ def apply_provider_health_order(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    if not _provider_health_enabled_for_mode(config, "downrank"):
+    health_config = _provider_health_config(config)
+    if not _provider_health_enabled_for_mode(health_config, "downrank"):
         return list(candidates)
     return sorted(candidates, key=_by_health)

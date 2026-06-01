@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from gateway.services.routing_provider_health import (
     ProviderHealth,
+    _provider_health_config,
     _provider_health_enabled,
     _provider_health_enabled_for_mode,
     _provider_health_from_counts,
@@ -34,22 +35,29 @@ def test_provider_health_helpers_read_shared_health_config_values() -> None:
             "degraded_failure_rate": 2.0,
         }
     }
+    health_config = _provider_health_config(config)
 
-    assert _provider_health_enabled(config) is True
-    assert _provider_health_mode(config) == "skip_unhealthy"
-    assert _provider_health_rate(config, "degraded_failure_rate", 0.25) == 1.0
+    assert _provider_health_enabled(health_config) is True
+    assert _provider_health_mode(health_config) == "skip_unhealthy"
+    assert _provider_health_rate(health_config, "degraded_failure_rate", 0.25) == 1.0
 
 
 def test_provider_health_enabled_for_mode_requires_enabled_matching_mode() -> None:
-    config = {"health": {"enabled": True, "mode": "skip_unhealthy"}}
+    health_config = _provider_health_config({"health": {"enabled": True, "mode": "skip_unhealthy"}})
 
-    assert _provider_health_enabled_for_mode(config, "skip_unhealthy") is True
-    assert _provider_health_enabled_for_mode(config, "downrank") is False
-    assert _provider_health_enabled_for_mode({"health": {"mode": "skip_unhealthy"}}, "skip_unhealthy") is False
+    assert _provider_health_enabled_for_mode(health_config, "skip_unhealthy") is True
+    assert _provider_health_enabled_for_mode(health_config, "downrank") is False
+    assert (
+        _provider_health_enabled_for_mode(
+            _provider_health_config({"health": {"mode": "skip_unhealthy"}}),
+            "skip_unhealthy",
+        )
+        is False
+    )
 
 
 def test_provider_health_mode_defaults_for_unknown_mode() -> None:
-    assert _provider_health_mode({"health": {"mode": "watch"}}) == "downrank"
+    assert _provider_health_mode(_provider_health_config({"health": {"mode": "watch"}})) == "downrank"
 
 
 def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds() -> None:
@@ -57,12 +65,10 @@ def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds(
         "openai",
         success_count=1,
         error_count=1,
-        config={
-            "health": {
-                "min_samples": 2,
-                "degraded_failure_rate": 0.25,
-                "unhealthy_failure_rate": 0.75,
-            }
+        health_config={
+            "min_samples": 2,
+            "degraded_failure_rate": 0.25,
+            "unhealthy_failure_rate": 0.75,
         },
     )
 
@@ -76,13 +82,13 @@ def test_provider_health_from_counts_preserves_unknown_and_healthy_results() -> 
         "openai",
         success_count=1,
         error_count=0,
-        config={"health": {"min_samples": 3}},
+        health_config={"min_samples": 3},
     )
     healthy = _provider_health_from_counts(
         "openai",
         success_count=4,
         error_count=0,
-        config={"health": {"min_samples": 3}},
+        health_config={"min_samples": 3},
     )
 
     assert unknown.status == "unknown"
@@ -100,11 +106,9 @@ def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
         "openai",
         success_count=1,
         error_count=3,
-        config={
-            "health": {
-                "min_samples": 3,
-                "unhealthy_failure_rate": 0.75,
-            }
+        health_config={
+            "min_samples": 3,
+            "unhealthy_failure_rate": 0.75,
         },
     )
 
