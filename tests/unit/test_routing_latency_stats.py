@@ -2,11 +2,7 @@ from typing import Any
 
 import pytest
 
-from gateway.services.routing_latency_stats import (
-    _latency_min_samples,
-    _latency_sample_limit,
-    attach_latency_stats,
-)
+from gateway.services.routing_latency_stats import attach_latency_stats
 from gateway.services.routing_policy_service import RoutingCandidate
 
 
@@ -65,13 +61,6 @@ class _Db:
         return _Result(self._traces)
 
 
-def test_latency_stats_config_helpers_use_defaults_for_invalid_values() -> None:
-    assert _latency_sample_limit({"latency_sample_limit": 3}) == 3
-    assert _latency_sample_limit({"latency_sample_limit": 0}) == 200
-    assert _latency_min_samples({"latency_min_samples": 2}) == 2
-    assert _latency_min_samples({"latency_min_samples": "2"}) == 1
-
-
 @pytest.mark.asyncio
 async def test_attach_latency_stats_uses_configured_limit_and_min_samples() -> None:
     db = _Db(
@@ -102,3 +91,27 @@ async def test_attach_latency_stats_uses_configured_limit_and_min_samples() -> N
     assert enriched[0].latency_sample_count == 2
     assert enriched[1].average_latency_ms is None
     assert enriched[1].latency_sample_count == 0
+
+
+@pytest.mark.asyncio
+async def test_attach_latency_stats_uses_defaults_for_invalid_config_values() -> None:
+    db = _Db(
+        [
+            _Trace(
+                [
+                    {"model_key": "openai:gpt-4o", "status": "success", "duration_ms": 42.0},
+                ]
+            )
+        ]
+    )
+
+    enriched = await attach_latency_stats(
+        db,
+        [_candidate("openai:gpt-4o", position=1)],
+        config={"latency_sample_limit": 0, "latency_min_samples": "2"},
+    )
+
+    assert db.statement is not None
+    assert db.statement._limit_clause.value == 200
+    assert enriched[0].average_latency_ms == 42.0
+    assert enriched[0].latency_sample_count == 1

@@ -10,14 +10,6 @@ from gateway.services.routing_config_values import int_config
 from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_model_key
 
 
-def _latency_sample_limit(config: Mapping[str, Any]) -> int:
-    return int_config(config.get("latency_sample_limit"), 200)
-
-
-def _latency_min_samples(config: Mapping[str, Any]) -> int:
-    return int_config(config.get("latency_min_samples"), 1)
-
-
 async def attach_latency_stats(
     db: AsyncSession,
     candidates: Sequence[Any],
@@ -29,8 +21,8 @@ async def attach_latency_stats(
     if not candidate_models:
         return list(candidates)
 
-    sample_limit = _latency_sample_limit(config)
-    min_samples = _latency_min_samples(config)
+    sample_limit = int_config(config.get("latency_sample_limit"), 200)
+    min_samples = int_config(config.get("latency_min_samples"), 1)
     result = await db.execute(
         select(RouteTrace)
         .where(RouteTrace.status == "success")
