@@ -35,6 +35,18 @@ def test_classify_request_tier_respects_configured_thresholds() -> None:
     assert tier == "medium"
 
 
+def test_classify_request_tier_uses_default_for_invalid_thresholds() -> None:
+    request = {"messages": [{"role": "user", "content": "short prompt"}]}
+
+    tier = classify_request_tier(
+        request,
+        prompt_tokens=120,
+        config={"tier_thresholds": {"medium": 0, "complex": -1, "reasoning": "100"}},
+    )
+
+    assert tier == "simple"
+
+
 def test_estimates_prompt_and_output_tokens_from_request() -> None:
     request = {
         "messages": [{"role": "user", "content": "abcd" * 20}],
