@@ -33,6 +33,33 @@ def test_context_policy_summarizes_with_normalized_string_settings() -> None:
     assert "- user: alpha" in body["messages"][0]["content"]
 
 
+def test_context_policy_blank_summary_prefix_uses_default() -> None:
+    messages = [
+        {"role": "user", "content": "alpha " * 80},
+        {"role": "assistant", "content": "beta " * 80},
+        {"role": "user", "content": "final"},
+    ]
+
+    body, trace = apply_context_policy(
+        {
+            "context": {
+                "enabled": True,
+                "strategy": "summarize_messages",
+                "max_prompt_tokens": 80,
+                "preserve_system_messages": False,
+                "preserve_last_messages": 1,
+                "summary_max_tokens": 40,
+                "summary_prefix": "   ",
+            }
+        },
+        {"messages": messages},
+    )
+
+    assert trace is not None
+    assert trace["status"] == "summarized"
+    assert body["messages"][0]["content"].startswith("Earlier conversation summary:")
+
+
 def test_context_policy_unsupported_blank_strategy_reports_original_value() -> None:
     request_body = {"messages": [{"role": "user", "content": "hello"}]}
 
