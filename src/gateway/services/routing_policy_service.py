@@ -263,6 +263,18 @@ def _fallback_enabled(config: Mapping[str, Any], *, strategy: str) -> bool:
     return bool_config(config.get("fallback_enabled"), True)
 
 
+def _no_candidates_detail(
+    policy_id: str,
+    stage: str,
+    rejected_candidates: Sequence[Mapping[str, Any]],
+) -> str:
+    detail = f"Routing policy '{policy_id}' has no candidates after {stage}"
+    if rejected_candidates:
+        reasons = sorted({str(item["reason"]) for item in rejected_candidates})
+        detail = f"{detail}: {', '.join(reasons)}"
+    return detail
+
+
 async def _post_external_guardrail_classifier(
     *,
     url: str,
@@ -434,11 +446,7 @@ async def resolve_routing_plan(
     )
     candidates = cast(list[RoutingCandidate], constrained_candidates)
     if not candidates:
-        detail = f"Routing policy '{policy.policy_id}' has no candidates after constraints"
-        if rejected_candidates:
-            reasons = sorted({str(item["reason"]) for item in rejected_candidates})
-            detail = f"{detail}: {', '.join(reasons)}"
-        raise RoutingPolicyError(422, detail)
+        raise RoutingPolicyError(422, _no_candidates_detail(policy.policy_id, "constraints", rejected_candidates))
     candidates = cast(
         list[RoutingCandidate],
         await _routing_provider_health.attach_provider_health(db, candidates, config=config),
@@ -450,11 +458,10 @@ async def resolve_routing_plan(
     candidates = cast(list[RoutingCandidate], health_allowed_candidates)
     rejected_candidates.extend(health_rejected_candidates)
     if not candidates:
-        detail = f"Routing policy '{policy.policy_id}' has no candidates after provider health gate"
-        if health_rejected_candidates:
-            reasons = sorted({str(item["reason"]) for item in health_rejected_candidates})
-            detail = f"{detail}: {', '.join(reasons)}"
-        raise RoutingPolicyError(422, detail)
+        raise RoutingPolicyError(
+            422,
+            _no_candidates_detail(policy.policy_id, "provider health gate", health_rejected_candidates),
+        )
     if strategy in {"least_latency", "weighted_score"}:
         candidates = cast(
             list[RoutingCandidate],

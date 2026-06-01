@@ -1,6 +1,7 @@
 from gateway.services.routing_policy_service import (
     ROUTING_STRATEGIES,
     RoutingCandidate,
+    _no_candidates_detail,
     _order_candidates,
     classify_request_tier,
     estimate_output_tokens,
@@ -130,3 +131,26 @@ def test_order_candidates_sorts_weighted_scores_descending_with_unknown_last() -
     )
 
     assert [candidate.model for candidate in candidates] == ["higher", "lower", "unknown"]
+
+
+def test_no_candidates_detail_includes_sorted_unique_reasons() -> None:
+    detail = _no_candidates_detail(
+        "policy-a",
+        "provider health gate",
+        [
+            {"reason": "provider_unhealthy"},
+            {"reason": "provider_blocked"},
+            {"reason": "provider_unhealthy"},
+        ],
+    )
+
+    assert detail == (
+        "Routing policy 'policy-a' has no candidates after provider health gate: "
+        "provider_blocked, provider_unhealthy"
+    )
+
+
+def test_no_candidates_detail_omits_reasons_when_none_rejected() -> None:
+    detail = _no_candidates_detail("policy-a", "constraints", [])
+
+    assert detail == "Routing policy 'policy-a' has no candidates after constraints"
