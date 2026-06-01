@@ -2,11 +2,13 @@
 
 import csv
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from gateway.services.routing_config_values import float_or_none
+
+_ParsedValue = TypeVar("_ParsedValue")
 
 _ROW_LIST_KEYS = ("scores", "results", "items", "rows", "evals")
 _MODEL_KEYS = ("model", "model_key", "candidate_model")
@@ -58,20 +60,24 @@ def _coerce_int(value: Any) -> int | None:
     return int(parsed)
 
 
-def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
+def _first_parsed(
+    row: Mapping[str, Any],
+    keys: Iterable[str],
+    parser: Callable[[Any], _ParsedValue | None],
+) -> _ParsedValue | None:
     for key in keys:
-        parsed = _coerce_float(row.get(key))
+        parsed = parser(row.get(key))
         if parsed is not None:
             return parsed
     return None
+
+
+def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
+    return _first_parsed(row, keys, _coerce_float)
 
 
 def _first_int(row: Mapping[str, Any], keys: Iterable[str]) -> int | None:
-    for key in keys:
-        parsed = _coerce_int(row.get(key))
-        if parsed is not None:
-            return parsed
-    return None
+    return _first_parsed(row, keys, _coerce_int)
 
 
 def _row_metadata(row: Mapping[str, Any], *, source: str | None, row_number: int) -> dict[str, Any]:
