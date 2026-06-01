@@ -4,6 +4,11 @@ from typing import Any
 
 from gateway.services.routing_config_values import dict_or_empty, non_negative_float_or_none, score_or_none
 
+_DEFAULT_SCORE_WEIGHTS = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
+_DEFAULT_QUALITY_SCORE = 0.5
+_DEFAULT_UNKNOWN_COST_SCORE = 0.0
+_DEFAULT_UNKNOWN_LATENCY_SCORE = 0.5
+
 
 def _weighted_scoring_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     scoring = config.get("scoring")
@@ -26,12 +31,11 @@ def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float
 def _weighted_score_weights(config: Mapping[str, Any]) -> dict[str, float]:
     scoring = _weighted_scoring_config(config)
     weights = {
-        "quality": _score_weight(scoring, "quality", 0.5),
-        "cost": _score_weight(scoring, "cost", 0.3),
-        "latency": _score_weight(scoring, "latency", 0.2),
+        key: _score_weight(scoring, key, default)
+        for key, default in _DEFAULT_SCORE_WEIGHTS.items()
     }
     if sum(weights.values()) <= 0:
-        return {"quality": 0.5, "cost": 0.3, "latency": 0.2}
+        return dict(_DEFAULT_SCORE_WEIGHTS)
     return weights
 
 
@@ -63,9 +67,9 @@ def attach_weighted_scores(
     default_quality = score_or_none(scoring.get("default_quality_score"))
     unknown_cost = score_or_none(scoring.get("unknown_cost_score"))
     unknown_latency = score_or_none(scoring.get("unknown_latency_score"))
-    default_quality_score = 0.5 if default_quality is None else default_quality
-    unknown_cost_score = 0.0 if unknown_cost is None else unknown_cost
-    unknown_latency_score = 0.5 if unknown_latency is None else unknown_latency
+    default_quality_score = _DEFAULT_QUALITY_SCORE if default_quality is None else default_quality
+    unknown_cost_score = _DEFAULT_UNKNOWN_COST_SCORE if unknown_cost is None else unknown_cost
+    unknown_latency_score = _DEFAULT_UNKNOWN_LATENCY_SCORE if unknown_latency is None else unknown_latency
 
     known_costs = [
         candidate.estimated_cost
