@@ -31,3 +31,34 @@ def test_configured_candidate_specs_dedupes_with_normalized_selector() -> None:
     assert specs[0].model == "openai:gpt-4o"
     assert specs[0].metadata == {"source": "first"}
     assert specs[0].quality_score == 0.9
+
+
+def test_configured_candidate_specs_reads_quality_score_aliases_from_metadata() -> None:
+    specs = configured_candidate_specs(
+        {
+            "candidates": [
+                {
+                    "model": "openai:gpt-4o-mini",
+                    "metadata": {"benchmark_score": 0.72},
+                }
+            ]
+        }
+    )
+
+    assert specs[0].quality_score == 0.72
+
+
+def test_configured_candidate_specs_prefers_top_level_quality_score_aliases() -> None:
+    specs = configured_candidate_specs(
+        {
+            "candidates": [
+                {
+                    "model": "openai:gpt-4o-mini",
+                    "score": 0.0,
+                    "metadata": {"quality_score": 0.95},
+                }
+            ]
+        }
+    )
+
+    assert specs[0].quality_score == 0.0
