@@ -3,6 +3,11 @@
 from gateway.core.config import GatewayConfig
 
 
+def platform_base_url(config: GatewayConfig) -> str | None:
+    value = config.platform.get("base_url")
+    return str(value) if value else None
+
+
 def platform_url(base_url: str, path: str) -> str:
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 

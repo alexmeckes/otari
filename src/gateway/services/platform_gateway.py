@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from gateway.core.config import GatewayConfig
 from gateway.models.mcp import McpServerConfig
-from gateway.services.platform_config import platform_int_setting, platform_timeout_seconds, platform_url
+from gateway.services.platform_config import (
+    platform_base_url,
+    platform_int_setting,
+    platform_timeout_seconds,
+    platform_url,
+)
 from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
 
@@ -83,13 +88,13 @@ def extract_platform_user_token(request: Request) -> str:
 
 
 def _platform_base_url_or_raise(config: GatewayConfig) -> str:
-    platform_base_url = config.platform.get("base_url")
-    if not platform_base_url:
+    base_url = platform_base_url(config)
+    if not base_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Platform mode is misconfigured",
         )
-    return str(platform_base_url)
+    return base_url
 
 
 def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
@@ -322,12 +327,12 @@ async def report_platform_usage(
 
 
 def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageReportRequest | None:
-    platform_base_url = config.platform.get("base_url")
-    if not platform_base_url:
+    base_url = platform_base_url(config)
+    if not base_url:
         return None
 
     return _PlatformUsageReportRequest(
-        url=platform_url(platform_base_url, "/gateway/usage"),
+        url=platform_url(base_url, "/gateway/usage"),
         headers=_platform_gateway_headers(config),
         timeout_seconds=platform_timeout_seconds(config, "usage_timeout_ms"),
         max_retries=platform_int_setting(config, "usage_max_retries", 3),

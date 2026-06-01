@@ -16,6 +16,7 @@ from gateway.rate_limit import RateLimiter
 from gateway.services.bootstrap_service import bootstrap_first_api_key
 from gateway.services.budget_alert_webhook_service import BudgetAlertWebhookRetryWorker
 from gateway.services.log_writer import LogWriter, NoopLogWriter, create_log_writer
+from gateway.services.platform_config import platform_base_url
 from gateway.services.pricing_init_service import initialize_pricing_from_config
 from gateway.version import __version__
 
@@ -147,7 +148,7 @@ def _validate_platform_config(config: GatewayConfig) -> None:
     config.validate_mode_selection()
     if not config.is_platform_mode:
         return
-    if not config.platform.get("base_url"):
+    if not platform_base_url(config):
         msg = "platform.base_url is required when platform mode is active"
         raise ValueError(msg)
     if config.providers:
