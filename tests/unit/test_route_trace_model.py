@@ -1,3 +1,4 @@
+from gateway.api.routes._route_trace_models import summarize_route_trace_logs
 from gateway.models.entities import RouteTrace
 
 
@@ -45,3 +46,61 @@ def test_route_trace_list_helpers_return_empty_list_for_invalid_values() -> None
     assert trace.attempt_list() == []
     assert trace.to_dict()["candidates"] == []
     assert trace.to_dict()["attempts"] == []
+
+
+def test_summarize_route_trace_logs_groups_counts_cost_and_latency() -> None:
+    traces = [
+        RouteTrace(
+            requested_model="gpt-4o",
+            selected_model="openai:gpt-4o",
+            selected_provider="openai",
+            policy_id="policy-a",
+            policy_source="default",
+            endpoint="/v1/chat/completions",
+            strategy="priority",
+            status="success",
+            estimated_cost=0.001,
+            attempts=[{"status": "success", "duration_ms": 40}],
+        ),
+        RouteTrace(
+            requested_model="gpt-4o",
+            selected_model="openai:gpt-4o",
+            selected_provider="openai",
+            policy_id="policy-a",
+            policy_source="default",
+            endpoint="/v1/chat/completions",
+            strategy="priority",
+            status="success",
+            estimated_cost=0.003,
+            attempts=[{"status": "success", "duration_ms": 60}],
+        ),
+        RouteTrace(
+            requested_model="claude",
+            selected_model="anthropic:claude-3-5-sonnet-latest",
+            selected_provider="anthropic",
+            policy_id="policy-b",
+            policy_source="canary_match",
+            endpoint="/v1/messages",
+            strategy="weighted_score",
+            status="error",
+            estimated_cost=0.0,
+            attempts=[{"status": "error", "duration_ms": 100}],
+        ),
+    ]
+
+    summary = summarize_route_trace_logs(traces)
+
+    assert summary.total_count == 3
+    assert summary.success_count == 2
+    assert summary.error_count == 1
+    assert summary.estimated_cost == 0.004
+    assert summary.average_latency_ms == 50.0
+    assert [bucket.key for bucket in summary.by_model] == [
+        "openai:gpt-4o",
+        "anthropic:claude-3-5-sonnet-latest",
+    ]
+    assert summary.by_model[0].count == 2
+    assert summary.by_model[0].average_latency_ms == 50.0
+    assert summary.by_model[1].error_count == 1
+    assert summary.by_model[1].average_latency_ms is None
+    assert [bucket.key for bucket in summary.by_policy] == ["policy-a", "policy-b"]
