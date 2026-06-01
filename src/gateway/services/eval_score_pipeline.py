@@ -39,13 +39,11 @@ def _is_present(value: Any) -> bool:
     return value is not None and str(value).strip() != ""
 
 
-def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
-    for key in keys:
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return str(value)
+def _coerce_string(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return str(value)
     return None
 
 
@@ -78,6 +76,10 @@ def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
 
 def _first_int(row: Mapping[str, Any], keys: Iterable[str]) -> int | None:
     return _first_parsed(row, keys, _coerce_int)
+
+
+def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
+    return _first_parsed(row, keys, _coerce_string)
 
 
 def _row_metadata(row: Mapping[str, Any], *, source: str | None, row_number: int) -> dict[str, Any]:

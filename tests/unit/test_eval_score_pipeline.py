@@ -91,6 +91,22 @@ def test_eval_score_pipeline_rejects_rows_without_score() -> None:
         normalize_eval_score_row({"model": "openai:gpt-4o"})
 
 
+def test_eval_score_pipeline_string_alias_lookup_trims_and_preserves_numeric_values() -> None:
+    item = normalize_eval_score_row(
+        {
+            "candidate_model": 101,
+            "vendor": 202,
+            "eval": " benchmark ",
+            "score": 0.8,
+        }
+    )
+
+    assert item["model"] == "101"
+    assert item["provider"] == "202"
+    assert item["metric"] == "benchmark"
+    assert item["score"] == 0.8
+
+
 def test_apply_eval_scores_script_dry_run_outputs_endpoint_payload(tmp_path: Path) -> None:
     input_path = tmp_path / "scores.json"
     input_path.write_text(
