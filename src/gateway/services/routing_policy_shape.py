@@ -225,6 +225,17 @@ def _providers_from_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
     return providers
 
 
+def _default_strategy_fallback_enabled(
+    strategy: str,
+    config: Mapping[str, Any],
+    *,
+    default: bool = True,
+) -> bool:
+    if strategy == "single":
+        return False
+    return bool(config.get("fallback_enabled", default))
+
+
 def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> dict[str, Any] | None:
     providers = _providers_from_config(config)
     if not providers:
@@ -233,7 +244,7 @@ def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> 
         return {
             "type": "fallback",
             "providers": providers,
-            "fallback_enabled": strategy != "single" and bool(config.get("fallback_enabled", True)),
+            "fallback_enabled": _default_strategy_fallback_enabled(strategy, config),
         }
     if strategy == "intelligent":
         axis = config.get("axis")
@@ -241,13 +252,13 @@ def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> 
             "type": "intelligent",
             "axis": axis if isinstance(axis, str) else "performance",
             "providers": providers,
-            "fallback_enabled": bool(config.get("fallback_enabled", True)),
+            "fallback_enabled": _default_strategy_fallback_enabled(strategy, config),
         }
     if strategy == "weighted_score":
         response: dict[str, Any] = {
             "type": "weighted_score",
             "providers": providers,
-            "fallback_enabled": bool(config.get("fallback_enabled", True)),
+            "fallback_enabled": _default_strategy_fallback_enabled(strategy, config),
         }
         scoring = config.get("scoring")
         if isinstance(scoring, dict):
@@ -256,7 +267,7 @@ def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> 
     return {
         "type": strategy,
         "providers": providers,
-        "fallback_enabled": bool(config.get("fallback_enabled", strategy != "single")),
+        "fallback_enabled": _default_strategy_fallback_enabled(strategy, config, default=strategy != "single"),
     }
 
 

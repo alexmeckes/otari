@@ -65,3 +65,41 @@ def test_default_strategy_from_internal_trims_candidate_models_and_skips_blanks(
         {"provider": "openai", "model": "gpt-4o-mini", "priority": 1},
         {"provider": "anthropic", "model": "claude-3-5-haiku-latest", "priority": 3},
     ]
+
+
+def test_default_strategy_from_internal_forces_single_fallback_disabled() -> None:
+    default_strategy = routing_policy_shape.default_strategy_from_internal(
+        "single",
+        {"candidates": ["openai:gpt-4o"], "fallback_enabled": True},
+    )
+
+    assert default_strategy is not None
+    assert default_strategy["fallback_enabled"] is False
+
+
+def test_default_strategy_from_internal_preserves_fallback_enabled_flags_and_defaults() -> None:
+    priority = routing_policy_shape.default_strategy_from_internal(
+        "priority",
+        {"candidates": ["openai:gpt-4o"], "fallback_enabled": False},
+    )
+    intelligent = routing_policy_shape.default_strategy_from_internal(
+        "intelligent",
+        {"candidates": ["openai:gpt-4o"]},
+    )
+    weighted_score = routing_policy_shape.default_strategy_from_internal(
+        "weighted_score",
+        {"candidates": ["openai:gpt-4o"], "fallback_enabled": False, "scoring": {"quality_weight": 1.0}},
+    )
+    lowest_cost = routing_policy_shape.default_strategy_from_internal(
+        "lowest_cost",
+        {"candidates": ["openai:gpt-4o"], "fallback_enabled": False},
+    )
+
+    assert priority is not None
+    assert intelligent is not None
+    assert weighted_score is not None
+    assert lowest_cost is not None
+    assert priority["fallback_enabled"] is False
+    assert intelligent["fallback_enabled"] is True
+    assert weighted_score["fallback_enabled"] is False
+    assert lowest_cost["fallback_enabled"] is False
