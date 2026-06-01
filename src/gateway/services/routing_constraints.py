@@ -84,6 +84,19 @@ def _membership_failure(
     return None
 
 
+def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> str | None:
+    max_estimated_cost = non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost"))
+    if max_estimated_cost is None:
+        return None
+
+    allow_unknown_cost = bool_config(_constraint_value(constraints, "allow_unknown_cost"), False, coerce_strings=True)
+    if candidate.estimated_cost is None:
+        return None if allow_unknown_cost else "estimated_cost_unknown"
+    if candidate.estimated_cost > max_estimated_cost:
+        return "estimated_cost_exceeds_max"
+    return None
+
+
 def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
@@ -139,16 +152,7 @@ def _constraint_failure(
             if failure is not None:
                 return failure
 
-    max_estimated_cost = non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost"))
-    if max_estimated_cost is None:
-        return None
-
-    allow_unknown_cost = bool_config(_constraint_value(constraints, "allow_unknown_cost"), False, coerce_strings=True)
-    if candidate.estimated_cost is None:
-        return None if allow_unknown_cost else "estimated_cost_unknown"
-    if candidate.estimated_cost > max_estimated_cost:
-        return "estimated_cost_exceeds_max"
-    return None
+    return _estimated_cost_failure(candidate, constraints)
 
 
 def apply_constraints(

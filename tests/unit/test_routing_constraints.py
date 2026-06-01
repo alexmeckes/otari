@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
     _region_presence_failure,
@@ -80,6 +81,18 @@ def test_membership_failure_reuses_allowed_and_blocked_reasons() -> None:
         )
         is None
     )
+
+
+def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior() -> None:
+    unknown_cost = SimpleNamespace(estimated_cost=None)
+    expensive = SimpleNamespace(estimated_cost=0.02)
+    cheap = SimpleNamespace(estimated_cost=0.001)
+
+    assert _estimated_cost_failure(expensive, {}) is None
+    assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01}) == "estimated_cost_unknown"
+    assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01, "allow_unknown_cost": "true"}) is None
+    assert _estimated_cost_failure(expensive, {"max_estimated_cost": 0.01}) == "estimated_cost_exceeds_max"
+    assert _estimated_cost_failure(cheap, {"max_estimated_cost": 0.01}) is None
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:
