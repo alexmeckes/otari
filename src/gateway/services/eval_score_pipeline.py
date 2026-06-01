@@ -96,6 +96,15 @@ def _row_metadata(row: Mapping[str, Any], *, source: str | None, row_number: int
     return metadata
 
 
+def _object_rows(rows: list[Any], *, error_message: str) -> list[Mapping[str, Any]]:
+    object_rows: list[Mapping[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise EvalScorePipelineError(error_message)
+        object_rows.append(row)
+    return object_rows
+
+
 def normalize_eval_score_row(
     row: Mapping[str, Any],
     *,
@@ -143,17 +152,13 @@ def normalize_eval_score_row(
 
 def _rows_from_json_payload(payload: Any) -> list[Mapping[str, Any]]:
     if isinstance(payload, list):
-        if not all(isinstance(item, dict) for item in payload):
-            raise EvalScorePipelineError("JSON eval artifact list must contain objects")
-        return payload
+        return _object_rows(payload, error_message="JSON eval artifact list must contain objects")
     if not isinstance(payload, dict):
         raise EvalScorePipelineError("JSON eval artifact must be an object or list")
     for key in _ROW_LIST_KEYS:
         value = payload.get(key)
         if isinstance(value, list):
-            if not all(isinstance(item, dict) for item in value):
-                raise EvalScorePipelineError(f"JSON eval artifact '{key}' list must contain objects")
-            return value
+            return _object_rows(value, error_message=f"JSON eval artifact '{key}' list must contain objects")
     if any(key in payload for key in _MODEL_KEYS):
         return [payload]
     raise EvalScorePipelineError("JSON eval artifact must contain scores, results, items, rows, evals, or model")

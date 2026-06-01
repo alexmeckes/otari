@@ -86,6 +86,27 @@ def test_eval_score_pipeline_loads_jsonl_csv_and_nested_json(tmp_path: Path) -> 
     assert load_eval_score_rows(json_path) == [{"model": "anthropic:claude-3-5-haiku-latest", "score": 0.66}]
 
 
+def test_eval_score_pipeline_loads_single_json_object_row(tmp_path: Path) -> None:
+    json_path = tmp_path / "score.json"
+    json_path.write_text(json.dumps({"model": "openai:gpt-4o", "score": 0.9}), encoding="utf-8")
+
+    assert load_eval_score_rows(json_path) == [{"model": "openai:gpt-4o", "score": 0.9}]
+
+
+def test_eval_score_pipeline_rejects_non_object_json_row_lists(tmp_path: Path) -> None:
+    top_level_path = tmp_path / "top-level.json"
+    top_level_path.write_text(json.dumps([{"model": "openai:gpt-4o", "score": 0.9}, "bad"]), encoding="utf-8")
+
+    with pytest.raises(EvalScorePipelineError, match="JSON eval artifact list must contain objects"):
+        load_eval_score_rows(top_level_path)
+
+    nested_path = tmp_path / "nested.json"
+    nested_path.write_text(json.dumps({"scores": [{"model": "openai:gpt-4o", "score": 0.9}, "bad"]}), encoding="utf-8")
+
+    with pytest.raises(EvalScorePipelineError, match="JSON eval artifact 'scores' list must contain objects"):
+        load_eval_score_rows(nested_path)
+
+
 def test_eval_score_pipeline_rejects_rows_without_score() -> None:
     with pytest.raises(EvalScorePipelineError, match="must include score"):
         normalize_eval_score_row({"model": "openai:gpt-4o"})
