@@ -2,7 +2,7 @@
 
 import copy
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
@@ -189,6 +189,14 @@ def _request_guardrail_text(request_body: Mapping[str, Any]) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _case_insensitive_text_violations(
+    kind: str,
+    values: Iterable[str],
+    normalized_text: str,
+) -> list[dict[str, str]]:
+    return [guardrail_violation(kind, value) for value in values if value.lower() in normalized_text]
+
+
 async def evaluate_guardrails(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -204,9 +212,13 @@ async def evaluate_guardrails(
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
 
-    for term in string_list(guardrails.get("blocked_terms")):
-        if term.lower() in normalized_text:
-            violations.append(guardrail_violation("blocked_term", term))
+    violations.extend(
+        _case_insensitive_text_violations(
+            "blocked_term",
+            string_list(guardrails.get("blocked_terms")),
+            normalized_text,
+        )
+    )
 
     for name, pattern in named_patterns(guardrails.get("blocked_patterns")):
         if pattern.search(request_text):
@@ -223,9 +235,13 @@ async def evaluate_guardrails(
     )
     if injection_enabled:
         phrases = string_list(injection_config.get("phrases") if isinstance(injection_config, dict) else None)
-        for phrase in [*phrases, *_PROMPT_INJECTION_PHRASES]:
-            if phrase.lower() in normalized_text:
-                violations.append(guardrail_violation("prompt_injection", phrase))
+        violations.extend(
+            _case_insensitive_text_violations(
+                "prompt_injection",
+                [*phrases, *_PROMPT_INJECTION_PHRASES],
+                normalized_text,
+            )
+        )
 
     external_violations, classifier_results = await _routing_guardrail_external.evaluate_external_classifiers(
         guardrails=guardrails,
