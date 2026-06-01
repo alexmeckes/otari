@@ -66,6 +66,27 @@ def _provider_health_rate(config: Mapping[str, Any], key: str, default: float) -
     return min(rate, 1.0)
 
 
+def _provider_health_result(
+    provider: str,
+    *,
+    status: str,
+    reason: str,
+    sample_count: int,
+    success_count: int,
+    error_count: int,
+    failure_rate: float | None,
+) -> ProviderHealth:
+    return ProviderHealth(
+        provider=provider,
+        status=status,
+        sample_count=sample_count,
+        success_count=success_count,
+        error_count=error_count,
+        failure_rate=failure_rate,
+        reason=reason,
+    )
+
+
 def _provider_health_from_counts(
     provider: str,
     *,
@@ -80,43 +101,43 @@ def _provider_health_from_counts(
     failure_rate = None if sample_count == 0 else error_count / sample_count
 
     if sample_count < min_samples or failure_rate is None:
-        return ProviderHealth(
+        return _provider_health_result(
             provider=provider,
             status="unknown",
+            reason="insufficient_samples",
             sample_count=sample_count,
             success_count=success_count,
             error_count=error_count,
             failure_rate=failure_rate,
-            reason="insufficient_samples",
         )
     if failure_rate >= unhealthy_rate:
-        return ProviderHealth(
+        return _provider_health_result(
             provider=provider,
             status="unhealthy",
+            reason="failure_rate_exceeds_unhealthy_threshold",
             sample_count=sample_count,
             success_count=success_count,
             error_count=error_count,
             failure_rate=failure_rate,
-            reason="failure_rate_exceeds_unhealthy_threshold",
         )
     if failure_rate >= degraded_rate:
-        return ProviderHealth(
+        return _provider_health_result(
             provider=provider,
             status="degraded",
+            reason="failure_rate_exceeds_degraded_threshold",
             sample_count=sample_count,
             success_count=success_count,
             error_count=error_count,
             failure_rate=failure_rate,
-            reason="failure_rate_exceeds_degraded_threshold",
         )
-    return ProviderHealth(
+    return _provider_health_result(
         provider=provider,
         status="healthy",
+        reason="failure_rate_below_threshold",
         sample_count=sample_count,
         success_count=success_count,
         error_count=error_count,
         failure_rate=failure_rate,
-        reason="failure_rate_below_threshold",
     )
 
 

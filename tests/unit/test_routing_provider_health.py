@@ -50,3 +50,46 @@ def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds(
     assert health.status == "degraded"
     assert health.failure_rate == 0.5
     assert health.reason == "failure_rate_exceeds_degraded_threshold"
+
+
+def test_provider_health_from_counts_preserves_unknown_and_healthy_results() -> None:
+    unknown = _provider_health_from_counts(
+        "openai",
+        success_count=1,
+        error_count=0,
+        config={"health": {"min_samples": 3}},
+    )
+    healthy = _provider_health_from_counts(
+        "openai",
+        success_count=4,
+        error_count=0,
+        config={"health": {"min_samples": 3}},
+    )
+
+    assert unknown.status == "unknown"
+    assert unknown.sample_count == 1
+    assert unknown.failure_rate == 0.0
+    assert unknown.reason == "insufficient_samples"
+    assert healthy.status == "healthy"
+    assert healthy.sample_count == 4
+    assert healthy.failure_rate == 0.0
+    assert healthy.reason == "failure_rate_below_threshold"
+
+
+def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
+    health = _provider_health_from_counts(
+        "openai",
+        success_count=1,
+        error_count=3,
+        config={
+            "health": {
+                "min_samples": 3,
+                "unhealthy_failure_rate": 0.75,
+            }
+        },
+    )
+
+    assert health.status == "unhealthy"
+    assert health.sample_count == 4
+    assert health.failure_rate == 0.75
+    assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
