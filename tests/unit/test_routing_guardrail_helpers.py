@@ -35,6 +35,19 @@ def test_named_patterns_accepts_strings_and_named_pattern_objects() -> None:
     assert patterns[1][1].search("a@example.com")
 
 
+def test_named_patterns_trims_names_and_uses_default_for_blank_names() -> None:
+    patterns = named_patterns(
+        [
+            {"name": " secret_name ", "pattern": "secret"},
+            {"name": " ", "pattern": "token"},
+        ]
+    )
+
+    assert [name for name, _ in patterns] == ["secret_name", "pattern_2"]
+    assert patterns[0][1].search("SECRET")
+    assert patterns[1][1].search("TOKEN")
+
+
 def test_named_patterns_skips_invalid_regex() -> None:
     assert named_patterns([{"name": "bad", "pattern": "["}]) == []
 

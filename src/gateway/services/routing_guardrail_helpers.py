@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from gateway.log_config import logger
-from gateway.services.routing_config_values import bool_config, dict_or_empty, string_list
+from gateway.services.routing_config_values import bool_config, dict_or_empty, string_list, string_or_none
 
 __all__ = [
     "PII_PATTERNS",
@@ -52,9 +52,7 @@ def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
         name = f"pattern_{index}"
         pattern_value: Any = item
         if isinstance(item, dict):
-            name_value = item.get("name")
-            if isinstance(name_value, str) and name_value.strip():
-                name = name_value.strip()
+            name = string_or_none(item.get("name")) or name
             pattern_value = item.get("pattern")
         if not isinstance(pattern_value, str) or not pattern_value.strip():
             continue
