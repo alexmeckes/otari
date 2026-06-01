@@ -171,19 +171,13 @@ def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Map
     return _evaluate_condition_group(conditions, request_tags, logic="or" if logic in {"or", "any"} else "and")
 
 
-def _matches_request_tags(policy_tags: Mapping[str, str], request_tags: Mapping[str, str]) -> bool:
-    if not policy_tags:
-        return False
-    return all(request_tags.get(key) == value for key, value in policy_tags.items())
-
-
 def matches_policy_match_config(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
     match_config = policy_match_config(config)
     legacy_tags = policy_match_tags(config)
     has_conditions = any(key in match_config for key in ("conditions", "all", "any", "and", "or"))
     if not legacy_tags and not has_conditions:
         return False
-    if legacy_tags and not _matches_request_tags(legacy_tags, request_tags):
+    if legacy_tags and not all(request_tags.get(key) == value for key, value in legacy_tags.items()):
         return False
     if has_conditions and not _matches_condition_config(match_config, request_tags):
         return False
