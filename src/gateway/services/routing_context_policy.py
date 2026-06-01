@@ -69,14 +69,6 @@ def _context_summary_role(value: Any) -> str:
     return "system"
 
 
-def _context_strategy(value: Any) -> str | None:
-    strategy = string_or_none(value)
-    if strategy is None:
-        return None
-    normalized = strategy.lower()
-    return normalized if normalized in _CONTEXT_STRATEGIES else None
-
-
 def _summary_line_for_message(message: Any, *, max_chars: int) -> str:
     role = _message_role(message) or "message"
     text = jsonable_text(message.get("content") if isinstance(message, dict) else message)
@@ -141,8 +133,9 @@ def apply_context_policy(
         return body, None
 
     strategy_raw = context_config.get("strategy", "trim_messages")
-    strategy = _context_strategy(strategy_raw)
-    if strategy is None:
+    strategy_value = string_or_none(strategy_raw)
+    strategy = strategy_value.lower() if strategy_value is not None else None
+    if strategy not in _CONTEXT_STRATEGIES:
         return body, {
             "enabled": True,
             "status": "skipped",
