@@ -1,6 +1,7 @@
 from gateway.core.config import GatewayConfig
 from gateway.services.platform_config import (
     platform_base_url,
+    platform_health_path,
     platform_int_setting,
     platform_timeout_seconds,
     platform_url,
@@ -13,6 +14,14 @@ def test_platform_base_url_returns_none_when_missing() -> None:
 
 def test_platform_base_url_returns_configured_value_as_string() -> None:
     assert platform_base_url(GatewayConfig(platform={"base_url": "https://platform.local"})) == "https://platform.local"
+
+
+def test_platform_health_path_uses_default_when_missing() -> None:
+    assert platform_health_path(GatewayConfig(platform={})) == "/utils/health-check/"
+
+
+def test_platform_health_path_uses_configured_value() -> None:
+    assert platform_health_path(GatewayConfig(platform={"health_path": "/healthz"})) == "/healthz"
 
 
 def test_platform_url_joins_base_and_path() -> None:
