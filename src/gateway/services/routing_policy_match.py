@@ -76,10 +76,6 @@ def _condition_tag_key(condition: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _numeric_value(value: Any) -> float | None:
-    return float_or_none(value, coerce_strings=True)
-
-
 def _tag_values(value: Any) -> set[str]:
     if isinstance(value, list | tuple | set):
         return {str(item) for item in value}
@@ -118,8 +114,8 @@ def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[
     if op == "ends_with":
         return actual_value.endswith(str(expected))
 
-    actual_number = _numeric_value(actual_value)
-    expected_number = _numeric_value(expected)
+    actual_number = float_or_none(actual_value, coerce_strings=True)
+    expected_number = float_or_none(expected, coerce_strings=True)
     if actual_number is None or expected_number is None:
         return False
     if op == "gt":
