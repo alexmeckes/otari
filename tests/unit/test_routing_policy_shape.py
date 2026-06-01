@@ -30,6 +30,33 @@ def test_default_strategy_parsing_trims_strategy_axis_provider_and_model() -> No
     assert config["candidates"] == [{"model": "openai:gpt-4o-mini"}]
 
 
+def test_default_strategy_parsing_preserves_controls_and_weighted_scoring_aliases() -> None:
+    strategy, config = routing_policy_shape.config_from_default_strategy(
+        {
+            "type": "weighted_score",
+            "providers": [{"provider": "openai", "model": "gpt-4o"}],
+            "constraints": {"allowed_providers": ["openai"]},
+            "health": {"enabled": True},
+            "match": {"tags": {"tier": "prod"}},
+            "tier_thresholds": {"medium": 100, "complex": 500, "reasoning": 1000},
+            "scoring": {"weights": {"quality": 0.5, "cost": 0.5}},
+            "quality_weight": 0.8,
+            "unknown_cost_score": 0.25,
+        }
+    )
+
+    assert strategy == "weighted_score"
+    assert config["constraints"] == {"allowed_providers": ["openai"]}
+    assert config["health"] == {"enabled": True}
+    assert config["match"] == {"tags": {"tier": "prod"}}
+    assert config["tier_thresholds"] == {"medium": 100, "complex": 500, "reasoning": 1000}
+    assert config["scoring"] == {
+        "weights": {"quality": 0.5, "cost": 0.5},
+        "quality_weight": 0.8,
+        "unknown_cost_score": 0.25,
+    }
+
+
 def test_default_strategy_provider_validation_preserves_error_messages() -> None:
     with pytest.raises(
         routing_policy_shape.RoutingPolicyShapeError,
