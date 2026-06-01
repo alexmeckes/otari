@@ -15,7 +15,11 @@ from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._chat_request_fields import chat_provider_call_kwargs, chat_provider_request_fields
 from gateway.api.routes._chat_tools import resolve_chat_tool_selection
 from gateway.models.mcp import McpServerConfig
-from gateway.services.chat_tool_config import extract_code_execution_tool, extract_web_search_tool
+from gateway.services.chat_tool_config import (
+    build_web_search_backend,
+    extract_code_execution_tool,
+    extract_web_search_tool,
+)
 
 
 def test_extracts_gateway_native_short_form() -> None:
@@ -120,6 +124,24 @@ def test_web_search_carries_per_tool_config_through() -> None:
     assert entry is not None
     assert entry["max_results"] == 3
     assert entry["allowed_domains"] == ["docs.python.org"]
+
+
+def test_build_web_search_backend_uses_trimmed_env_engines(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_ENGINES", " duckduckgo, , brave ")
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._engines == ("duckduckgo", "brave")
+
+
+def test_build_web_search_backend_ignores_blank_env_engines(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GATEWAY_WEB_SEARCH_ENGINES", raising=False)
+    default_backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_ENGINES", " , ")
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._engines == default_backend._engines
 
 
 # --- route-level tool selection ----------------------------------------------

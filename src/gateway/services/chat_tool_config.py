@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from gateway.log_config import logger
+from gateway.services.routing_config_values import comma_separated_string_list
 from gateway.services.web_search_backend import WebSearchBackend
 
 # Gateway-internal fields the provider SDKs (any-llm, anthropic, openai, ...)
@@ -106,11 +107,9 @@ def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> We
     """Construct a WebSearchBackend honoring environment and per-tool config."""
     kwargs: dict[str, Any] = {"base_url": base_url}
 
-    engines_str = os.environ.get("GATEWAY_WEB_SEARCH_ENGINES")
-    if engines_str:
-        engines = tuple(engine.strip() for engine in engines_str.split(",") if engine.strip())
-        if engines:
-            kwargs["engines"] = engines
+    engines = tuple(comma_separated_string_list(os.environ.get("GATEWAY_WEB_SEARCH_ENGINES")))
+    if engines:
+        kwargs["engines"] = engines
 
     max_env = os.environ.get("GATEWAY_WEB_SEARCH_MAX_RESULTS")
     if max_env:

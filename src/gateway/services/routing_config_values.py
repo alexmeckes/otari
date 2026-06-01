@@ -1,4 +1,4 @@
-"""Shared config value parsers for routing services."""
+"""Shared config value parsers for gateway services."""
 
 from typing import Any
 
@@ -24,6 +24,13 @@ def string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def comma_separated_string_list(value: Any) -> list[str]:
+    parsed = string_or_none(value)
+    if parsed is None:
+        return []
+    return [item for part in parsed.split(",") if (item := string_or_none(part)) is not None]
 
 
 def int_config(value: Any, default: int) -> int:
