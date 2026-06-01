@@ -25,6 +25,28 @@ def _ok_response(servers: list[dict[str, Any]]) -> httpx.Response:
     return httpx.Response(200, json={"servers": servers})
 
 
+def test_mcp_server_config_from_payload_preserves_optional_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "true")
+
+    config = platform_gateway._mcp_server_config_from_payload(
+        {
+            "name": "calendar",
+            "url": "https://example.com/mcp",
+            "authorization_token": "ya29.x",
+            "purpose_hint": "scheduling",
+            "allowed_tools": ["list_events"],
+        }
+    )
+
+    assert config == McpServerConfig(
+        name="calendar",
+        url="https://example.com/mcp",
+        authorization_token="ya29.x",
+        purpose_hint="scheduling",
+        allowed_tools=["list_events"],
+    )
+
+
 @pytest.mark.asyncio
 async def test_resolve_returns_configs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "true")
