@@ -9,6 +9,7 @@ from gateway.services.routing_config_values import bool_config, dict_or_empty, s
 
 __all__ = [
     "PII_PATTERNS",
+    "guardrail_config_value",
     "guardrail_violation",
     "guardrails_config",
     "named_patterns",
@@ -27,15 +28,21 @@ def guardrails_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(config.get("guardrails"))
 
 
+def guardrail_config_value(config: Any, key: str, *, scalar_value: Any = None) -> Any:
+    if isinstance(config, dict):
+        return config.get(key)
+    return scalar_value
+
+
 def pii_patterns_from_config(
     pii_config: Any,
     *,
     fallback_types: Any = None,
 ) -> list[tuple[str, re.Pattern[str]]]:
-    enabled = bool_config(pii_config.get("enabled") if isinstance(pii_config, dict) else pii_config, False)
+    enabled = bool_config(guardrail_config_value(pii_config, "enabled", scalar_value=pii_config), False)
     if not enabled:
         return []
-    type_config = pii_config.get("types") if isinstance(pii_config, dict) else fallback_types
+    type_config = guardrail_config_value(pii_config, "types", scalar_value=fallback_types)
     pii_types = string_list(type_config) or sorted(PII_PATTERNS)
     return [
         (pii_type, pattern)

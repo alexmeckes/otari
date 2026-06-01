@@ -9,6 +9,7 @@ from gateway.services import routing_guardrail_external as _routing_guardrail_ex
 from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
 from gateway.services.routing_config_values import bool_config, string_list, string_or_none
 from gateway.services.routing_guardrail_helpers import (
+    guardrail_config_value,
     guardrail_violation,
     guardrails_config,
     named_patterns,
@@ -230,11 +231,11 @@ async def evaluate_guardrails(
 
     injection_config = guardrails.get("prompt_injection")
     injection_enabled = bool_config(
-        injection_config.get("enabled") if isinstance(injection_config, dict) else injection_config,
+        guardrail_config_value(injection_config, "enabled", scalar_value=injection_config),
         False,
     )
     if injection_enabled:
-        phrases = string_list(injection_config.get("phrases") if isinstance(injection_config, dict) else None)
+        phrases = string_list(guardrail_config_value(injection_config, "phrases"))
         violations.extend(
             _case_insensitive_text_violations(
                 "prompt_injection",

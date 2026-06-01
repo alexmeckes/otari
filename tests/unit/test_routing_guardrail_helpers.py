@@ -1,4 +1,5 @@
 from gateway.services.routing_guardrail_helpers import (
+    guardrail_config_value,
     guardrail_violation,
     guardrails_config,
     named_patterns,
@@ -18,6 +19,13 @@ def test_guardrails_config_returns_mapping_only() -> None:
     assert guardrails_config({"guardrails": guardrails}) == guardrails
     assert guardrails_config({"guardrails": ["enabled"]}) == {}
     assert guardrails_config({}) == {}
+
+
+def test_guardrail_config_value_preserves_dict_and_scalar_shorthand_behavior() -> None:
+    assert guardrail_config_value({"enabled": True}, "enabled", scalar_value=False) is True
+    assert guardrail_config_value({"types": ["email"]}, "missing", scalar_value=["ssn"]) is None
+    assert guardrail_config_value(True, "enabled", scalar_value=True) is True
+    assert guardrail_config_value("pii", "types") is None
 
 
 def test_named_patterns_accepts_strings_and_named_pattern_objects() -> None:
