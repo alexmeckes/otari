@@ -97,6 +97,16 @@ def _estimated_cost_failure(candidate: Any, constraints: Mapping[str, Any]) -> s
     return None
 
 
+def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
+    return {
+        "model": candidate.model,
+        "provider": candidate.provider,
+        "reason": reason,
+        "estimated_cost": candidate.estimated_cost,
+        "regions": sorted(_candidate_regions(candidate)),
+    }
+
+
 def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
@@ -172,14 +182,5 @@ def apply_constraints(
         if reason is None:
             allowed.append(candidate)
             continue
-        candidate_regions = sorted(_candidate_regions(candidate))
-        rejected.append(
-            {
-                "model": candidate.model,
-                "provider": candidate.provider,
-                "reason": reason,
-                "estimated_cost": candidate.estimated_cost,
-                "regions": candidate_regions,
-            }
-        )
+        rejected.append(_rejected_candidate_payload(candidate, reason))
     return allowed, rejected

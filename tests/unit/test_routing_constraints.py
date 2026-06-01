@@ -8,6 +8,7 @@ from gateway.services.routing_constraints import (
     _membership_failure,
     _normalize_model_key_for_constraint,
     _region_presence_failure,
+    _rejected_candidate_payload,
     _request_region,
     apply_constraints,
 )
@@ -93,6 +94,23 @@ def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior()
     assert _estimated_cost_failure(unknown_cost, {"max_estimated_cost": 0.01, "allow_unknown_cost": "true"}) is None
     assert _estimated_cost_failure(expensive, {"max_estimated_cost": 0.01}) == "estimated_cost_exceeds_max"
     assert _estimated_cost_failure(cheap, {"max_estimated_cost": 0.01}) is None
+
+
+def test_rejected_candidate_payload_preserves_public_shape_and_sorted_regions() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=0.02,
+        metadata={"regions": ["us", "eu"]},
+    )
+
+    assert _rejected_candidate_payload(candidate, "estimated_cost_exceeds_max") == {
+        "model": "openai:gpt-4o",
+        "provider": "openai",
+        "reason": "estimated_cost_exceeds_max",
+        "estimated_cost": 0.02,
+        "regions": ["eu", "us"],
+    }
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:
