@@ -17,6 +17,8 @@ from gateway.services.routing_policy_shape import model_selector, split_model_se
         ("openai", "openai/gpt-4o", "openai:gpt-4o"),
         (None, "openai/gpt-4o", "openai:gpt-4o"),
         (None, "gpt-4o", "gpt-4o"),
+        (" openai ", " gpt-4o ", "openai:gpt-4o"),
+        (" ", " gpt-4o ", "gpt-4o"),
     ],
 )
 def test_model_selector_preserves_existing_selector_shapes(

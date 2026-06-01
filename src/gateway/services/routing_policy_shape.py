@@ -44,19 +44,19 @@ score_value = score_or_none
 
 
 def model_selector(provider: str | None, model: str) -> str:
-    model_value = model.strip()
-    if not provider:
+    model_value = string_or_none(model) or ""
+    provider_value = string_or_none(provider)
+    if provider_value is None:
         if "/" in model_value:
             return model_value.replace("/", ":", 1)
         return model_value
-    provider_value = provider.strip()
     if model_value.startswith(f"{provider_value}:") or model_value.startswith(f"{provider_value}/"):
         return model_value.replace("/", ":", 1)
     return pricing_model_ref(provider_value, model_value)
 
 
 def normalized_model_selector(provider: str | None, model: str) -> str:
-    return model_selector(provider, model).replace("/", ":", 1).strip()
+    return string_or_none(model_selector(provider, model).replace("/", ":", 1)) or ""
 
 
 def split_model_selector(model_selector: str) -> tuple[str | None, str]:
