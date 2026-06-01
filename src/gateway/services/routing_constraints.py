@@ -184,11 +184,10 @@ def _rejected_candidate_payload(candidate: Any, reason: str) -> dict[str, Any]:
 def _constraint_failure(
     candidate: Any,
     constraints: Mapping[str, Any],
+    constraint_sets: _ConstraintSets,
     *,
     tags: Mapping[str, str],
 ) -> str | None:
-    constraint_sets = _constraint_sets(constraints)
-
     failure = _provider_model_failure(candidate, constraint_sets)
     if failure is not None:
         return failure
@@ -210,10 +209,11 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
+    constraint_sets = _constraint_sets(constraints)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        reason = _constraint_failure(candidate, constraints, tags=tags)
+        reason = _constraint_failure(candidate, constraints, constraint_sets, tags=tags)
         if reason is None:
             allowed.append(candidate)
             continue

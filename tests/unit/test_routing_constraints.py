@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _constraint_failure,
     _constraint_sets,
     _estimated_cost_failure,
     _membership_failure,
@@ -196,6 +197,26 @@ def test_rejected_candidate_payload_preserves_public_shape_and_sorted_regions() 
         "estimated_cost": 0.02,
         "regions": ["eu", "us"],
     }
+
+
+def test_constraint_failure_reuses_precomputed_constraint_sets() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=0.02,
+        metadata={"region": "eu"},
+    )
+    constraints = {
+        "allowed_providers": ["openai"],
+        "allowed_models": ["openai:gpt-4o"],
+        "allowed_regions": ["eu"],
+        "max_estimated_cost": 0.01,
+    }
+
+    assert (
+        _constraint_failure(candidate, constraints, _constraint_sets(constraints), tags={})
+        == "estimated_cost_exceeds_max"
+    )
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:
