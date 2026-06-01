@@ -221,20 +221,30 @@ def classify_upstream_error(exc: BaseException) -> tuple[bool, str]:
     if isinstance(exc, httpx.NetworkError):
         return True, "conn_err"
 
-    status_code = getattr(exc, "status_code", None)
+    status_code = _upstream_status_code(exc)
     if status_code is None:
-        resp = getattr(exc, "response", None)
-        if resp is not None:
-            status_code = getattr(resp, "status_code", None)
+        return False, "unknown"
+    return _classify_upstream_status_code(status_code)
 
+
+def _upstream_status_code(exc: BaseException) -> int | None:
+    status_code = getattr(exc, "status_code", None)
     if isinstance(status_code, int):
-        if status_code in _FALLBACK_NON_RETRYABLE_STATUS_CODES:
-            return False, f"http_{status_code}"
-        if status_code in _FALLBACK_RETRYABLE_STATUS_CODES or 500 <= status_code <= 599:
-            return True, f"http_{status_code}"
-        return False, f"http_{status_code}"
+        return status_code
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+    response_status = getattr(response, "status_code", None)
+    return response_status if isinstance(response_status, int) else None
 
-    return False, "unknown"
+
+def _classify_upstream_status_code(status_code: int) -> tuple[bool, str]:
+    error_class = f"http_{status_code}"
+    if status_code in _FALLBACK_NON_RETRYABLE_STATUS_CODES:
+        return False, error_class
+    if status_code in _FALLBACK_RETRYABLE_STATUS_CODES or 500 <= status_code <= 599:
+        return True, error_class
+    return False, error_class
 
 
 async def resolve_platform_mcp_servers(
