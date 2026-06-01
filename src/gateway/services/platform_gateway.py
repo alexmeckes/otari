@@ -105,8 +105,12 @@ def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, 
     return headers
 
 
+def _platform_int_setting(config: GatewayConfig, key: str, default: int) -> int:
+    return int(config.platform.get(key, default))
+
+
 def _platform_timeout_seconds(config: GatewayConfig, key: str, default_ms: int = 5000) -> float:
-    return int(config.platform.get(key, default_ms)) / 1000
+    return _platform_int_setting(config, key, default_ms) / 1000
 
 
 def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
@@ -337,7 +341,7 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
         url=_platform_url(platform_base_url, "/gateway/usage"),
         headers=_platform_gateway_headers(config),
         timeout_seconds=_platform_timeout_seconds(config, "usage_timeout_ms"),
-        max_retries=int(config.platform.get("usage_max_retries", 3)),
+        max_retries=_platform_int_setting(config, "usage_max_retries", 3),
     )
 
 
