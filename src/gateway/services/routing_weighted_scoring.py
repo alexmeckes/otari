@@ -26,16 +26,6 @@ def _score_setting(scoring: Mapping[str, Any], key: str, default: float) -> floa
     return default if parsed is None else parsed
 
 
-def _weighted_score_weights(scoring: Mapping[str, Any]) -> dict[str, float]:
-    weights = {
-        key: _score_weight(scoring, key, default)
-        for key, default in _DEFAULT_SCORE_WEIGHTS.items()
-    }
-    if sum(weights.values()) <= 0:
-        return dict(_DEFAULT_SCORE_WEIGHTS)
-    return weights
-
-
 def _normalized_lower_is_better(
     value: float | None,
     known_values: Sequence[float],
@@ -59,7 +49,12 @@ def attach_weighted_scores(
     config: Mapping[str, Any],
 ) -> list[Any]:
     scoring = nested_dict_or_empty(config, "scoring", "score_weights")
-    weights = _weighted_score_weights(scoring)
+    weights = {
+        key: _score_weight(scoring, key, default)
+        for key, default in _DEFAULT_SCORE_WEIGHTS.items()
+    }
+    if sum(weights.values()) <= 0:
+        weights = dict(_DEFAULT_SCORE_WEIGHTS)
     weight_total = sum(weights.values())
     default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
     unknown_cost_score = _score_setting(scoring, "unknown_cost_score", _DEFAULT_UNKNOWN_COST_SCORE)
