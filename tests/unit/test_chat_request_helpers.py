@@ -76,7 +76,7 @@ def test_empty_tools_returns_no_entry() -> None:
 
 
 def test_does_not_match_unrelated_types_starting_with_code() -> None:
-    entry, _ = extract_code_execution_tool([{"type": "code_review"}])
+    entry, _ = extract_code_execution_tool([{"type": "code_review"}, {"type": "code_executioner"}])
     assert entry is None
 
 
@@ -114,6 +114,16 @@ def test_web_search_passes_through_unrelated_tools() -> None:
 
 def test_web_search_does_not_match_code_execution() -> None:
     entry, _ = extract_web_search_tool([{"type": "code_execution"}])
+    assert entry is None
+
+
+def test_web_search_does_not_match_unrelated_prefix_boundary() -> None:
+    entry, _ = extract_web_search_tool([{"type": "web_searcher"}])
+    assert entry is None
+
+
+def test_web_search_non_string_type_does_not_match() -> None:
+    entry, _ = extract_web_search_tool([{"type": None}, {"type": 42}])
     assert entry is None
 
 
