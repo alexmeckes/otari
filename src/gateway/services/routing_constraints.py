@@ -20,10 +20,6 @@ def _constraint_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return dict_or_empty(config.get("constraints"))
 
 
-def _constraint_value(constraints: Mapping[str, Any], key: str, default: Any = None) -> Any:
-    return constraints.get(key, default)
-
-
 def _normalize_model_key_for_constraint(value: str) -> str:
     try:
         _provider, _model_name, normalized = split_model_selector(value)
@@ -65,20 +61,20 @@ class _PreparedConstraints:
 
 def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     return _ConstraintSets(
-        allowed_providers=_string_set(_constraint_value(constraints, "allowed_providers")),
-        blocked_providers=_string_set(_constraint_value(constraints, "blocked_providers")),
-        allowed_models=_constraint_model_set(_constraint_value(constraints, "allowed_models")),
-        blocked_models=_constraint_model_set(_constraint_value(constraints, "blocked_models")),
-        allowed_regions=_region_set(_constraint_value(constraints, "allowed_regions")),
-        blocked_regions=_region_set(_constraint_value(constraints, "blocked_regions")),
+        allowed_providers=_string_set(constraints.get("allowed_providers")),
+        blocked_providers=_string_set(constraints.get("blocked_providers")),
+        allowed_models=_constraint_model_set(constraints.get("allowed_models")),
+        blocked_models=_constraint_model_set(constraints.get("blocked_models")),
+        allowed_regions=_region_set(constraints.get("allowed_regions")),
+        blocked_regions=_region_set(constraints.get("blocked_regions")),
     )
 
 
 def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
     return _CostConstraint(
-        max_estimated_cost=non_negative_float_or_none(_constraint_value(constraints, "max_estimated_cost")),
+        max_estimated_cost=non_negative_float_or_none(constraints.get("max_estimated_cost")),
         allow_unknown_cost=bool_config(
-            _constraint_value(constraints, "allow_unknown_cost"),
+            constraints.get("allow_unknown_cost"),
             False,
             coerce_strings=True,
         ),
@@ -103,7 +99,7 @@ def _candidate_regions(candidate: Any) -> set[str]:
 
 
 def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
-    region_tag = string_or_none(_constraint_value(constraints, "region_tag", "region"))
+    region_tag = string_or_none(constraints.get("region_tag", "region"))
     if region_tag is None:
         return None
     region = string_or_none(tags.get(region_tag))
@@ -111,7 +107,7 @@ def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> 
 
 
 def _required_request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
-    if not bool_config(_constraint_value(constraints, "require_region_match"), False, coerce_strings=True):
+    if not bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
         return None
     return _request_region(constraints, tags)
 
