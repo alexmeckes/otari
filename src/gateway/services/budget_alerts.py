@@ -10,6 +10,7 @@ from gateway.models.entities import Budget, BudgetAlert
 from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.repositories.projects_repository import get_project_by_id
 from gateway.repositories.users_repository import get_active_user
+from gateway.services.routing_config_values import string_or_none
 
 BUDGET_ALERT_SCOPE_PROJECT = "project"
 BUDGET_ALERT_SCOPE_USER = "user"
@@ -37,10 +38,8 @@ def normalize_alert_thresholds(value: Any) -> list[float]:
 
 def normalize_alert_webhook_url(value: str | None) -> str | None:
     """Normalize and validate an optional budget alert webhook URL."""
-    if value is None:
-        return None
-    stripped = value.strip()
-    if not stripped:
+    stripped = string_or_none(value)
+    if stripped is None:
         return None
     try:
         return str(_HTTP_URL_ADAPTER.validate_python(stripped))

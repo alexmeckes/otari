@@ -43,6 +43,11 @@ def test_budget_requests_normalize_alert_fields() -> None:
     assert update_request.alert_webhook_url == "https://alerts.example.test/hook"
 
 
+def test_budget_requests_omit_blank_alert_webhook_url() -> None:
+    assert CreateBudgetRequest(alert_webhook_url=" ").alert_webhook_url is None
+    assert UpdateBudgetRequest(alert_webhook_url=" ").alert_webhook_url is None
+
+
 def test_budget_match_tag_dict_returns_match_tags_when_dict() -> None:
     budget = Budget(match_tags={"team": "platform"})
 
