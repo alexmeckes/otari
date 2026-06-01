@@ -55,6 +55,10 @@ def _provider_health_mode(config: Mapping[str, Any]) -> str:
     return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
 
 
+def _provider_health_enabled_for_mode(config: Mapping[str, Any], mode: str) -> bool:
+    return _provider_health_enabled(config) and _provider_health_mode(config) == mode
+
+
 def _provider_health_rate(config: Mapping[str, Any], key: str, default: float) -> float:
     rate = non_negative_float_or_none(_provider_health_value(config, key))
     if rate is None:
@@ -170,7 +174,7 @@ def apply_provider_health_gate(
     *,
     config: Mapping[str, Any],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    if not _provider_health_enabled(config) or _provider_health_mode(config) != "skip_unhealthy":
+    if not _provider_health_enabled_for_mode(config, "skip_unhealthy"):
         return list(candidates), []
 
     allowed: list[Any] = []
@@ -201,6 +205,6 @@ def apply_provider_health_order(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    if not _provider_health_enabled(config) or _provider_health_mode(config) != "downrank":
+    if not _provider_health_enabled_for_mode(config, "downrank"):
         return list(candidates)
     return sorted(candidates, key=_by_health)
