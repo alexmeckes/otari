@@ -20,10 +20,6 @@ from gateway.services.routing_request_analysis import (
 _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
 
 
-def _context_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return nested_dict_or_empty(config, "context", "context_policy")
-
-
 def _context_enabled(context_config: Mapping[str, Any]) -> bool:
     return bool_config(context_config.get("enabled"), bool(context_config))
 
@@ -144,7 +140,7 @@ def apply_context_policy(
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Apply deterministic prompt compression from policy config and return trace metadata."""
     body = copy.deepcopy(dict(request_body))
-    context_config = _context_config(config)
+    context_config = nested_dict_or_empty(config, "context", "context_policy")
     if not _context_enabled(context_config):
         return body, None
 
