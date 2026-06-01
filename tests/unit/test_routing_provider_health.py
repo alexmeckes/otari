@@ -4,6 +4,7 @@ from gateway.services.routing_provider_health import (
     _provider_health_from_counts,
     _provider_health_mode,
     _provider_health_rate,
+    _record_provider_outcome,
 )
 
 
@@ -93,3 +94,22 @@ def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
     assert health.sample_count == 4
     assert health.failure_rate == 0.75
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
+
+
+def test_record_provider_outcome_counts_known_success_and_error_only() -> None:
+    counts_by_provider = {
+        "openai": {"success": 0, "error": 0},
+        "anthropic": {"success": 0, "error": 0},
+    }
+
+    _record_provider_outcome(counts_by_provider, "openai", "success")
+    _record_provider_outcome(counts_by_provider, "openai", "error")
+    _record_provider_outcome(counts_by_provider, "unknown", "success")
+    _record_provider_outcome(counts_by_provider, "anthropic", "timeout")
+    _record_provider_outcome(counts_by_provider, None, "error")
+    _record_provider_outcome(counts_by_provider, "anthropic", None)
+
+    assert counts_by_provider == {
+        "openai": {"success": 1, "error": 1},
+        "anthropic": {"success": 0, "error": 0},
+    }
