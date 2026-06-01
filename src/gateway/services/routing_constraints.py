@@ -2,7 +2,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from gateway.services.routing_candidate_specs import split_model_selector
-from gateway.services.routing_config_values import bool_config, dict_or_empty, non_negative_float_or_none, string_list
+from gateway.services.routing_config_values import (
+    bool_config,
+    dict_or_empty,
+    non_negative_float_or_none,
+    string_list,
+    string_or_none,
+)
 
 
 def _string_set(value: Any) -> set[str]:
@@ -26,24 +32,24 @@ def _constraint_model_set(value: Any) -> set[str]:
 
 
 def _region_set(value: Any) -> set[str]:
-    return {item.strip().lower() for item in _string_set(value) if item.strip()}
+    return {item.lower() for item in _string_set(value)}
 
 
 def _candidate_regions(candidate: Any) -> set[str]:
     metadata = dict_or_empty(candidate.metadata)
     regions = _region_set(metadata.get("regions"))
-    region = metadata.get("region")
-    if isinstance(region, str) and region.strip():
-        regions.add(region.strip().lower())
+    region = string_or_none(metadata.get("region"))
+    if region is not None:
+        regions.add(region.lower())
     return regions
 
 
 def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
-    region_tag = constraints.get("region_tag", "region")
-    if not isinstance(region_tag, str) or not region_tag.strip():
+    region_tag = string_or_none(constraints.get("region_tag", "region"))
+    if region_tag is None:
         return None
-    value = tags.get(region_tag.strip())
-    return value.strip().lower() if isinstance(value, str) and value.strip() else None
+    region = string_or_none(tags.get(region_tag))
+    return region.lower() if region is not None else None
 
 
 def _constraint_failure(
