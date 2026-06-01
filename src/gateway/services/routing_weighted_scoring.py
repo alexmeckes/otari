@@ -28,6 +28,11 @@ def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float
     return default if parsed is None else parsed
 
 
+def _score_setting(scoring: Mapping[str, Any], key: str, default: float) -> float:
+    parsed = score_or_none(scoring.get(key))
+    return default if parsed is None else parsed
+
+
 def _weighted_score_weights(config: Mapping[str, Any]) -> dict[str, float]:
     scoring = _weighted_scoring_config(config)
     weights = {
@@ -64,12 +69,9 @@ def attach_weighted_scores(
     scoring = _weighted_scoring_config(config)
     weights = _weighted_score_weights(config)
     weight_total = sum(weights.values())
-    default_quality = score_or_none(scoring.get("default_quality_score"))
-    unknown_cost = score_or_none(scoring.get("unknown_cost_score"))
-    unknown_latency = score_or_none(scoring.get("unknown_latency_score"))
-    default_quality_score = _DEFAULT_QUALITY_SCORE if default_quality is None else default_quality
-    unknown_cost_score = _DEFAULT_UNKNOWN_COST_SCORE if unknown_cost is None else unknown_cost
-    unknown_latency_score = _DEFAULT_UNKNOWN_LATENCY_SCORE if unknown_latency is None else unknown_latency
+    default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
+    unknown_cost_score = _score_setting(scoring, "unknown_cost_score", _DEFAULT_UNKNOWN_COST_SCORE)
+    unknown_latency_score = _score_setting(scoring, "unknown_latency_score", _DEFAULT_UNKNOWN_LATENCY_SCORE)
 
     known_costs = [
         candidate.estimated_cost
