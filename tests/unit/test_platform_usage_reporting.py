@@ -1,8 +1,9 @@
 import pytest
 from any_llm.types.completion import CompletionUsage
 
-from gateway.core.config import GatewayConfig
+from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
 from gateway.services.platform_gateway import (
+    _platform_gateway_headers,
     _platform_usage_payload,
     _platform_usage_report_request,
     _should_retry_usage_report_status,
@@ -49,6 +50,19 @@ def test_platform_usage_payload_includes_error_class_for_errors() -> None:
         "status": "error",
         "error_class": "http_503",
     }
+
+
+def test_platform_gateway_headers_include_gateway_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
+
+    assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": "gw-test-token"}
+
+
+def test_platform_gateway_headers_default_missing_token_to_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    for env_var in PLATFORM_TOKEN_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+
+    assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": ""}
 
 
 def test_platform_usage_report_request_uses_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:

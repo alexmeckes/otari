@@ -95,11 +95,14 @@ def _platform_base_url_or_raise(config: GatewayConfig) -> str:
     return str(platform_base_url)
 
 
+def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
+    return {"X-Gateway-Token": config.platform_token or ""}
+
+
 def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, str]:
-    return {
-        "X-Gateway-Token": config.platform_token or "",
-        "X-User-Token": user_token,
-    }
+    headers = _platform_gateway_headers(config)
+    headers["X-User-Token"] = user_token
+    return headers
 
 
 def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
@@ -329,7 +332,7 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
     timeout_ms = int(config.platform.get("usage_timeout_ms", 5000))
     return _PlatformUsageReportRequest(
         url=_platform_url(platform_base_url, "/gateway/usage"),
-        headers={"X-Gateway-Token": config.platform_token or ""},
+        headers=_platform_gateway_headers(config),
         timeout_seconds=timeout_ms / 1000,
         max_retries=int(config.platform.get("usage_max_retries", 3)),
     )
