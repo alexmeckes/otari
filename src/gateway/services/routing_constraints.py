@@ -38,12 +38,6 @@ class _ConstraintSets:
     blocked_regions: set[str]
 
 
-@dataclass(frozen=True)
-class _CostConstraint:
-    max_estimated_cost: float | None
-    allow_unknown_cost: bool
-
-
 def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     return _ConstraintSets(
         allowed_providers=_string_set(constraints.get("allowed_providers")),
@@ -59,17 +53,6 @@ def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     )
 
 
-def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
-    return _CostConstraint(
-        max_estimated_cost=non_negative_float_or_none(constraints.get("max_estimated_cost")),
-        allow_unknown_cost=bool_config(
-            constraints.get("allow_unknown_cost"),
-            False,
-            coerce_strings=True,
-        ),
-    )
-
-
 def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) -> str | None:
     if constraint_sets.allowed_providers and candidate.provider not in constraint_sets.allowed_providers:
         return "provider_not_allowed"
@@ -82,13 +65,18 @@ def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) ->
     return None
 
 
-def _estimated_cost_failure(candidate: Any, cost_constraint: _CostConstraint) -> str | None:
-    if cost_constraint.max_estimated_cost is None:
+def _estimated_cost_failure(
+    candidate: Any,
+    *,
+    max_estimated_cost: float | None,
+    allow_unknown_cost: bool,
+) -> str | None:
+    if max_estimated_cost is None:
         return None
 
     if candidate.estimated_cost is None:
-        return None if cost_constraint.allow_unknown_cost else "estimated_cost_unknown"
-    if candidate.estimated_cost > cost_constraint.max_estimated_cost:
+        return None if allow_unknown_cost else "estimated_cost_unknown"
+    if candidate.estimated_cost > max_estimated_cost:
         return "estimated_cost_exceeds_max"
     return None
 
@@ -132,7 +120,12 @@ def apply_constraints(
         if region_tag is not None:
             region = string_or_none(tags.get(region_tag))
             requested_region = region.lower() if region is not None else None
-    cost_constraint = _cost_constraint(constraints)
+    max_estimated_cost = non_negative_float_or_none(constraints.get("max_estimated_cost"))
+    allow_unknown_cost = bool_config(
+        constraints.get("allow_unknown_cost"),
+        False,
+        coerce_strings=True,
+    )
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
@@ -149,7 +142,11 @@ def apply_constraints(
                 requested_region,
             )
         if reason is None:
-            reason = _estimated_cost_failure(candidate, cost_constraint)
+            reason = _estimated_cost_failure(
+                candidate,
+                max_estimated_cost=max_estimated_cost,
+                allow_unknown_cost=allow_unknown_cost,
+            )
         if reason is None:
             allowed.append(candidate)
             continue
