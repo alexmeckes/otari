@@ -51,14 +51,6 @@ def _env_flag(name: str, *, default: bool) -> bool:
     return default
 
 
-def _allow_loopback() -> bool:
-    return _env_flag("GATEWAY_MCP_ALLOW_LOOPBACK", default=True)
-
-
-def _allow_private_hosts() -> bool:
-    return _env_flag("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", default=False)
-
-
 def _addresses_from_addrinfo(infos: Iterable[Any]) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     for info in infos:
@@ -94,7 +86,7 @@ def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
     if not host:
         raise UnsafeURLError("MCP server URL must include a hostname")
 
-    if _allow_private_hosts():
+    if _env_flag("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", default=False):
         return
 
     try:
@@ -118,7 +110,7 @@ def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
             )
 
     for addr in addresses:
-        if addr.is_loopback and _allow_loopback():
+        if addr.is_loopback and _env_flag("GATEWAY_MCP_ALLOW_LOOPBACK", default=True):
             continue
         reason = _blocked_reason(addr)
         if reason is not None:
@@ -144,10 +136,6 @@ def _blocked_reason(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str 
     if addr.is_reserved:
         return "in a reserved range"
     return None
-
-
-def _allow_web_search_private_hosts() -> bool:
-    return _env_flag("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", default=False)
 
 
 async def _resolve_all_async(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -182,7 +170,7 @@ async def validate_outbound_fetch_url(url: str) -> None:
     if not host:
         raise UnsafeURLError("fetch URL must include a hostname")
 
-    if _allow_web_search_private_hosts():
+    if _env_flag("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", default=False):
         return
 
     try:
