@@ -35,10 +35,14 @@ def test_admin_dashboard_page_is_available(tmp_path: Path) -> None:
 
     with TestClient(app) as client:
         response = client.get("/admin")
+        slash_response = client.get("/admin/")
 
     assert response.status_code == 200
+    assert slash_response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+    assert "text/html" in slash_response.headers["content-type"]
     assert "LLM Routing Gateway Admin" in response.text
+    assert slash_response.text == response.text
     assert "/admin/assets/styles.css" in response.text
     assert "/admin/assets/app.js" in response.text
     assert 'type="module"' in response.text

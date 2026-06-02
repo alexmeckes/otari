@@ -30,13 +30,8 @@ def _admin_asset_bytes(asset_name: str) -> bytes:
 
 
 @router.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-async def admin_dashboard() -> str:
-    """Return the standalone gateway operator dashboard."""
-    return _admin_index_html()
-
-
 @router.get("/admin/", response_class=HTMLResponse, include_in_schema=False)
-async def admin_dashboard_slash() -> str:
+async def admin_dashboard() -> str:
     """Return the standalone gateway operator dashboard."""
     return _admin_index_html()
 
