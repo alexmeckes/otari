@@ -9,10 +9,6 @@ from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
 
-def _redactions_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return dict_or_empty(guardrails_config(config).get("redactions"))
-
-
 def _redaction_rules(redactions: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
     rules: list[tuple[str, str, re.Pattern[str]]] = []
 
@@ -68,7 +64,7 @@ def apply_guardrail_redactions(
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Apply policy redactions to provider-bound request content."""
     body = copy.deepcopy(dict(request_body))
-    redactions = _redactions_config(config)
+    redactions = dict_or_empty(guardrails_config(config).get("redactions"))
     if not bool_config(redactions.get("enabled"), bool(redactions)):
         return body, None
 
