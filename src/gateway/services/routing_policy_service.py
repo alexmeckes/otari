@@ -73,9 +73,6 @@ class RoutingPolicyError(Exception):
         self.detail = detail
 
 
-split_model_selector = _routing_candidate_specs.split_model_selector
-
-
 @dataclass(frozen=True)
 class RoutingCandidate:
     """Resolved candidate model with pricing and ordering metadata."""
@@ -165,7 +162,7 @@ async def _build_candidates(
 ) -> list[RoutingCandidate]:
     candidates: list[RoutingCandidate] = []
     for index, spec in enumerate(specs, start=1):
-        provider, provider_model, normalized_model = split_model_selector(spec.model)
+        provider, provider_model, normalized_model = _routing_candidate_specs.split_model_selector(spec.model)
         pricing = await find_model_pricing(db, provider, provider_model)
         input_price = spec.input_price_per_million
         output_price = spec.output_price_per_million
