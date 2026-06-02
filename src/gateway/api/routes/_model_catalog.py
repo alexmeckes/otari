@@ -78,21 +78,6 @@ def _model_pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None
     )
 
 
-def _display_name(model_key: str) -> str:
-    _provider, model_name = _split_model_key(model_key)
-    words = model_name.replace("/", " / ").replace("-", " ").replace("_", " ").split()
-    fixed: list[str] = []
-    for word in words:
-        lower = word.lower()
-        if lower in {"gpt", "llm", "glm", "mcp"}:
-            fixed.append(lower.upper())
-        elif lower.endswith("o") and any(char.isdigit() for char in lower):
-            fixed.append(lower)
-        else:
-            fixed.append(word[:1].upper() + word[1:])
-    return " ".join(fixed)
-
-
 def _catalog_record_from_discovered(
     provider_name: str,
     model: Model,
@@ -144,10 +129,20 @@ def gateway_model_from_catalog_record(record: CatalogRecord) -> GatewayCatalogMo
             input_per_million=record.pricing.input_price_per_million,
             output_per_million=record.pricing.output_price_per_million,
         )
+    provider, model_name = _split_model_key(record.model_key)
+    display_words: list[str] = []
+    for word in model_name.replace("/", " / ").replace("-", " ").replace("_", " ").split():
+        lower = word.lower()
+        if lower in {"gpt", "llm", "glm", "mcp"}:
+            display_words.append(lower.upper())
+        elif lower.endswith("o") and any(char.isdigit() for char in lower):
+            display_words.append(lower)
+        else:
+            display_words.append(word[:1].upper() + word[1:])
     return GatewayCatalogModel(
-        model=_canonical_model_id(record.model_key),
+        model=legacy_pricing_model_ref(provider, model_name),
         provider=record.provider,
-        display_name=_display_name(record.model_key),
+        display_name=" ".join(display_words),
         vendors={
             record.provider: GatewayVendorModelMetadata(
                 launch_date=record.created_at[:10] if record.created_at else None,
