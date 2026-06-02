@@ -87,12 +87,6 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
     }
 
 
-def _candidate_quality_score(candidate: Any) -> float | None:
-    if not isinstance(candidate, dict):
-        return None
-    return _candidate_quality_score_value(candidate)
-
-
 def _candidate_model_key(candidate: Any) -> str | None:
     if isinstance(candidate, str):
         return routing_policy_shape.normalized_model_selector(None, candidate)
@@ -116,7 +110,7 @@ def _apply_eval_score_to_candidate(
         return candidate
 
     aggregate = scores_by_model[model_key]
-    previous_quality_score = _candidate_quality_score(candidate)
+    previous_quality_score = _candidate_quality_score_value(candidate) if isinstance(candidate, dict) else None
     updated_candidate = {"model": candidate} if isinstance(candidate, str) else dict(candidate)
     metadata = dict_or_empty(updated_candidate.get("metadata"), copy_value=True)
     metadata["eval_score"] = {
