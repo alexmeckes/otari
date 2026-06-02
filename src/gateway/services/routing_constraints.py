@@ -16,10 +16,6 @@ def _string_set(value: Any) -> set[str]:
     return set(string_list(value))
 
 
-def _constraint_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return dict_or_empty(config.get("constraints"))
-
-
 def _normalize_model_key_for_constraint(value: str) -> str:
     try:
         _provider, _model_name, normalized = split_model_selector(value)
@@ -190,7 +186,7 @@ def apply_constraints(
     config: Mapping[str, Any],
     tags: Mapping[str, str],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    constraints = _constraint_config(config)
+    constraints = dict_or_empty(config.get("constraints"))
     if not constraints:
         return list(candidates), []
 

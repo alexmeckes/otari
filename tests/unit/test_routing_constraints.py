@@ -209,6 +209,21 @@ def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> 
     )
 
 
+def test_apply_constraints_ignores_missing_or_non_dict_constraints() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={},
+    )
+
+    for config in ({}, {"constraints": "disabled"}):
+        allowed, rejected = apply_constraints([candidate], config=config, tags={})
+
+        assert allowed == [candidate]
+        assert rejected == []
+
+
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
