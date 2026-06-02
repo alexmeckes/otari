@@ -70,19 +70,6 @@ def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
     )
 
 
-def _region_presence_failure(
-    candidate_regions: set[str],
-    *,
-    matches: bool,
-    mismatch_reason: str,
-) -> str | None:
-    if not candidate_regions:
-        return "region_unknown"
-    if not matches:
-        return mismatch_reason
-    return None
-
-
 def _membership_failure(
     value: str,
     *,
@@ -135,24 +122,18 @@ def _region_failure(
     requested_region: str | None,
 ) -> str | None:
     if constraint_sets.allowed_regions:
-        failure = _region_presence_failure(
-            candidate_regions,
-            matches=bool(candidate_regions & constraint_sets.allowed_regions),
-            mismatch_reason="region_not_allowed",
-        )
-        if failure is not None:
-            return failure
+        if not candidate_regions:
+            return "region_unknown"
+        if not candidate_regions & constraint_sets.allowed_regions:
+            return "region_not_allowed"
     if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
         return "region_blocked"
 
     if requested_region is not None:
-        failure = _region_presence_failure(
-            candidate_regions,
-            matches=requested_region in candidate_regions,
-            mismatch_reason="region_not_supported",
-        )
-        if failure is not None:
-            return failure
+        if not candidate_regions:
+            return "region_unknown"
+        if requested_region not in candidate_regions:
+            return "region_not_supported"
 
     return None
 

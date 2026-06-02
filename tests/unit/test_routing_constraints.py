@@ -10,7 +10,6 @@ from gateway.services.routing_constraints import (
     _normalize_model_key_for_constraint,
     _provider_model_failure,
     _region_failure,
-    _region_presence_failure,
     apply_constraints,
 )
 
@@ -73,15 +72,6 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
             "regions": ["apac", "eu", "us"],
         }
     ]
-
-
-def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
-    assert _region_presence_failure(set(), matches=False, mismatch_reason="region_not_allowed") == "region_unknown"
-    assert (
-        _region_presence_failure({"eu"}, matches=False, mismatch_reason="region_not_supported")
-        == "region_not_supported"
-    )
-    assert _region_presence_failure({"eu"}, matches=True, mismatch_reason="region_not_allowed") is None
 
 
 def test_membership_failure_reuses_allowed_and_blocked_reasons() -> None:
