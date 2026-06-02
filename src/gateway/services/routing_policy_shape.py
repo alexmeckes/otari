@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 from gateway.services.pricing_service import pricing_model_ref
@@ -100,12 +100,6 @@ def _default_strategy_providers(default_strategy: Mapping[str, Any]) -> list[Map
     return provider_items
 
 
-def _copy_present_keys(source: Mapping[str, Any], target: dict[str, Any], keys: Iterable[str]) -> None:
-    for key in keys:
-        if key in source:
-            target[key] = source[key]
-
-
 def config_from_default_strategy(
     default_strategy: Mapping[str, Any],
     *,
@@ -124,7 +118,9 @@ def config_from_default_strategy(
 
     provider_items = _default_strategy_providers(default_strategy)
     config = dict(base_config or {})
-    _copy_present_keys(default_strategy, config, _DEFAULT_STRATEGY_CONFIG_KEYS)
+    for key in _DEFAULT_STRATEGY_CONFIG_KEYS:
+        if key in default_strategy:
+            config[key] = default_strategy[key]
 
     if strategy_type == "fallback":
         ordered_providers = sorted(
@@ -144,7 +140,9 @@ def config_from_default_strategy(
             _candidate_from_default_strategy_provider(provider_item) for provider_item in provider_items
         ]
         scoring_config = dict_or_empty(default_strategy.get("scoring"), copy_value=True)
-        _copy_present_keys(default_strategy, scoring_config, _WEIGHTED_SCORE_KEYS)
+        for key in _WEIGHTED_SCORE_KEYS:
+            if key in default_strategy:
+                scoring_config[key] = default_strategy[key]
         if scoring_config:
             config["scoring"] = scoring_config
         config.setdefault("fallback_enabled", True)
