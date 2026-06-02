@@ -21,11 +21,11 @@ from gateway.metrics import (
 )
 from gateway.models.entities import BudgetAlert, Project, UsageLog, User
 from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhooks
-from gateway.services.budget_service import (
-    increment_matching_tag_budget_spend,
+from gateway.services.budget_alerts import (
     record_project_budget_alerts_after_spend,
     record_user_budget_alerts_after_spend,
 )
+from gateway.services.budget_service import increment_matching_tag_budget_spend
 
 
 class LogWriter(Protocol):

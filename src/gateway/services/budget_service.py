@@ -15,17 +15,11 @@ from gateway.models.entities import Budget, BudgetAlert, Project, User
 from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.repositories.projects_repository import get_project_by_id
 from gateway.repositories.users_repository import get_active_user
-from gateway.services import budget_alerts as _budget_alerts
 from gateway.services import budget_periods as _budget_periods
 from gateway.services import budget_tags as _budget_tags
 from gateway.services.budget_reset_logs import new_budget_reset_log
 from gateway.services.pricing_service import find_model_pricing, split_pricing_model_ref
 
-BUDGET_ALERT_SCOPE_PROJECT = _budget_alerts.BUDGET_ALERT_SCOPE_PROJECT
-BUDGET_ALERT_SCOPE_USER = _budget_alerts.BUDGET_ALERT_SCOPE_USER
-record_budget_alerts = _budget_alerts.record_budget_alerts
-record_project_budget_alerts_after_spend = _budget_alerts.record_project_budget_alerts_after_spend
-record_user_budget_alerts_after_spend = _budget_alerts.record_user_budget_alerts_after_spend
 budget_matches_tags = _budget_tags.budget_matches_tags
 reset_tag_budget = _budget_tags.reset_tag_budget
 
