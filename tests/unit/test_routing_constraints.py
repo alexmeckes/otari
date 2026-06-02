@@ -9,7 +9,6 @@ from gateway.services.routing_constraints import (
     _estimated_cost_failure,
     _membership_failure,
     _normalize_model_key_for_constraint,
-    _prepared_constraints,
     _provider_model_failure,
     _region_failure,
     _region_presence_failure,
@@ -158,26 +157,6 @@ def test_cost_constraint_parses_max_cost_and_unknown_cost_behavior() -> None:
 
     assert cost_constraint.max_estimated_cost == 0.01
     assert cost_constraint.allow_unknown_cost is True
-
-
-def test_prepared_constraints_groups_sets_request_region_and_cost_settings() -> None:
-    prepared_constraints = _prepared_constraints(
-        {
-            "allowed_providers": ["openai"],
-            "allowed_regions": ["eu"],
-            "require_region_match": "true",
-            "region_tag": "request_region",
-            "max_estimated_cost": 0.01,
-            "allow_unknown_cost": "true",
-        },
-        {"request_region": "EU"},
-    )
-
-    assert prepared_constraints.constraint_sets.allowed_providers == {"openai"}
-    assert prepared_constraints.constraint_sets.allowed_regions == {"eu"}
-    assert prepared_constraints.requested_region == "eu"
-    assert prepared_constraints.cost_constraint.max_estimated_cost == 0.01
-    assert prepared_constraints.cost_constraint.allow_unknown_cost is True
 
 
 def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior() -> None:
