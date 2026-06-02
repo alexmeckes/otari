@@ -57,12 +57,6 @@ def _split_model_key(model_key: str) -> tuple[str, str]:
     return provider or "unknown", model_name
 
 
-def _canonical_model_id(model_key: str) -> str:
-    """Return a provider/model ID for a stored model key."""
-    provider, model_name = _split_model_key(model_key)
-    return legacy_pricing_model_ref(provider, model_name)
-
-
 def _stored_model_key(selector: str) -> str:
     """Return the canonical storage key for either provider:model or provider/model."""
     provider, model_name = _split_model_key(selector)
@@ -250,7 +244,8 @@ def vendor_catalog_from_records(records: list[CatalogRecord], config: GatewayCon
     """Build execution-vendor objects from catalog records."""
     by_vendor: dict[str, set[str]] = {}
     for record in records:
-        by_vendor.setdefault(record.provider, set()).add(_canonical_model_id(record.model_key))
+        provider, model_name = _split_model_key(record.model_key)
+        by_vendor.setdefault(record.provider, set()).add(legacy_pricing_model_ref(provider, model_name))
 
     for provider_name in config.providers:
         by_vendor.setdefault(provider_name, set())

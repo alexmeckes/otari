@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 import pytest
 
-from gateway.api.routes._model_catalog import _canonical_model_id, _stored_model_key
+from gateway.api.routes._model_catalog import _stored_model_key
 from gateway.api.routes._responses_transform import metadata_from_model_selector, served_metadata
 from gateway.core.config import GatewayConfig
 from gateway.services import platform_gateway
@@ -57,10 +57,7 @@ def test_responses_metadata_uses_shared_model_selector_splitter() -> None:
     assert metadata_from_model_selector("gpt-4o") is None
 
 
-def test_model_catalog_helpers_use_shared_model_selector_splitter() -> None:
-    assert _canonical_model_id("openai:gpt-4o") == "openai/gpt-4o"
-    assert _canonical_model_id("openai/gpt-4o-mini") == "openai/gpt-4o-mini"
-    assert _canonical_model_id("gpt-4o") == "unknown/gpt-4o"
+def test_model_catalog_storage_key_uses_shared_model_selector_splitter() -> None:
     assert _stored_model_key("openai/gpt-4o") == "openai:gpt-4o"
 
 

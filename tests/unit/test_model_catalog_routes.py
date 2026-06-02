@@ -202,6 +202,35 @@ def test_vendor_catalog_uses_known_and_fallback_display_names() -> None:
     assert vendors["custom-provider"].name == "Custom Provider"
 
 
+def test_vendor_catalog_uses_slash_form_model_ids() -> None:
+    config = GatewayConfig(master_key="test-master-key")
+    records = [
+        CatalogRecord(
+            model_key="openai:gpt-4o",
+            provider="openai",
+            provider_model="gpt-4o",
+            created=0,
+            created_at=None,
+            updated_at=None,
+            pricing=None,
+        ),
+        CatalogRecord(
+            model_key="gpt-4o-mini",
+            provider="unknown",
+            provider_model="gpt-4o-mini",
+            created=0,
+            created_at=None,
+            updated_at=None,
+            pricing=None,
+        ),
+    ]
+
+    vendors = {item.vendor: item for item in vendor_catalog_from_records(records, config)}
+
+    assert vendors["openai"].models == ["openai/gpt-4o"]
+    assert vendors["unknown"].models == ["unknown/gpt-4o-mini"]
+
+
 def test_vendors_unknown_vendor_returns_404(
     catalog_client: tuple[TestClient, dict[str, str]],
 ) -> None:
