@@ -270,6 +270,16 @@ def test_retrieve_batch_missing_provider(
     assert resp.status_code == 422
 
 
+def test_retrieve_batch_invalid_provider(
+    client: TestClient,
+    api_key_header: dict[str, str],
+) -> None:
+    """GET /v1/batches/{batch_id} returns 400 for unknown providers."""
+    resp = client.get("/v1/batches/batch_abc123?provider=not-a-provider", headers=api_key_header)
+    assert resp.status_code == 400
+    assert "not-a-provider" in resp.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # POST /v1/batches/{batch_id}/cancel — Cancel batch
 # ---------------------------------------------------------------------------

@@ -51,19 +51,14 @@ async def log_batch_usage(
     await log_writer.put(usage_log)
 
 
-def _parse_provider(provider: str) -> LLMProvider:
-    """Parse a provider string into an LLMProvider enum, raising 400 on invalid values."""
+def _batch_provider_context(config: GatewayConfig, provider: str) -> tuple[LLMProvider, dict[str, Any]]:
     try:
-        return LLMProvider.from_string(provider)
+        provider_enum = LLMProvider.from_string(provider)
     except UnsupportedProviderError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
-
-
-def _batch_provider_context(config: GatewayConfig, provider: str) -> tuple[LLMProvider, dict[str, Any]]:
-    provider_enum = _parse_provider(provider)
     return provider_enum, get_provider_kwargs(config, provider_enum)
 
 
