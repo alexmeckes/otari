@@ -41,28 +41,6 @@ def _trim_error(value: str) -> str:
     return value[:_MAX_ERROR_CHARS]
 
 
-def _alert_payload(alert: BudgetAlert) -> dict[str, Any]:
-    return {
-        "event": "budget.threshold_crossed",
-        "alert": {
-            "id": alert.id,
-            "budget_id": alert.budget_id,
-            "scope_type": alert.scope_type,
-            "scope_id": alert.scope_id,
-            "threshold": alert.threshold,
-            "spend": alert.spend,
-            "max_budget": alert.max_budget,
-            "budget_period_start": (
-                alert.budget_period_start.isoformat()
-                if alert.budget_period_start
-                else None
-            ),
-            "created_at": alert.created_at.isoformat() if alert.created_at else None,
-            "metadata": alert.metadata_dict(),
-        },
-    }
-
-
 def _next_retry_at(
     now: datetime,
     *,
@@ -192,7 +170,25 @@ async def dispatch_budget_alert_webhook(
         if alert.delivery_status == "delivered":
             return alert
 
-        payload = _alert_payload(alert)
+        payload = {
+            "event": "budget.threshold_crossed",
+            "alert": {
+                "id": alert.id,
+                "budget_id": alert.budget_id,
+                "scope_type": alert.scope_type,
+                "scope_id": alert.scope_id,
+                "threshold": alert.threshold,
+                "spend": alert.spend,
+                "max_budget": alert.max_budget,
+                "budget_period_start": (
+                    alert.budget_period_start.isoformat()
+                    if alert.budget_period_start
+                    else None
+                ),
+                "created_at": alert.created_at.isoformat() if alert.created_at else None,
+                "metadata": alert.metadata_dict(),
+            },
+        }
         delivery_started_at = time.monotonic()
         result = await _post_budget_alert_webhook(webhook_url=alert.webhook_url, payload=payload)
         delivery_duration = time.monotonic() - delivery_started_at
