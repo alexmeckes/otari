@@ -105,10 +105,6 @@ def _display_name(model_key: str) -> str:
     return " ".join(fixed)
 
 
-def _vendor_name(vendor: str) -> str:
-    return _VENDOR_DISPLAY_NAMES.get(vendor, vendor.replace("_", " ").replace("-", " ").title())
-
-
 def _catalog_record_from_discovered(
     provider_name: str,
     model: Model,
@@ -277,7 +273,7 @@ def vendor_catalog_from_records(records: list[CatalogRecord], config: GatewayCon
     vendors = [
         GatewayVendorResponse(
             vendor=vendor,
-            name=_vendor_name(vendor),
+            name=_VENDOR_DISPLAY_NAMES.get(vendor, vendor.replace("_", " ").replace("-", " ").title()),
             models=sorted(models),
             supports_byok=vendor in config.providers,
             availability_status="active" if models or vendor in config.providers else "unavailable",

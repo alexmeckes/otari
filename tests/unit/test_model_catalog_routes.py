@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from gateway.api.routes._model_catalog import _catalog_record_from_pricing
+from gateway.api.routes._model_catalog import CatalogRecord, _catalog_record_from_pricing, vendor_catalog_from_records
 from gateway.core.config import API_KEY_HEADER, GatewayConfig
 from gateway.main import create_app
 from gateway.models.entities import ModelPricing
@@ -150,6 +150,29 @@ def test_vendors_list_and_fetch_single_vendor(
     get_response = client.get("/v1/vendors/openai", headers=master_header)
     assert get_response.status_code == 200
     assert get_response.json()["vendor"] == "openai"
+
+
+def test_vendor_catalog_uses_known_and_fallback_display_names() -> None:
+    config = GatewayConfig(
+        master_key="test-master-key",
+        providers={"custom-provider": {"api_key": "sk-test"}},
+    )
+    records = [
+        CatalogRecord(
+            model_key="openai:gpt-4o-mini",
+            provider="openai",
+            provider_model="gpt-4o-mini",
+            created=0,
+            created_at=None,
+            updated_at=None,
+            pricing=None,
+        )
+    ]
+
+    vendors = {item.vendor: item for item in vendor_catalog_from_records(records, config)}
+
+    assert vendors["openai"].name == "OpenAI"
+    assert vendors["custom-provider"].name == "Custom Provider"
 
 
 def test_vendors_unknown_vendor_returns_404(
