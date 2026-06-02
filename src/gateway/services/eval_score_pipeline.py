@@ -35,10 +35,6 @@ class EvalScorePipelineError(ValueError):
     """Raised when an eval artifact cannot be converted into score rows."""
 
 
-def _is_present(value: Any) -> bool:
-    return value is not None and coerced_string_or_none(value) is not None
-
-
 def _coerce_string(value: Any) -> str | None:
     parsed = string_or_none(value)
     if parsed is not None:
@@ -89,7 +85,7 @@ def _row_metadata(row: Mapping[str, Any], *, source: str | None, row_number: int
     if isinstance(existing, dict):
         metadata.update(existing)
     for key, value in row.items():
-        if key not in _KNOWN_KEYS and _is_present(value):
+        if key not in _KNOWN_KEYS and value is not None and coerced_string_or_none(value) is not None:
             metadata[key] = value
     if source is not None:
         metadata.setdefault("source", source)
