@@ -62,11 +62,6 @@ def split_model_selector(model_selector: str) -> tuple[str | None, str]:
     return None, model_selector
 
 
-def _provider_priority(item: Mapping[str, Any], position: int) -> float:
-    priority = float_or_none(item.get("priority"))
-    return priority if priority is not None else float(position)
-
-
 def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[str, Any]:
     provider = string_or_none(item.get("provider"))
     model = string_or_none(item.get("model"))
@@ -125,7 +120,10 @@ def config_from_default_strategy(
     if strategy_type == "fallback":
         ordered_providers = sorted(
             enumerate(provider_items, start=1),
-            key=lambda indexed: (_provider_priority(indexed[1], indexed[0]), indexed[0]),
+            key=lambda indexed: (
+                priority if (priority := float_or_none(indexed[1].get("priority"))) is not None else float(indexed[0]),
+                indexed[0],
+            ),
         )
         config["candidates"] = [
             _candidate_from_default_strategy_provider(provider_item) for _, provider_item in ordered_providers
