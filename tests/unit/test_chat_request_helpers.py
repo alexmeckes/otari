@@ -20,6 +20,7 @@ from gateway.services.chat_tool_config import (
     extract_code_execution_tool,
     extract_web_search_tool,
 )
+from gateway.services.web_search_backend import WebSearchBackend
 
 
 def test_extracts_gateway_native_short_form() -> None:
@@ -189,6 +190,36 @@ def test_build_web_search_backend_normalizes_domain_lists_with_shared_helper() -
 
     assert backend._allowed_domains == ("docs.python.org", "7")
     assert backend._blocked_domains == ("example.com", "false")
+
+
+def test_build_web_search_backend_uses_env_purpose_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_PURPOSE_HINT", "use search for current facts")
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._purpose_hint == "use search for current facts"
+
+
+def test_build_web_search_backend_tool_purpose_hint_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_PURPOSE_HINT", "env hint")
+
+    backend = build_web_search_backend(
+        base_url="http://search.local",
+        tool_entry={"type": "web_search", "purpose_hint": "tool hint"},
+    )
+
+    assert backend._purpose_hint == "tool hint"
+
+
+def test_build_web_search_backend_without_purpose_hint_uses_backend_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GATEWAY_WEB_SEARCH_PURPOSE_HINT", raising=False)
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+    default_backend = WebSearchBackend(base_url="http://search.local")
+
+    assert backend._purpose_hint == default_backend._purpose_hint
 
 
 # --- route-level tool selection ----------------------------------------------

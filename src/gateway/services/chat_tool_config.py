@@ -103,15 +103,6 @@ def extract_web_search_tool(
     return _extract_first_matching_tool(tools, _is_web_search_tool_type)
 
 
-def _resolve_web_search_purpose_hint(tool_entry: dict[str, Any] | None) -> str | None:
-    """Resolve per-tool web search purpose hint, then environment fallback."""
-    return (
-        (tool_entry.get("purpose_hint") if tool_entry else None)
-        or os.environ.get("GATEWAY_WEB_SEARCH_PURPOSE_HINT")
-        or None
-    )
-
-
 def _domain_config_tuple(value: Any) -> tuple[str, ...]:
     if isinstance(value, list) and value:
         return tuple(str(domain) for domain in value)
@@ -152,7 +143,7 @@ def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> We
     if blocked_domains:
         kwargs["blocked_domains"] = blocked_domains
 
-    purpose_hint = _resolve_web_search_purpose_hint(tool_entry)
+    purpose_hint = tool_entry.get("purpose_hint") or os.environ.get("GATEWAY_WEB_SEARCH_PURPOSE_HINT")
     if purpose_hint:
         kwargs["purpose_hint"] = purpose_hint
 
