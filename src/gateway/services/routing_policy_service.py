@@ -14,6 +14,7 @@ from gateway.models.entities import Project, RouteTrace, RoutingPolicy
 from gateway.repositories.projects_repository import get_project_by_id
 from gateway.services import routing_candidate_specs as _routing_candidate_specs
 from gateway.services import routing_constraints as _routing_constraints
+from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrails as _routing_guardrails
 from gateway.services import routing_latency_stats as _routing_latency_stats
 from gateway.services import routing_policy_match as _routing_policy_match
@@ -23,6 +24,7 @@ from gateway.services import routing_weighted_scoring as _routing_weighted_scori
 from gateway.services.pricing_service import find_model_pricing
 from gateway.services.routing_config_values import bool_config, string_or_none
 from gateway.services.routing_context_policy import apply_context_policy as apply_context_policy
+from gateway.services.routing_guardrail_redactions import apply_guardrail_redactions
 from gateway.services.routing_provider_health import ProviderHealth as ProviderHealth
 
 DEFAULT_ROUTING_MODEL = "default_routing"
@@ -374,7 +376,7 @@ async def resolve_routing_plan(
     guardrails = await _routing_guardrails.evaluate_guardrails(
         config,
         request_body,
-        post_classifier=_routing_guardrails.post_external_guardrail_classifier,
+        post_classifier=_routing_guardrail_external.post_external_guardrail_classifier,
     )
     if guardrails is not None and guardrails["status"] == "blocked":
         first_violation = guardrails["violations"][0] if guardrails["violations"] else {}
@@ -391,7 +393,7 @@ async def resolve_routing_plan(
     if not specs:
         raise RoutingPolicyError(422, f"Routing policy '{policy.policy_id}' has no candidates")
 
-    redacted_request_body, redactions = _routing_guardrails.apply_guardrail_redactions(config, request_body)
+    redacted_request_body, redactions = apply_guardrail_redactions(config, request_body)
     if redactions is not None:
         if guardrails is None:
             guardrails = {

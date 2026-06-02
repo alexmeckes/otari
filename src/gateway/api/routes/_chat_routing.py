@@ -23,7 +23,7 @@ from gateway.services.log_writer import LogWriter
 from gateway.services.mcp_loop import MaxToolIterationsExceeded
 from gateway.services.platform_gateway import classify_upstream_error
 from gateway.services.provider_kwargs import get_provider_kwargs
-from gateway.services.routing_guardrails import apply_guardrail_redactions
+from gateway.services.routing_guardrail_redactions import apply_guardrail_redactions
 from gateway.services.routing_policy_service import (
     DEFAULT_ROUTING_MODEL,
     RoutingCandidate,

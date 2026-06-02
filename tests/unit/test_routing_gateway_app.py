@@ -2863,7 +2863,7 @@ def test_policy_external_guardrail_classifier_blocks_before_provider_call(
 
     with (
         patch(
-            "gateway.services.routing_guardrails.post_external_guardrail_classifier",
+            "gateway.services.routing_guardrail_external.post_external_guardrail_classifier",
             new=mock_classifier,
         ),
         patch("gateway.api.routes.chat.acompletion") as mock_acompletion,
@@ -2930,7 +2930,7 @@ def test_policy_external_guardrail_classifier_observe_mode_is_traced(
 
     with (
         patch(
-            "gateway.services.routing_guardrails.post_external_guardrail_classifier",
+            "gateway.services.routing_guardrail_external.post_external_guardrail_classifier",
             new=mock_classifier,
         ),
         patch("gateway.api.routes.chat.acompletion", new=mock_acompletion),

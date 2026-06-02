@@ -6,8 +6,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
-from gateway.services import routing_guardrail_redactions as _routing_guardrail_redactions
 from gateway.services.routing_config_values import bool_config, string_list, string_or_none
+from gateway.services.routing_guardrail_external import ExternalClassifierPost
 from gateway.services.routing_guardrail_helpers import (
     guardrail_config_value,
     guardrail_violation,
@@ -16,10 +16,6 @@ from gateway.services.routing_guardrail_helpers import (
     pii_patterns_from_config,
 )
 from gateway.services.routing_request_analysis import jsonable_text
-
-ExternalClassifierPost = _routing_guardrail_external.ExternalClassifierPost
-post_external_guardrail_classifier = _routing_guardrail_external.post_external_guardrail_classifier
-apply_guardrail_redactions = _routing_guardrail_redactions.apply_guardrail_redactions
 
 _GUARDRAIL_ACTIONS = {"block", "observe"}
 _PROMPT_INJECTION_PHRASES = (
@@ -187,7 +183,7 @@ async def evaluate_guardrails(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
     *,
-    post_classifier: ExternalClassifierPost = post_external_guardrail_classifier,
+    post_classifier: ExternalClassifierPost | None = None,
 ) -> dict[str, Any] | None:
     guardrails = guardrails_config(config)
     if not bool_config(guardrails.get("enabled"), bool(guardrails)):
@@ -232,10 +228,11 @@ async def evaluate_guardrails(
             )
         )
 
+    classifier_post = post_classifier or _routing_guardrail_external.post_external_guardrail_classifier
     external_violations, classifier_results = await _routing_guardrail_external.evaluate_external_classifiers(
         guardrails=guardrails,
         request_text=request_text,
-        post_classifier=post_classifier,
+        post_classifier=classifier_post,
     )
     violations.extend(external_violations)
 
