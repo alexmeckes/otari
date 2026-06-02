@@ -88,16 +88,6 @@ def extract_platform_user_token(request: Request) -> str:
     return token
 
 
-def _platform_base_url_or_raise(config: GatewayConfig) -> str:
-    base_url = platform_base_url(config)
-    if not base_url:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Platform mode is misconfigured",
-        )
-    return base_url
-
-
 def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
     return {"X-Gateway-Token": config.platform_token or ""}
 
@@ -148,8 +138,13 @@ async def _post_platform_resolution(
     path: str,
     body: dict[str, Any],
 ) -> httpx.Response:
-    platform_base_url = _platform_base_url_or_raise(config)
-    resolve_url = platform_url(platform_base_url, path)
+    base_url = platform_base_url(config)
+    if not base_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Platform mode is misconfigured",
+        )
+    resolve_url = platform_url(base_url, path)
     headers = _platform_user_headers(config, user_token)
     try:
         return await _post_platform(
