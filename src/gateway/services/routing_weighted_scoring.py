@@ -10,17 +10,6 @@ _DEFAULT_UNKNOWN_COST_SCORE = 0.0
 _DEFAULT_UNKNOWN_LATENCY_SCORE = 0.5
 
 
-def _score_weight(scoring: Mapping[str, Any], key: str, default: float) -> float:
-    weights = scoring.get("weights")
-    if isinstance(weights, dict):
-        weight_value = weights.get(key, weights.get(f"{key}_weight"))
-        if weight_value is not None:
-            parsed = non_negative_float_or_none(weight_value)
-            return default if parsed is None else parsed
-    parsed = non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))
-    return default if parsed is None else parsed
-
-
 def _normalized_lower_is_better(
     value: float | None,
     known_values: Sequence[float],
@@ -44,10 +33,17 @@ def attach_weighted_scores(
     config: Mapping[str, Any],
 ) -> list[Any]:
     scoring = nested_dict_or_empty(config, "scoring", "score_weights")
-    weights = {
-        key: _score_weight(scoring, key, default)
-        for key, default in _DEFAULT_SCORE_WEIGHTS.items()
-    }
+    weights: dict[str, float] = {}
+    configured_weights = scoring.get("weights")
+    for key, default in _DEFAULT_SCORE_WEIGHTS.items():
+        parsed_weight = None
+        if isinstance(configured_weights, dict):
+            weight_value = configured_weights.get(key, configured_weights.get(f"{key}_weight"))
+            if weight_value is not None:
+                parsed_weight = non_negative_float_or_none(weight_value)
+        if parsed_weight is None:
+            parsed_weight = non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))
+        weights[key] = default if parsed_weight is None else parsed_weight
     weight_total = sum(weights.values())
     if weight_total <= 0:
         weights = dict(_DEFAULT_SCORE_WEIGHTS)
