@@ -4,10 +4,7 @@ from any_llm.types.completion import CompletionUsage
 
 from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
 from gateway.services import platform_gateway
-from gateway.services.platform_gateway import (
-    _platform_gateway_headers,
-    report_platform_usage,
-)
+from gateway.services.platform_gateway import report_platform_usage
 
 
 async def _reported_usage_body(
@@ -48,6 +45,7 @@ async def _reported_usage_calls(
     config: GatewayConfig,
     *,
     status_code: int = 204,
+    gateway_token: str | None = "gw-test-token",
 ) -> tuple[list[dict[str, object]], list[float]]:
     calls: list[dict[str, object]] = []
     sleeps: list[float] = []
@@ -73,7 +71,8 @@ async def _reported_usage_calls(
 
     monkeypatch.setattr(platform_gateway, "_post_platform", fake_post_platform)
     monkeypatch.setattr(platform_gateway.asyncio, "sleep", fake_sleep)
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
+    if gateway_token is not None:
+        monkeypatch.setenv("OTARI_AI_TOKEN", gateway_token)
 
     await report_platform_usage(
         config,
@@ -132,17 +131,22 @@ async def test_report_platform_usage_includes_error_class_for_errors(monkeypatch
     }
 
 
-def test_platform_gateway_headers_include_gateway_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
-
-    assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": "gw-test-token"}
-
-
-def test_platform_gateway_headers_default_missing_token_to_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_report_platform_usage_defaults_missing_gateway_token_to_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     for env_var in PLATFORM_TOKEN_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)
 
-    assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": ""}
+    calls, sleeps = await _reported_usage_calls(
+        monkeypatch,
+        GatewayConfig(platform={"base_url": "https://platform.local/api/v1"}),
+        gateway_token=None,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["headers"] == {"X-Gateway-Token": ""}
+    assert sleeps == []
 
 
 @pytest.mark.asyncio

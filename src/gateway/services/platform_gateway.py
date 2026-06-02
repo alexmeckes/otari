@@ -79,10 +79,6 @@ def extract_platform_user_token(request: Request) -> str:
     return token
 
 
-def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
-    return {"X-Gateway-Token": config.platform_token or ""}
-
-
 def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
     if response.status_code in _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES:
         detail = passthrough_fallback
@@ -128,8 +124,10 @@ async def _post_platform_resolution(
             detail="Platform mode is misconfigured",
         )
     resolve_url = platform_url(base_url, path)
-    headers = _platform_gateway_headers(config)
-    headers["X-User-Token"] = user_token
+    headers = {
+        "X-Gateway-Token": config.platform_token or "",
+        "X-User-Token": user_token,
+    }
     try:
         return await _post_platform(
             url=resolve_url,
@@ -268,7 +266,7 @@ async def report_platform_usage(
     if not base_url:
         return
     usage_url = platform_url(base_url, "/gateway/usage")
-    headers = _platform_gateway_headers(config)
+    headers = {"X-Gateway-Token": config.platform_token or ""}
     timeout_seconds = platform_timeout_seconds(config, "usage_timeout_ms")
     max_retries = platform_int_setting(config, "usage_max_retries", 3)
 
