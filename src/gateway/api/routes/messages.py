@@ -109,15 +109,6 @@ class MessageExecutionContext:
         )
 
 
-def _message_response_usage(result: MessageResponse) -> CompletionUsage | None:
-    if not result.usage:
-        return None
-    return completion_usage_from_token_counts(
-        input_tokens=result.usage.input_tokens,
-        output_tokens=result.usage.output_tokens,
-    )
-
-
 def _resolve_message_request_context(
     request: MessagesRequest,
     auth_result: tuple[APIKey | None, bool],
@@ -238,7 +229,12 @@ async def _message_response_payload(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> dict[str, Any]:
-    usage_data = _message_response_usage(result)
+    usage_data = None
+    if result.usage:
+        usage_data = completion_usage_from_token_counts(
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+        )
     if usage_data:
         await execution_context.log_usage(
             db=db,
