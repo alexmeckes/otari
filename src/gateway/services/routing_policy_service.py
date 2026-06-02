@@ -15,7 +15,7 @@ from gateway.repositories.projects_repository import get_project_by_id
 from gateway.services import routing_candidate_specs as _routing_candidate_specs
 from gateway.services import routing_constraints as _routing_constraints
 from gateway.services import routing_context_policy as _routing_context_policy
-from gateway.services import routing_guardrail_external as _routing_guardrail_external
+from gateway.services import routing_guardrail_external
 from gateway.services import routing_guardrails as _routing_guardrails
 from gateway.services import routing_latency_stats as _routing_latency_stats
 from gateway.services import routing_policy_match as _routing_policy_match
@@ -375,7 +375,7 @@ async def resolve_routing_plan(
     guardrails = await _routing_guardrails.evaluate_guardrails(
         config,
         request_body,
-        post_classifier=_routing_guardrail_external.post_external_guardrail_classifier,
+        post_classifier=routing_guardrail_external.post_external_guardrail_classifier,
     )
     if guardrails is not None and guardrails["status"] == "blocked":
         first_violation = guardrails["violations"][0] if guardrails["violations"] else {}

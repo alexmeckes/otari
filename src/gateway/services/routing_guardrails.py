@@ -5,7 +5,7 @@ import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from gateway.services import routing_guardrail_external as _routing_guardrail_external
+from gateway.services import routing_guardrail_external
 from gateway.services.routing_config_values import bool_config, string_list, string_or_none
 from gateway.services.routing_guardrail_external import ExternalClassifierPost
 from gateway.services.routing_guardrail_helpers import (
@@ -228,8 +228,8 @@ async def evaluate_guardrails(
             )
         )
 
-    classifier_post = post_classifier or _routing_guardrail_external.post_external_guardrail_classifier
-    external_violations, classifier_results = await _routing_guardrail_external.evaluate_external_classifiers(
+    classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier
+    external_violations, classifier_results = await routing_guardrail_external.evaluate_external_classifiers(
         guardrails=guardrails,
         request_text=request_text,
         post_classifier=classifier_post,
