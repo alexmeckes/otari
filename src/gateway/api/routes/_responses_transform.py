@@ -111,14 +111,6 @@ def response_input_to_chat_messages(input_payload: Any, instructions: str | None
     return messages
 
 
-def _chat_completion_text(completion: ChatCompletion) -> str:
-    """Extract the first assistant text from a chat completion."""
-    if not completion.choices:
-        return ""
-    message = completion.choices[0].message
-    return _content_to_text(getattr(message, "content", None))
-
-
 def served_metadata(provider: str, model: str) -> dict[str, str]:
     """Build served model/vendor metadata."""
     return {
@@ -143,7 +135,10 @@ def set_served_headers(response: Response, metadata: dict[str, str]) -> None:
 
 def chat_completion_to_response_payload(completion: ChatCompletion) -> dict[str, Any]:
     """Wrap a routed chat completion in an OpenAI Responses-like payload."""
-    text = _chat_completion_text(completion)
+    text = ""
+    if completion.choices:
+        message = completion.choices[0].message
+        text = _content_to_text(getattr(message, "content", None))
     usage = completion.usage
     metadata = metadata_from_model_selector(completion.model)
     payload: dict[str, Any] = {
