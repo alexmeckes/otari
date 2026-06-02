@@ -195,25 +195,6 @@ async def _build_candidates(
     return candidates
 
 
-def _numeric_order_key(value: float | None, position: int, *, descending: bool = False) -> tuple[bool, float, int]:
-    order_value = value or 0.0
-    if descending:
-        order_value = -order_value
-    return (value is None, order_value, position)
-
-
-def _by_cost(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return _numeric_order_key(candidate.estimated_cost, candidate.position)
-
-
-def _by_latency(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return _numeric_order_key(candidate.average_latency_ms, candidate.position)
-
-
-def _by_weighted_score(candidate: RoutingCandidate) -> tuple[bool, float, int]:
-    return _numeric_order_key(candidate.routing_score, candidate.position, descending=True)
-
-
 def _tier_fallback_order(target_tier: str) -> list[str]:
     target_index = routing_candidate_specs.TIER_ORDER.index(target_tier)
     return [
@@ -230,23 +211,36 @@ def _order_candidates(
 ) -> list[RoutingCandidate]:
     if strategy in {"single", "priority"}:
         return list(candidates)
+
+    def order_key(value: float | None, position: int, *, descending: bool = False) -> tuple[bool, float, int]:
+        order_value = value or 0.0
+        if descending:
+            order_value = -order_value
+        return (value is None, order_value, position)
+
+    def cost_key(candidate: RoutingCandidate) -> tuple[bool, float, int]:
+        return order_key(candidate.estimated_cost, candidate.position)
+
     if strategy == "lowest_cost":
-        return sorted(candidates, key=_by_cost)
+        return sorted(candidates, key=cost_key)
     if strategy == "least_latency":
-        return sorted(candidates, key=_by_latency)
+        return sorted(candidates, key=lambda candidate: order_key(candidate.average_latency_ms, candidate.position))
     if strategy == "weighted_score":
-        return sorted(candidates, key=_by_weighted_score)
+        return sorted(
+            candidates,
+            key=lambda candidate: order_key(candidate.routing_score, candidate.position, descending=True),
+        )
 
     ordered: list[RoutingCandidate] = []
     consumed: set[str] = set()
     for tier in _tier_fallback_order(target_tier):
         tier_candidates = [candidate for candidate in candidates if candidate.tier == tier]
-        for candidate in sorted(tier_candidates, key=_by_cost):
+        for candidate in sorted(tier_candidates, key=cost_key):
             ordered.append(candidate)
             consumed.add(candidate.model)
 
     remaining = [candidate for candidate in candidates if candidate.model not in consumed]
-    ordered.extend(sorted(remaining, key=_by_cost))
+    ordered.extend(sorted(remaining, key=cost_key))
     return ordered
 
 
