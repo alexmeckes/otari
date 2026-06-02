@@ -19,15 +19,6 @@ ExternalClassifierPost = Callable[
 ]
 
 
-def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    classifiers = guardrails.get("external_classifiers")
-    if isinstance(classifiers, dict):
-        return [classifiers]
-    if not isinstance(classifiers, list):
-        return []
-    return [classifier for classifier in classifiers if isinstance(classifier, dict)]
-
-
 async def post_external_guardrail_classifier(
     *,
     url: str,
@@ -102,7 +93,14 @@ async def evaluate_external_classifiers(
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
-    for index, classifier in enumerate(_external_classifier_configs(guardrails), start=1):
+    classifiers = guardrails.get("external_classifiers")
+    if isinstance(classifiers, dict):
+        classifier_configs = [classifiers]
+    elif isinstance(classifiers, list):
+        classifier_configs = [classifier for classifier in classifiers if isinstance(classifier, dict)]
+    else:
+        classifier_configs = []
+    for index, classifier in enumerate(classifier_configs, start=1):
         name = string_or_none(classifier.get("name")) or f"classifier_{index}"
         url = string_or_none(classifier.get("url"))
         if url is None:
