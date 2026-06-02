@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any, cast
 
 import pytest
@@ -160,9 +160,11 @@ async def test_log_standalone_streaming_usage_skips_without_database_or_writer(
 
 def test_build_chat_streaming_response_uses_provider_model_label(monkeypatch: pytest.MonkeyPatch) -> None:
     labels: list[str] = []
+    formatters: list[Callable[[Any], str]] = []
 
     def fake_streaming_generator(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
         labels.append(kwargs["label"])
+        formatters.append(kwargs["format_chunk"])
 
         async def _events() -> AsyncIterator[str]:
             yield "data: [DONE]\n\n"
@@ -193,3 +195,9 @@ def test_build_chat_streaming_response_uses_provider_model_label(monkeypatch: py
     )
 
     assert labels == ["openai:gpt-4o-mini"]
+
+    class FakeChunk:
+        def model_dump_json(self) -> str:
+            return '{"id":"chunk-1"}'
+
+    assert formatters[0](FakeChunk()) == 'data: {"id":"chunk-1"}\n\n'

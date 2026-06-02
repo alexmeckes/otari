@@ -84,9 +84,6 @@ def build_chat_streaming_response(
 ) -> StreamingResponse:
     """Wrap an already-opened upstream stream in an SSE response."""
 
-    def _format_chunk(chunk: ChatCompletionChunk) -> str:
-        return f"data: {chunk.model_dump_json()}\n\n"
-
     def _extract_usage(chunk: ChatCompletionChunk) -> CompletionUsage | None:
         if not chunk.usage:
             return None
@@ -149,7 +146,7 @@ def build_chat_streaming_response(
     return StreamingResponse(
         streaming_generator(
             stream=stream,
-            format_chunk=_format_chunk,
+            format_chunk=lambda chunk: f"data: {chunk.model_dump_json()}\n\n",
             extract_usage=_extract_usage,
             fmt=OPENAI_STREAM_FORMAT,
             on_complete=_on_complete,
