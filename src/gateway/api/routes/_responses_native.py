@@ -106,6 +106,11 @@ def native_response_streaming_response(
             error=error,
         )
 
+    headers = context.rate_limit_headers()
+    metadata = served_metadata(context.provider.value, context.model)
+    headers["X-Response-Model"] = metadata["model"]
+    headers["X-Response-Vendor"] = metadata["vendor"]
+
     return StreamingResponse(
         streaming_generator(
             stream=stream_result,
@@ -117,7 +122,7 @@ def native_response_streaming_response(
             label=context.provider_label,
         ),
         media_type="text/event-stream",
-        headers=_response_stream_headers(context),
+        headers=headers,
     )
 
 
@@ -136,11 +141,3 @@ def native_response_payload(
         provider=context.provider.value,
         requested_model=context.model,
     )
-
-
-def _response_stream_headers(context: OpenAIProviderRequestContext) -> dict[str, str]:
-    headers = context.rate_limit_headers()
-    metadata = served_metadata(context.provider.value, context.model)
-    headers["X-Response-Model"] = metadata["model"]
-    headers["X-Response-Vendor"] = metadata["vendor"]
-    return headers
