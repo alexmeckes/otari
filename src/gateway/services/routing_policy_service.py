@@ -290,14 +290,6 @@ async def _post_external_guardrail_classifier(
     )
 
 
-async def _evaluate_guardrails(config: Mapping[str, Any], request_body: Mapping[str, Any]) -> dict[str, Any] | None:
-    return await _routing_guardrails.evaluate_guardrails(
-        config,
-        request_body,
-        post_classifier=_post_external_guardrail_classifier,
-    )
-
-
 async def _default_policy(db: AsyncSession) -> RoutingPolicy | None:
     result = await db.execute(
         select(RoutingPolicy)
@@ -404,7 +396,11 @@ async def resolve_routing_plan(
         raise RoutingPolicyError(422, f"Unsupported routing strategy '{strategy}'")
 
     config = policy.config_dict()
-    guardrails = await _evaluate_guardrails(config, request_body)
+    guardrails = await _routing_guardrails.evaluate_guardrails(
+        config,
+        request_body,
+        post_classifier=_post_external_guardrail_classifier,
+    )
     if guardrails is not None and guardrails["status"] == "blocked":
         first_violation = guardrails["violations"][0] if guardrails["violations"] else {}
         violation_type = first_violation.get("type", "guardrail")
