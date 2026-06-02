@@ -36,18 +36,6 @@ class LogWriter(Protocol):
     async def stop(self) -> None: ...
 
 
-def _budget_alert_metadata(log: UsageLog) -> dict[str, object]:
-    return {
-        "api_key_id": log.api_key_id,
-        "cost": log.cost,
-        "endpoint": log.endpoint,
-        "model": log.model,
-        "provider": log.provider,
-        "status": log.status,
-        "tags": log.tag_dict(),
-    }
-
-
 async def _dispatch_new_alert_webhooks(alerts: list[BudgetAlert]) -> None:
     alert_ids = [alert.id for alert in alerts if alert.id is not None and alert.webhook_url]
     if not alert_ids:
@@ -69,7 +57,15 @@ async def _add_log_and_record_budget_alerts(db: AsyncSession, log: UsageLog) -> 
         return []
 
     created_alerts: list[BudgetAlert] = []
-    alert_metadata = _budget_alert_metadata(log)
+    alert_metadata: dict[str, object] = {
+        "api_key_id": log.api_key_id,
+        "cost": log.cost,
+        "endpoint": log.endpoint,
+        "model": log.model,
+        "provider": log.provider,
+        "status": log.status,
+        "tags": log.tag_dict(),
+    }
     if log.user_id:
         await db.execute(
             update(User)
