@@ -38,13 +38,6 @@ async def _pricing_rows(
     return []
 
 
-def _pricing_not_found(model_key: str, effective_at: datetime | None = None) -> HTTPException:
-    detail = f"Pricing for model '{model_key}' not found"
-    if effective_at is not None:
-        detail = f"Pricing for model '{model_key}' with effective_at {effective_at.isoformat()} not found"
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-
-
 async def _pricing_rows_or_404(
     db: AsyncSession,
     model_key: str,
@@ -54,7 +47,10 @@ async def _pricing_rows_or_404(
 ) -> list[ModelPricing]:
     rows = await _pricing_rows(db, candidate_pricing_model_refs(model_key), *criteria, limit=limit)
     if not rows:
-        raise _pricing_not_found(model_key, effective_at)
+        detail = f"Pricing for model '{model_key}' not found"
+        if effective_at is not None:
+            detail = f"Pricing for model '{model_key}' with effective_at {effective_at.isoformat()} not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     return rows
 
 
