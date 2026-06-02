@@ -1,6 +1,5 @@
 """Response models and summary helpers for usage routes."""
 
-from datetime import datetime
 from typing import Any, Self
 
 from pydantic import BaseModel
@@ -9,10 +8,6 @@ from gateway.api.deps import _as_utc
 from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket, summary_bucket
 from gateway.models.entities import UsageLog
-
-
-def _format_timestamp(value: datetime) -> str:
-    return datetime_isoformat(_as_utc(value) or value)
 
 
 class UsageEntry(BaseModel):
@@ -41,7 +36,7 @@ class UsageEntry(BaseModel):
             user_id=log.user_id,
             api_key_id=log.api_key_id,
             project_id=log.project_id,
-            timestamp=_format_timestamp(log.timestamp),
+            timestamp=datetime_isoformat(_as_utc(log.timestamp) or log.timestamp),
             model=log.model,
             provider=log.provider,
             endpoint=log.endpoint,
