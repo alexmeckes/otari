@@ -48,13 +48,6 @@ def _coerce_float(value: Any) -> float | None:
     return float_or_none(value, coerce_strings=True, allow_percent=True)
 
 
-def _coerce_int(value: Any) -> int | None:
-    parsed = _coerce_float(value)
-    if parsed is None or parsed < 1:
-        return None
-    return int(parsed)
-
-
 def _first_parsed(
     row: Mapping[str, Any],
     keys: Iterable[str],
@@ -69,10 +62,6 @@ def _first_parsed(
 
 def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
     return _first_parsed(row, keys, _coerce_float)
-
-
-def _first_int(row: Mapping[str, Any], keys: Iterable[str]) -> int | None:
-    return _first_parsed(row, keys, _coerce_int)
 
 
 def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
@@ -137,7 +126,12 @@ def normalize_eval_score_row(
     metric = _first_string(row, _METRIC_KEYS) or string_or_none(default_metric)
     if metric is not None:
         item["metric"] = metric
-    sample_count = _first_int(row, _SAMPLE_COUNT_KEYS)
+    sample_count = None
+    for key in _SAMPLE_COUNT_KEYS:
+        parsed_sample_count = _coerce_float(row.get(key))
+        if parsed_sample_count is not None and parsed_sample_count >= 1:
+            sample_count = int(parsed_sample_count)
+            break
     if sample_count is not None:
         item["sample_count"] = sample_count
 
