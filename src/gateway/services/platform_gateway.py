@@ -227,24 +227,14 @@ def classify_upstream_error(exc: BaseException) -> tuple[bool, str]:
     if isinstance(exc, httpx.NetworkError):
         return True, "conn_err"
 
-    status_code = _upstream_status_code(exc)
-    if status_code is None:
-        return False, "unknown"
-    return _classify_upstream_status_code(status_code)
-
-
-def _upstream_status_code(exc: BaseException) -> int | None:
     status_code = getattr(exc, "status_code", None)
-    if isinstance(status_code, int):
-        return status_code
-    response = getattr(exc, "response", None)
-    if response is None:
-        return None
-    response_status = getattr(response, "status_code", None)
-    return response_status if isinstance(response_status, int) else None
+    if not isinstance(status_code, int):
+        response = getattr(exc, "response", None)
+        response_status = getattr(response, "status_code", None) if response is not None else None
+        if not isinstance(response_status, int):
+            return False, "unknown"
+        status_code = response_status
 
-
-def _classify_upstream_status_code(status_code: int) -> tuple[bool, str]:
     error_class = f"http_{status_code}"
     if status_code in _FALLBACK_NON_RETRYABLE_STATUS_CODES:
         return False, error_class
