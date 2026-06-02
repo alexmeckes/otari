@@ -20,8 +20,6 @@ from gateway.services.routing_config_values import lower_string_or_none
 
 TAG_BUDGET_SCOPE = "tag"
 
-IsModelFree = Callable[[AsyncSession, str], Awaitable[bool]]
-
 
 def normalize_budget_strategy(strategy: str) -> str:
     normalized_strategy = lower_string_or_none(strategy) or "for_update"
@@ -138,7 +136,7 @@ async def validate_tag_budgets(
     model: str | None = None,
     *,
     strategy: str = "for_update",
-    is_model_free: IsModelFree,
+    is_model_free: Callable[[AsyncSession, str], Awaitable[bool]],
 ) -> list[Budget]:
     """Validate matching tag-scoped budgets have available spend."""
     normalized_strategy = normalize_budget_strategy(strategy)
