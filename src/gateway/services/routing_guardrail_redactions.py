@@ -23,22 +23,6 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> list[tuple[str, str, re.P
     return rules
 
 
-def _redact_text(
-    value: str,
-    *,
-    rules: Sequence[tuple[str, str, re.Pattern[str]]],
-    replacement: str,
-    counts: dict[tuple[str, str], int],
-) -> str:
-    redacted = value
-    for kind, rule, pattern in rules:
-        redacted, count = pattern.subn(replacement, redacted)
-        if count:
-            key = (kind, rule)
-            counts[key] = counts.get(key, 0) + count
-    return redacted
-
-
 def _redact_content(
     value: Any,
     *,
@@ -47,7 +31,13 @@ def _redact_content(
     counts: dict[tuple[str, str], int],
 ) -> Any:
     if isinstance(value, str):
-        return _redact_text(value, rules=rules, replacement=replacement, counts=counts)
+        redacted = value
+        for kind, rule, pattern in rules:
+            redacted, count = pattern.subn(replacement, redacted)
+            if count:
+                key = (kind, rule)
+                counts[key] = counts.get(key, 0) + count
+        return redacted
     if isinstance(value, list):
         return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
     if isinstance(value, dict):
