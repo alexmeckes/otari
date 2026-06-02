@@ -123,10 +123,6 @@ def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[UsageSummaryBu
     return sorted(responses, key=lambda bucket: (-bucket.cost, -bucket.count, bucket.key))
 
 
-def _tag_bucket_key(tag_key: str, tag_value: Any) -> str:
-    return f"{tag_key}={tag_value}"
-
-
 def _usage_summary_keys(log: UsageLog) -> tuple[str, str, str, str, str, str]:
     return (
         log.project_id or "unknown",
@@ -166,7 +162,7 @@ def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
             _add_log_to_bucket(bucket, log)
 
         for key, value in log.tag_dict().items():
-            tag_bucket_key = _tag_bucket_key(str(key), value)
+            tag_bucket_key = f"{key}={value}"
             bucket = summary_bucket(tag_buckets, tag_bucket_key, _new_bucket)
             _add_log_to_bucket(bucket, log)
 
