@@ -43,7 +43,6 @@ _jsonable_text = _routing_request_analysis.jsonable_text
 classify_request_tier = _routing_request_analysis.classify_request_tier
 estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
 estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
-_guardrail_action = _routing_guardrails.guardrail_action
 apply_guardrail_redactions = _routing_guardrails.apply_guardrail_redactions
 
 
@@ -404,7 +403,12 @@ async def resolve_routing_plan(
     redacted_request_body, redactions = apply_guardrail_redactions(config, request_body)
     if redactions is not None:
         if guardrails is None:
-            guardrails = {"enabled": True, "status": "passed", "action": _guardrail_action(config), "violations": []}
+            guardrails = {
+                "enabled": True,
+                "status": "passed",
+                "action": _routing_guardrails.guardrail_action(config),
+                "violations": [],
+            }
         guardrails["redactions"] = redactions
 
     effective_request_body, context = apply_context_policy(config, redacted_request_body)
