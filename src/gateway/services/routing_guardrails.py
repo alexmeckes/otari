@@ -160,18 +160,12 @@ def _guardrail_preset_expansion(
 
 
 def _effective_guardrails_config(
-    config: Mapping[str, Any],
+    guardrails: Mapping[str, Any],
 ) -> tuple[Mapping[str, Any], dict[str, list[str]] | None]:
-    guardrails = guardrails_config(config)
     preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
     if not preset_config:
         return guardrails, preset_metadata
     return _combine_guardrail_config(preset_config, guardrails), preset_metadata
-
-
-def _guardrails_enabled(config: Mapping[str, Any]) -> bool:
-    guardrails = guardrails_config(config)
-    return bool_config(guardrails.get("enabled"), bool(guardrails))
 
 
 def guardrail_action(config: Mapping[str, Any]) -> str:
@@ -204,10 +198,11 @@ async def evaluate_guardrails(
     *,
     post_classifier: ExternalClassifierPost = post_external_guardrail_classifier,
 ) -> dict[str, Any] | None:
-    if not _guardrails_enabled(config):
+    guardrails = guardrails_config(config)
+    if not bool_config(guardrails.get("enabled"), bool(guardrails)):
         return None
 
-    guardrails, preset_metadata = _effective_guardrails_config(config)
+    guardrails, preset_metadata = _effective_guardrails_config(guardrails)
     request_text = _request_guardrail_text(request_body)
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
