@@ -34,7 +34,6 @@ reset_tag_budget = _budget_tags.reset_tag_budget
 _tag_scope_id = _budget_tags.tag_scope_id
 _matching_tag_budgets = _budget_tags.matching_tag_budgets
 _cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
-_normalize_budget_strategy = _budget_tags.normalize_budget_strategy
 calculate_next_reset = _budget_periods.calculate_next_reset
 
 
@@ -234,7 +233,7 @@ async def validate_user_budget(
         HTTPException: If user is blocked, doesn't exist, or exceeded budget
 
     """
-    normalized_strategy = _normalize_budget_strategy(strategy)
+    normalized_strategy = _budget_tags.normalize_budget_strategy(strategy)
 
     lock_for_update = normalized_strategy == "for_update"
     user = await get_active_user(db, user_id, for_update=lock_for_update)
@@ -286,7 +285,7 @@ async def validate_project_budget(
 ) -> Project:
     """Validate project exists, is active, is not blocked, and has available budget."""
 
-    normalized_strategy = _normalize_budget_strategy(strategy)
+    normalized_strategy = _budget_tags.normalize_budget_strategy(strategy)
 
     project = await get_project_by_id(db, project_id, for_update=normalized_strategy == "for_update")
 
