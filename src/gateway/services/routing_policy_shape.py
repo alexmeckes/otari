@@ -2,7 +2,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from gateway.services.pricing_service import pricing_model_ref
-from gateway.services.routing_config_values import dict_or_empty, float_or_none, score_or_none, string_or_none
+from gateway.services.routing_config_values import dict_or_empty, float_or_none, string_or_none
 
 DEFAULT_STRATEGY_TYPES = {"fallback", "intelligent", "weighted_score"}
 INTELLIGENT_AXES = {"cost", "performance", "intelligence"}
@@ -36,10 +36,6 @@ class RoutingPolicyShapeError(ValueError):
     """Raised when a public routing policy shape cannot be normalized."""
 
 
-number_value = float_or_none
-score_value = score_or_none
-
-
 def model_selector(provider: str | None, model: str) -> str:
     model_value = string_or_none(model) or ""
     provider_value = string_or_none(provider)
@@ -67,7 +63,7 @@ def split_model_selector(model_selector: str) -> tuple[str | None, str]:
 
 
 def _provider_priority(item: Mapping[str, Any], position: int) -> float:
-    priority = number_value(item.get("priority"))
+    priority = float_or_none(item.get("priority"))
     return priority if priority is not None else float(position)
 
 

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from gateway.services import routing_policy_shape
-from gateway.services.routing_config_values import dict_or_empty, string_or_none
+from gateway.services.routing_config_values import dict_or_empty, score_or_none, string_or_none
 from gateway.services.routing_quality_scores import candidate_quality_score
 
 
@@ -59,7 +59,7 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
         model_key = routing_policy_shape.normalized_model_selector(item.provider, item.model)
         score: float | None = None
         for value in (item.quality_score, item.score, item.benchmark_score):
-            score = routing_policy_shape.score_value(value)
+            score = score_or_none(value)
             if score is not None:
                 break
         if score is None:

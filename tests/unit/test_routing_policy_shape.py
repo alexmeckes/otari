@@ -1,19 +1,23 @@
 import pytest
 
 from gateway.services import routing_policy_shape
-from gateway.services.routing_config_values import float_or_none, score_or_none
 
 
-def test_number_value_reuses_shared_float_parser() -> None:
-    assert routing_policy_shape.number_value is float_or_none
-    assert routing_policy_shape.number_value(1.25) == 1.25
-    assert routing_policy_shape.number_value(True) is None
+def test_default_strategy_provider_priority_rejects_bool_values() -> None:
+    _strategy, config = routing_policy_shape.config_from_default_strategy(
+        {
+            "type": "fallback",
+            "providers": [
+                {"provider": "anthropic", "model": "claude-3-5-sonnet-latest", "priority": 1.5},
+                {"provider": "openai", "model": "gpt-4o", "priority": True},
+            ],
+        }
+    )
 
-
-def test_score_value_reuses_shared_score_parser() -> None:
-    assert routing_policy_shape.score_value is score_or_none
-    assert routing_policy_shape.score_value(72) == 0.72
-    assert routing_policy_shape.score_value(101) is None
+    assert [candidate["model"] for candidate in config["candidates"]] == [
+        "anthropic:claude-3-5-sonnet-latest",
+        "openai:gpt-4o",
+    ]
 
 
 def test_default_strategy_parsing_trims_strategy_axis_provider_and_model() -> None:
