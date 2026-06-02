@@ -68,12 +68,6 @@ def policy_rollout_info(
     }
 
 
-def _tag_values(value: Any) -> set[str]:
-    if isinstance(value, list | tuple | set):
-        return {str(item) for item in value}
-    return {str(value)}
-
-
 def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
     tag_key = None
     for key in ("tag", "key", "field", "name"):
@@ -101,9 +95,13 @@ def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[
     if op in {"ne", "neq", "not_eq", "!="}:
         return actual_value != str(expected)
     if op == "in":
-        return actual_value in _tag_values(expected)
+        if isinstance(expected, list | tuple | set):
+            return actual_value in {str(item) for item in expected}
+        return actual_value == str(expected)
     if op in {"not_in", "nin"}:
-        return actual_value not in _tag_values(expected)
+        if isinstance(expected, list | tuple | set):
+            return actual_value not in {str(item) for item in expected}
+        return actual_value != str(expected)
     if op == "contains":
         return str(expected) in actual_value
     if op == "starts_with":

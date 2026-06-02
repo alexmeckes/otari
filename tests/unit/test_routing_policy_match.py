@@ -80,6 +80,18 @@ def test_matches_tag_condition_preserves_missing_and_non_string_operator_behavio
     )
 
 
+def test_matches_tag_condition_expands_membership_expected_values() -> None:
+    request_tags = {"region": "eu", "tier": "prod", "team": "platform", "account": "standard"}
+
+    assert matches_tag_condition({"tag": "region", "operator": "in", "value": ["eu", "uk"]}, request_tags)
+    assert matches_tag_condition({"tag": "tier", "operator": "in", "value": "prod"}, request_tags)
+    assert matches_tag_condition({"tag": "team", "operator": "in", "value": ("platform", "ops")}, request_tags)
+    assert matches_tag_condition({"tag": "account", "operator": "in", "value": {"standard", "vip"}}, request_tags)
+    assert matches_tag_condition({"tag": "region", "operator": "not_in", "value": ["us", "apac"]}, request_tags)
+    assert matches_tag_condition({"tag": "tier", "operator": "nin", "value": "dev"}, request_tags)
+    assert not matches_tag_condition({"tag": "team", "operator": "not_in", "value": ("platform", "ops")}, request_tags)
+
+
 def test_matches_policy_match_config_trims_and_lowers_condition_logic() -> None:
     config = {
         "match": {
