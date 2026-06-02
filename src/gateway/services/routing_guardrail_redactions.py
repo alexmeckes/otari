@@ -66,13 +66,6 @@ def _redact_content(
     return value
 
 
-def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
-    replacement = redactions.get("replacement")
-    if isinstance(replacement, str):
-        return replacement
-    return "[REDACTED]"
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -84,7 +77,9 @@ def apply_guardrail_redactions(
         return body, None
 
     rules = _redaction_rules(redactions)
-    replacement = _redaction_replacement(redactions)
+    replacement = redactions.get("replacement")
+    if not isinstance(replacement, str):
+        replacement = "[REDACTED]"
     if not rules:
         return body, {
             "enabled": True,
