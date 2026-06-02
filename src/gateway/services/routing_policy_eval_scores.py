@@ -87,16 +87,6 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
     }
 
 
-def _candidate_model_key(candidate: Any) -> str | None:
-    if isinstance(candidate, str):
-        return routing_policy_shape.normalized_model_selector(None, candidate)
-    if isinstance(candidate, dict):
-        model = string_or_none(candidate.get("model"))
-        if model is not None:
-            return routing_policy_shape.normalized_model_selector(None, model)
-    return None
-
-
 def _apply_eval_score_to_candidate(
     candidate: Any,
     *,
@@ -105,7 +95,14 @@ def _apply_eval_score_to_candidate(
     applied_model_keys: set[str],
     updated_at: str,
 ) -> Any:
-    model_key = _candidate_model_key(candidate)
+    model_key: str | None
+    if isinstance(candidate, str):
+        model_key = routing_policy_shape.normalized_model_selector(None, candidate)
+    elif isinstance(candidate, dict):
+        model = string_or_none(candidate.get("model"))
+        model_key = routing_policy_shape.normalized_model_selector(None, model) if model is not None else None
+    else:
+        model_key = None
     if model_key is None or model_key not in scores_by_model:
         return candidate
 
