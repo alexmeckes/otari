@@ -36,7 +36,6 @@ _matching_tag_budgets = _budget_tags.matching_tag_budgets
 _cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
 _normalize_budget_strategy = _budget_tags.normalize_budget_strategy
 calculate_next_reset = _budget_periods.calculate_next_reset
-_as_utc = _budget_periods.as_utc
 
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
