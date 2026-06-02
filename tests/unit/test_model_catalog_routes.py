@@ -3,9 +3,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from any_llm.types.model import Model
 from fastapi.testclient import TestClient
 
-from gateway.api.routes._model_catalog import CatalogRecord, _catalog_record_from_pricing, vendor_catalog_from_records
+from gateway.api.routes._model_catalog import (
+    CatalogRecord,
+    _catalog_record_from_discovered,
+    _catalog_record_from_pricing,
+    vendor_catalog_from_records,
+)
 from gateway.core.config import API_KEY_HEADER, GatewayConfig
 from gateway.main import create_app
 from gateway.models.entities import ModelPricing
@@ -58,6 +64,26 @@ def test_catalog_record_from_pricing_formats_datetimes() -> None:
     assert record.created == int(created_at.timestamp())
     assert record.created_at == created_at.isoformat()
     assert record.updated_at == updated_at.isoformat()
+
+
+def test_catalog_record_from_discovered_formats_positive_epoch_timestamp() -> None:
+    created = 1_700_000_000
+    model = Model(**{"id": "gpt-4o", "object": "model", "created": created, "owned_by": "openai"})
+
+    record = _catalog_record_from_discovered("openai", model, pricing=None)
+
+    expected_timestamp = datetime.fromtimestamp(created, tz=UTC).isoformat().replace("+00:00", "Z")
+    assert record.created_at == expected_timestamp
+    assert record.updated_at == expected_timestamp
+
+
+def test_catalog_record_from_discovered_ignores_non_positive_epoch_timestamp() -> None:
+    model = Model(**{"id": "gpt-4o", "object": "model", "created": 0, "owned_by": "openai"})
+
+    record = _catalog_record_from_discovered("openai", model, pricing=None)
+
+    assert record.created_at is None
+    assert record.updated_at is None
 
 
 def test_models_default_response_stays_openai_compatible(

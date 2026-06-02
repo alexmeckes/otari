@@ -78,12 +78,6 @@ def _model_pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None
     )
 
 
-def _iso_from_epoch(epoch_seconds: int | None) -> str | None:
-    if epoch_seconds is None or epoch_seconds <= 0:
-        return None
-    return datetime.fromtimestamp(epoch_seconds, tz=UTC).isoformat().replace("+00:00", "Z")
-
-
 def _display_name(model_key: str) -> str:
     _provider, model_name = _split_model_key(model_key)
     words = model_name.replace("/", " / ").replace("-", " ").replace("_", " ").split()
@@ -105,7 +99,9 @@ def _catalog_record_from_discovered(
     pricing: ModelPricing | None,
 ) -> CatalogRecord:
     model_key = pricing_model_ref(provider_name, model.id)
-    created_at = _iso_from_epoch(model.created)
+    created_at = None
+    if model.created is not None and model.created > 0:
+        created_at = datetime.fromtimestamp(model.created, tz=UTC).isoformat().replace("+00:00", "Z")
     return CatalogRecord(
         model_key=model_key,
         provider=provider_name,
