@@ -64,10 +64,6 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _classifier_score(payload: Mapping[str, Any]) -> float | None:
-    return non_negative_float_or_none(payload.get("score"))
-
-
 def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: float | None) -> list[dict[str, str]]:
     violations: list[dict[str, str]] = []
     raw_violations = payload.get("violations")
@@ -76,7 +72,7 @@ def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: flo
             violations.append(guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
 
     flagged = payload.get("blocked") is True or payload.get("flagged") is True
-    score = _classifier_score(payload)
+    score = non_negative_float_or_none(payload.get("score"))
     if threshold is not None and score is not None and score >= threshold:
         flagged = True
     if flagged and not violations:
@@ -139,7 +135,7 @@ async def evaluate_external_classifiers(
         assert payload is not None
         classifier_violations = _classifier_violations(name, payload, threshold)
         violations.extend(classifier_violations)
-        score = _classifier_score(payload)
+        score = non_negative_float_or_none(payload.get("score"))
         label = payload.get("label") if isinstance(payload.get("label"), str) else None
         classifier_results.append(
             {
