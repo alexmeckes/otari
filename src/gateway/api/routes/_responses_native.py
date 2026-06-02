@@ -82,6 +82,12 @@ def native_response_streaming_response(
     context: OpenAIProviderRequestContext,
     request_body: ResponsesRequest,
 ) -> StreamingResponse:
+    def _extract_usage(event: ResponseStreamEvent) -> CompletionUsage | None:
+        response_obj = getattr(event, "response", None)
+        if response_obj and getattr(response_obj, "usage", None):
+            return usage_to_completion_usage(response_obj.usage)
+        return None
+
     async def _on_complete(usage_data: CompletionUsage) -> None:
         await log_native_response_usage(
             db=db,
@@ -104,7 +110,7 @@ def native_response_streaming_response(
         streaming_generator(
             stream=stream_result,
             format_chunk=format_typed_stream_event,
-            extract_usage=_extract_response_stream_usage,
+            extract_usage=_extract_usage,
             fmt=RESPONSES_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
@@ -130,13 +136,6 @@ def native_response_payload(
         provider=context.provider.value,
         requested_model=context.model,
     )
-
-
-def _extract_response_stream_usage(event: ResponseStreamEvent) -> CompletionUsage | None:
-    response_obj = getattr(event, "response", None)
-    if response_obj and getattr(response_obj, "usage", None):
-        return usage_to_completion_usage(response_obj.usage)
-    return None
 
 
 def _response_stream_headers(context: OpenAIProviderRequestContext) -> dict[str, str]:
