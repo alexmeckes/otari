@@ -40,10 +40,6 @@ def _external_classifier_headers(classifier: Mapping[str, Any]) -> dict[str, str
     return normalized or None
 
 
-def _external_classifier_float(classifier: Mapping[str, Any], key: str) -> float | None:
-    return non_negative_float_or_none(classifier.get(key))
-
-
 async def post_external_guardrail_classifier(
     *,
     url: str,
@@ -124,8 +120,8 @@ async def evaluate_external_classifiers(
         if url is None:
             classifier_results.append({"name": name, "status": "skipped", "reason": "missing_url"})
             continue
-        timeout_seconds = _external_classifier_float(classifier, "timeout_seconds") or 2.0
-        threshold = _external_classifier_float(classifier, "threshold")
+        timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
+        threshold = non_negative_float_or_none(classifier.get("threshold"))
         status_code, payload, error = await post_classifier(
             url=url,
             request_text=request_text,
