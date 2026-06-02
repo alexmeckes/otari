@@ -62,16 +62,6 @@ def _parse_provider(provider: str) -> LLMProvider:
         ) from e
 
 
-def _split_batch_model(model: str) -> tuple[LLMProvider, str]:
-    try:
-        return AnyLLM.split_model_provider(model)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid request: {e}",
-        ) from e
-
-
 def _ensure_batch_supported(provider: LLMProvider) -> None:
     provider_class = AnyLLM.get_provider_class(provider)
     if not getattr(provider_class, "SUPPORTS_BATCH", False):
@@ -141,7 +131,13 @@ async def create_batch(
     api_key_id = api_key.id if api_key else None
     user_id = api_key.user_id if api_key else None
 
-    provider, model = _split_batch_model(request.model)
+    try:
+        provider, model = AnyLLM.split_model_provider(request.model)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid request: {e}",
+        ) from e
     _ensure_batch_supported(provider)
     provider_kwargs = get_provider_kwargs(config, provider)
     tmp_path = _write_batch_input_file(request, model)
