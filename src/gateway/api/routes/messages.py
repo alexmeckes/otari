@@ -172,19 +172,6 @@ async def _message_execution_context(
     )
 
 
-def _message_stream_event_usage(event: MessageStreamEvent) -> CompletionUsage | None:
-    if isinstance(event, MessageDeltaEvent):
-        return completion_usage_from_token_counts(
-            input_tokens=event.usage.input_tokens,
-            output_tokens=event.usage.output_tokens,
-        )
-    if isinstance(event, MessageStartEvent):
-        input_tokens = event.message.usage.input_tokens or 0
-        if input_tokens:
-            return completion_usage_from_token_counts(input_tokens=input_tokens, output_tokens=0)
-    return None
-
-
 def _message_streaming_response(
     *,
     stream_result: Any,
@@ -192,6 +179,18 @@ def _message_streaming_response(
     log_writer: LogWriter,
     execution_context: MessageExecutionContext,
 ) -> StreamingResponse:
+    def _extract_usage(event: MessageStreamEvent) -> CompletionUsage | None:
+        if isinstance(event, MessageDeltaEvent):
+            return completion_usage_from_token_counts(
+                input_tokens=event.usage.input_tokens,
+                output_tokens=event.usage.output_tokens,
+            )
+        if isinstance(event, MessageStartEvent):
+            input_tokens = event.message.usage.input_tokens or 0
+            if input_tokens:
+                return completion_usage_from_token_counts(input_tokens=input_tokens, output_tokens=0)
+        return None
+
     async def _on_complete(usage_data: CompletionUsage) -> None:
         await execution_context.log_usage(
             db=db,
@@ -210,7 +209,7 @@ def _message_streaming_response(
         streaming_generator(
             stream=stream_result,
             format_chunk=format_typed_stream_event,
-            extract_usage=_message_stream_event_usage,
+            extract_usage=_extract_usage,
             fmt=ANTHROPIC_STREAM_FORMAT,
             on_complete=_on_complete,
             on_error=_on_error,
