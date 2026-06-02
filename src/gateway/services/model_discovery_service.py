@@ -88,7 +88,7 @@ def _supports_list_models(provider_name: str) -> bool:
         provider_class = AnyLLM.get_provider_class(provider_name)
         metadata = provider_class.get_provider_metadata()
         return metadata.list_models
-    except (ImportError, AttributeError, Exception):
+    except Exception:
         return False
 
 
