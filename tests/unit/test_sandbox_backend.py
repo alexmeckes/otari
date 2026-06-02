@@ -169,6 +169,78 @@ async def test_stderr_only_treated_as_error(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_call_tool_lists_returned_files(monkeypatch: pytest.MonkeyPatch) -> None:
+    result_block = {
+        "type": "code_execution_tool_result",
+        "tool_use_id": "t1",
+        "content": {
+            "type": "code_execution_result",
+            "stdout": "",
+            "stderr": "",
+            "return_code": 0,
+            "content": [{"filename": "plot.png"}, {"filename": "table.csv"}],
+        },
+    }
+    _patched_async_client(
+        {
+            ("POST", "/sessions"): httpx.Response(200, json={"session_id": "s1"}),
+            ("POST", "/sessions/s1/exec"): httpx.Response(200, json={"result_block": result_block}),
+            ("DELETE", "/sessions/s1"): httpx.Response(204),
+        },
+        monkeypatch,
+    )
+
+    async with SandboxBackend(sandbox_url="http://sandbox:8080") as backend:
+        result = await backend.call_tool(CODE_EXECUTION_TOOL_NAME, {"code": "1"})
+
+    assert result == "files: plot.png, table.csv"
+
+
+@pytest.mark.asyncio
+async def test_call_tool_returns_no_output_for_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    result_block = {
+        "type": "code_execution_tool_result",
+        "tool_use_id": "t1",
+        "content": {
+            "type": "code_execution_result",
+            "stdout": "",
+            "stderr": "",
+            "return_code": 0,
+            "content": [],
+        },
+    }
+    _patched_async_client(
+        {
+            ("POST", "/sessions"): httpx.Response(200, json={"session_id": "s1"}),
+            ("POST", "/sessions/s1/exec"): httpx.Response(200, json={"result_block": result_block}),
+            ("DELETE", "/sessions/s1"): httpx.Response(204),
+        },
+        monkeypatch,
+    )
+
+    async with SandboxBackend(sandbox_url="http://sandbox:8080") as backend:
+        result = await backend.call_tool(CODE_EXECUTION_TOOL_NAME, {"code": "1"})
+
+    assert result == "(no output)"
+
+
+@pytest.mark.asyncio
+async def test_call_tool_rejects_malformed_exec_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patched_async_client(
+        {
+            ("POST", "/sessions"): httpx.Response(200, json={"session_id": "s1"}),
+            ("POST", "/sessions/s1/exec"): httpx.Response(200, json={"result_block": "not-a-block"}),
+            ("DELETE", "/sessions/s1"): httpx.Response(204),
+        },
+        monkeypatch,
+    )
+
+    async with SandboxBackend(sandbox_url="http://sandbox:8080") as backend:
+        with pytest.raises(SandboxNotReachableError, match="malformed result"):
+            await backend.call_tool(CODE_EXECUTION_TOOL_NAME, {"code": "1"})
+
+
+@pytest.mark.asyncio
 async def test_enter_raises_when_sandbox_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     _patched_async_client(
         {("POST", "/sessions"): httpx.ConnectError("connection refused")},

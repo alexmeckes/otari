@@ -165,62 +165,34 @@ class SandboxBackend:
         if not isinstance(result_block, dict):
             raise SandboxNotReachableError(f"sandbox returned malformed result: {body!r}")
 
-        return _flatten_result_block(result_block)
+        # The sandbox returns an Anthropic-shaped tool-result block whose
+        # `content` is a single result object, not a list of mixed blocks.
+        content = result_block.get("content")
+        if not isinstance(content, dict):
+            return str(result_block)
 
+        stdout = content.get("stdout") or ""
+        stderr = content.get("stderr") or ""
+        return_code = content.get("return_code")
+        file_refs = content.get("content") or []
 
-def _flatten_result_block(block: dict[str, Any]) -> str:
-    """Render the sandbox's structured result as a single string for the model.
+        parts: list[str] = []
+        if stdout:
+            parts.append(f"stdout:\n{stdout}")
+        if stderr:
+            parts.append(f"stderr:\n{stderr}")
+        if return_code not in (None, 0):
+            parts.append(f"return_code: {return_code}")
+        if isinstance(file_refs, list) and file_refs:
+            names = [f.get("filename", "?") for f in file_refs if isinstance(f, dict)]
+            if names:
+                parts.append("files: " + ", ".join(names))
 
-    The sandbox returns an Anthropic-shaped tool-result block — see
-    https://github.com/mozilla-ai/otari-sandbox-container/blob/main/sandbox/models.py:
-
-        {
-          "type": "code_execution_tool_result"
-                  | "bash_code_execution_tool_result"
-                  | "text_editor_code_execution_tool_result",
-          "tool_use_id": "...",
-          "content": {
-            "type": "code_execution_result",
-            "stdout": "...",
-            "stderr": "...",
-            "return_code": 0,
-            "content": [file refs]
-          }
-        }
-
-    Note ``content`` is a single ``CodeExecutionResultContent`` object, NOT a
-    list of mixed blocks. Errors come through as a non-zero ``return_code``
-    or a non-empty ``stderr``; there is no top-level ``is_error`` flag.
-
-    Full structured output (file refs, separate exit codes per step) is a
-    future enhancement that lands alongside the Anthropic-content-block lift.
-    """
-    content = block.get("content")
-    if not isinstance(content, dict):
-        return str(block)
-
-    stdout = content.get("stdout") or ""
-    stderr = content.get("stderr") or ""
-    return_code = content.get("return_code")
-    file_refs = content.get("content") or []
-
-    parts: list[str] = []
-    if stdout:
-        parts.append(f"stdout:\n{stdout}")
-    if stderr:
-        parts.append(f"stderr:\n{stderr}")
-    if return_code not in (None, 0):
-        parts.append(f"return_code: {return_code}")
-    if isinstance(file_refs, list) and file_refs:
-        names = [f.get("filename", "?") for f in file_refs if isinstance(f, dict)]
-        if names:
-            parts.append("files: " + ", ".join(names))
-
-    flattened = "\n".join(parts)
-    if not flattened:
-        return "(no output)"
-    # Treat non-zero return_code or stderr-only output as error-shaped so the
-    # model gets a clear signal it can recover from.
-    if (return_code not in (None, 0)) or (stderr and not stdout):
-        return f"[tool error] {flattened}"
-    return flattened
+        flattened = "\n".join(parts)
+        if not flattened:
+            return "(no output)"
+        # Treat non-zero return_code or stderr-only output as error-shaped so the
+        # model gets a clear signal it can recover from.
+        if (return_code not in (None, 0)) or (stderr and not stdout):
+            return f"[tool error] {flattened}"
+        return flattened
