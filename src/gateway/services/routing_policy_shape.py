@@ -36,10 +36,6 @@ class RoutingPolicyShapeError(ValueError):
     """Raised when a public routing policy shape cannot be normalized."""
 
 
-def _shape_error(detail: str) -> RoutingPolicyShapeError:
-    return RoutingPolicyShapeError(detail)
-
-
 number_value = float_or_none
 score_value = score_or_none
 
@@ -79,9 +75,9 @@ def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[s
     provider = string_or_none(item.get("provider"))
     model = string_or_none(item.get("model"))
     if model is None:
-        raise _shape_error("default_strategy.providers entries must include a non-empty model")
+        raise RoutingPolicyShapeError("default_strategy.providers entries must include a non-empty model")
     if "provider" in item and provider is None:
-        raise _shape_error("default_strategy.providers entries must include a non-empty provider when set")
+        raise RoutingPolicyShapeError("default_strategy.providers entries must include a non-empty provider when set")
 
     candidate: dict[str, Any] = {"model": model_selector(provider, model)}
     for key in ("tier", "input_price_per_million", "output_price_per_million"):
@@ -103,11 +99,11 @@ def _candidates_from_default_strategy_providers(provider_items: Iterable[Mapping
 def _default_strategy_providers(default_strategy: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     providers = default_strategy.get("providers")
     if not isinstance(providers, list) or not providers:
-        raise _shape_error("default_strategy.providers must be a non-empty list")
+        raise RoutingPolicyShapeError("default_strategy.providers must be a non-empty list")
     provider_items: list[Mapping[str, Any]] = []
     for item in providers:
         if not isinstance(item, dict):
-            raise _shape_error("default_strategy.providers entries must be objects")
+            raise RoutingPolicyShapeError("default_strategy.providers entries must be objects")
         provider_items.append(item)
     return provider_items
 
@@ -126,11 +122,13 @@ def config_from_default_strategy(
     strategy_type_raw = default_strategy.get("type")
     strategy_type_value = string_or_none(strategy_type_raw)
     if strategy_type_value is None:
-        raise _shape_error("default_strategy.type is required")
+        raise RoutingPolicyShapeError("default_strategy.type is required")
     strategy_type = strategy_type_value.lower()
     if strategy_type not in DEFAULT_STRATEGY_TYPES:
         supported = ", ".join(sorted(DEFAULT_STRATEGY_TYPES))
-        raise _shape_error(f"Unsupported default_strategy.type '{strategy_type_raw}'. Supported types: {supported}")
+        raise RoutingPolicyShapeError(
+            f"Unsupported default_strategy.type '{strategy_type_raw}'. Supported types: {supported}"
+        )
 
     provider_items = _default_strategy_providers(default_strategy)
     config = dict(base_config or {})
@@ -161,11 +159,11 @@ def config_from_default_strategy(
     axis_raw = default_strategy.get("axis", "performance")
     axis_value = string_or_none(axis_raw)
     if axis_value is None:
-        raise _shape_error("default_strategy.axis must be a string")
+        raise RoutingPolicyShapeError("default_strategy.axis must be a string")
     axis = axis_value.lower()
     if axis not in INTELLIGENT_AXES:
         supported = ", ".join(sorted(INTELLIGENT_AXES))
-        raise _shape_error(f"Unsupported default_strategy.axis '{axis_raw}'. Supported axes: {supported}")
+        raise RoutingPolicyShapeError(f"Unsupported default_strategy.axis '{axis_raw}'. Supported axes: {supported}")
     config["candidates"] = _candidates_from_default_strategy_providers(provider_items)
     config["axis"] = axis
     config.setdefault("fallback_enabled", True)
@@ -298,5 +296,5 @@ def update_policy_shape(
     base_config = dict(payload["config"] or {}) if "config" in payload else dict(current_config)
     default_strategy = payload["default_strategy"]
     if not isinstance(default_strategy, dict):
-        raise _shape_error("default_strategy must be an object")
+        raise RoutingPolicyShapeError("default_strategy must be an object")
     return config_from_default_strategy(default_strategy, base_config=base_config)
