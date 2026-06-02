@@ -174,7 +174,7 @@ def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Map
 def matches_policy_match_config(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
     match_config = policy_match_config(config)
     legacy_tags = policy_match_tags(config)
-    has_conditions = any(key in match_config for key in ("conditions", "all", "any", "and", "or"))
+    has_conditions = "conditions" in match_config or _condition_group(match_config) is not None
     if not legacy_tags and not has_conditions:
         return False
     if legacy_tags and not all(request_tags.get(key) == value for key, value in legacy_tags.items()):
