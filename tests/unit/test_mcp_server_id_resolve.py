@@ -124,6 +124,31 @@ async def test_resolve_404_passes_through(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(403, text="forbidden"),
+        httpx.Response(403, json={"detail": ["not", "a", "string"]}),
+    ],
+)
+async def test_resolve_passthrough_uses_fallback_for_unusable_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    response: httpx.Response,
+) -> None:
+    async def fake_post(**kwargs: Any) -> httpx.Response:
+        return response
+
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as ei:
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+    assert ei.value.status_code == 403
+    assert ei.value.detail == "MCP server resolution failed"
+
+
+@pytest.mark.asyncio
 async def test_resolve_5xx_maps_to_502(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(503, text="busy")

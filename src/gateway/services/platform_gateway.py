@@ -83,19 +83,17 @@ def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
     return {"X-Gateway-Token": config.platform_token or ""}
 
 
-def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
-    try:
-        payload = response.json()
-    except ValueError:
-        return fallback
-
-    detail = payload.get("detail") if isinstance(payload, dict) else None
-    return detail if isinstance(detail, str) else fallback
-
-
 def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
     if response.status_code in _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES:
-        detail = _safe_detail_from_platform(response, passthrough_fallback)
+        detail = passthrough_fallback
+        try:
+            payload = response.json()
+        except ValueError:
+            pass
+        else:
+            platform_detail = payload.get("detail") if isinstance(payload, dict) else None
+            if isinstance(platform_detail, str):
+                detail = platform_detail
         headers: dict[str, str] | None = None
         if response.status_code == 429 and response.headers.get("Retry-After"):
             headers = {"Retry-After": response.headers["Retry-After"]}
