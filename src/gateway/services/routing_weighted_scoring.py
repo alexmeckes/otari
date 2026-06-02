@@ -53,9 +53,10 @@ def attach_weighted_scores(
         key: _score_weight(scoring, key, default)
         for key, default in _DEFAULT_SCORE_WEIGHTS.items()
     }
-    if sum(weights.values()) <= 0:
-        weights = dict(_DEFAULT_SCORE_WEIGHTS)
     weight_total = sum(weights.values())
+    if weight_total <= 0:
+        weights = dict(_DEFAULT_SCORE_WEIGHTS)
+        weight_total = sum(weights.values())
     default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
     unknown_cost_score = _score_setting(scoring, "unknown_cost_score", _DEFAULT_UNKNOWN_COST_SCORE)
     unknown_latency_score = _score_setting(scoring, "unknown_latency_score", _DEFAULT_UNKNOWN_LATENCY_SCORE)
