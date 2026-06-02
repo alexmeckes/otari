@@ -24,10 +24,6 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
-def _constraint_model_set(value: Any) -> set[str]:
-    return {_normalize_model_key_for_constraint(item) for item in _string_set(value)}
-
-
 def _region_set(value: Any) -> set[str]:
     return {item.lower() for item in _string_set(value)}
 
@@ -52,8 +48,12 @@ def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     return _ConstraintSets(
         allowed_providers=_string_set(constraints.get("allowed_providers")),
         blocked_providers=_string_set(constraints.get("blocked_providers")),
-        allowed_models=_constraint_model_set(constraints.get("allowed_models")),
-        blocked_models=_constraint_model_set(constraints.get("blocked_models")),
+        allowed_models={
+            _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("allowed_models"))
+        },
+        blocked_models={
+            _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("blocked_models"))
+        },
         allowed_regions=_region_set(constraints.get("allowed_regions")),
         blocked_regions=_region_set(constraints.get("blocked_regions")),
     )

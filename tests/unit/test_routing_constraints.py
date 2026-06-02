@@ -224,6 +224,33 @@ def test_apply_constraints_ignores_missing_or_non_dict_constraints() -> None:
         assert rejected == []
 
 
+def test_apply_constraints_normalizes_legacy_slash_model_constraints() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={},
+    )
+
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        allowed, rejected = apply_constraints(
+            [candidate],
+            config={"constraints": {"blocked_models": ["openai/gpt-4o"]}},
+            tags={},
+        )
+
+    assert allowed == []
+    assert rejected == [
+        {
+            "model": "openai:gpt-4o",
+            "provider": "openai",
+            "reason": "model_blocked",
+            "estimated_cost": None,
+            "regions": [],
+        }
+    ]
+
+
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
