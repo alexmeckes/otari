@@ -12,16 +12,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.log_config import logger
 from gateway.models.entities import Project, RouteTrace, RoutingPolicy
 from gateway.repositories.projects_repository import get_project_by_id
-from gateway.services import routing_candidate_specs as _routing_candidate_specs
-from gateway.services import routing_constraints as _routing_constraints
-from gateway.services import routing_context_policy as _routing_context_policy
-from gateway.services import routing_guardrail_external
-from gateway.services import routing_guardrails as _routing_guardrails
-from gateway.services import routing_latency_stats as _routing_latency_stats
-from gateway.services import routing_policy_match as _routing_policy_match
-from gateway.services import routing_provider_health as _routing_provider_health
-from gateway.services import routing_request_analysis as _routing_request_analysis
-from gateway.services import routing_weighted_scoring as _routing_weighted_scoring
+from gateway.services import (
+    routing_candidate_specs,
+    routing_constraints,
+    routing_context_policy,
+    routing_guardrail_external,
+    routing_guardrails,
+    routing_latency_stats,
+    routing_policy_match,
+    routing_provider_health,
+    routing_request_analysis,
+    routing_weighted_scoring,
+)
 from gateway.services.pricing_service import find_model_pricing
 from gateway.services.routing_config_values import bool_config, string_or_none
 from gateway.services.routing_guardrail_redactions import apply_guardrail_redactions
@@ -85,7 +87,7 @@ class RoutingCandidate:
     latency_sample_count: int
     routing_score: float | None
     score_components: dict[str, float] | None
-    provider_health: _routing_provider_health.ProviderHealth | None
+    provider_health: routing_provider_health.ProviderHealth | None
     metadata: dict[str, Any]
 
     def to_trace_dict(self) -> dict[str, Any]:
@@ -150,14 +152,14 @@ class _PolicyMatch:
 
 async def _build_candidates(
     db: AsyncSession,
-    specs: Sequence[_routing_candidate_specs.CandidateSpec],
+    specs: Sequence[routing_candidate_specs.CandidateSpec],
     *,
     prompt_tokens: int,
     output_tokens: int,
 ) -> list[RoutingCandidate]:
     candidates: list[RoutingCandidate] = []
     for index, spec in enumerate(specs, start=1):
-        provider, provider_model, normalized_model = _routing_candidate_specs.split_model_selector(spec.model)
+        provider, provider_model, normalized_model = routing_candidate_specs.split_model_selector(spec.model)
         pricing = await find_model_pricing(db, provider, provider_model)
         input_price = spec.input_price_per_million
         output_price = spec.output_price_per_million
@@ -177,7 +179,7 @@ async def _build_candidates(
                 provider=provider,
                 provider_model=provider_model,
                 position=index,
-                tier=spec.tier or _routing_candidate_specs.infer_tier_from_output_price(output_price),
+                tier=spec.tier or routing_candidate_specs.infer_tier_from_output_price(output_price),
                 estimated_cost=estimated_cost,
                 input_price_per_million=input_price,
                 output_price_per_million=output_price,
@@ -213,10 +215,10 @@ def _by_weighted_score(candidate: RoutingCandidate) -> tuple[bool, float, int]:
 
 
 def _tier_fallback_order(target_tier: str) -> list[str]:
-    target_index = _routing_candidate_specs.TIER_ORDER.index(target_tier)
+    target_index = routing_candidate_specs.TIER_ORDER.index(target_tier)
     return [
-        *_routing_candidate_specs.TIER_ORDER[target_index:],
-        *reversed(_routing_candidate_specs.TIER_ORDER[:target_index]),
+        *routing_candidate_specs.TIER_ORDER[target_index:],
+        *reversed(routing_candidate_specs.TIER_ORDER[:target_index]),
     ]
 
 
@@ -290,9 +292,9 @@ async def _matching_policy(db: AsyncSession, tags: Mapping[str, str]) -> _Policy
     matches: list[_PolicyMatch] = []
     for policy in policies:
         config = policy.config_dict()
-        if not _routing_policy_match.matches_policy_match_config(config, tags):
+        if not routing_policy_match.matches_policy_match_config(config, tags):
             continue
-        rollout = _routing_policy_match.policy_rollout_info(
+        rollout = routing_policy_match.policy_rollout_info(
             policy_id=policy.policy_id,
             config=config,
             request_tags=tags,
@@ -307,7 +309,7 @@ async def _matching_policy(db: AsyncSession, tags: Mapping[str, str]) -> _Policy
     return sorted(
         matches,
         key=lambda match: (
-            _routing_policy_match.policy_match_priority(match.policy.config_dict()),
+            routing_policy_match.policy_match_priority(match.policy.config_dict()),
             match.policy.updated_at,
         ),
         reverse=True,
@@ -345,7 +347,7 @@ async def resolve_routing_plan(
         if policy is None:
             raise RoutingPolicyError(404, f"Routing policy '{policy_id}' not found")
         policy_source = "policy_override"
-        policy_rollout = _routing_policy_match.policy_rollout_info(
+        policy_rollout = routing_policy_match.policy_rollout_info(
             policy_id=policy.policy_id,
             config=policy.config_dict(),
             request_tags=request_tags,
@@ -372,7 +374,7 @@ async def resolve_routing_plan(
         raise RoutingPolicyError(422, f"Unsupported routing strategy '{strategy}'")
 
     config = policy.config_dict()
-    guardrails = await _routing_guardrails.evaluate_guardrails(
+    guardrails = await routing_guardrails.evaluate_guardrails(
         config,
         request_body,
         post_classifier=routing_guardrail_external.post_external_guardrail_classifier,
@@ -386,7 +388,7 @@ async def resolve_routing_plan(
             f"Routing policy '{policy.policy_id}' guardrail blocked request: {violation_type}:{violation_rule}",
         )
     try:
-        specs = _routing_candidate_specs.configured_candidate_specs(config)
+        specs = routing_candidate_specs.configured_candidate_specs(config)
     except ValueError as exc:
         raise RoutingPolicyError(422, f"Invalid routing policy candidate: {exc}") from exc
     if not specs:
@@ -398,15 +400,15 @@ async def resolve_routing_plan(
             guardrails = {
                 "enabled": True,
                 "status": "passed",
-                "action": _routing_guardrails.guardrail_action(config),
+                "action": routing_guardrails.guardrail_action(config),
                 "violations": [],
             }
         guardrails["redactions"] = redactions
 
-    effective_request_body, context = _routing_context_policy.apply_context_policy(config, redacted_request_body)
-    prompt_tokens = _routing_request_analysis.estimate_prompt_tokens(effective_request_body)
-    output_tokens = _routing_request_analysis.estimate_output_tokens(effective_request_body)
-    target_tier = _routing_request_analysis.classify_request_tier(
+    effective_request_body, context = routing_context_policy.apply_context_policy(config, redacted_request_body)
+    prompt_tokens = routing_request_analysis.estimate_prompt_tokens(effective_request_body)
+    output_tokens = routing_request_analysis.estimate_output_tokens(effective_request_body)
+    target_tier = routing_request_analysis.classify_request_tier(
         effective_request_body,
         prompt_tokens=prompt_tokens,
         config=config,
@@ -420,7 +422,7 @@ async def resolve_routing_plan(
         )
     except ValueError as exc:
         raise RoutingPolicyError(422, f"Invalid routing policy candidate: {exc}") from exc
-    constrained_candidates, rejected_candidates = _routing_constraints.apply_constraints(
+    constrained_candidates, rejected_candidates = routing_constraints.apply_constraints(
         candidates,
         config=config,
         tags=request_tags,
@@ -430,9 +432,9 @@ async def resolve_routing_plan(
         raise RoutingPolicyError(422, _no_candidates_detail(policy.policy_id, "constraints", rejected_candidates))
     candidates = cast(
         list[RoutingCandidate],
-        await _routing_provider_health.attach_provider_health(db, candidates, config=config),
+        await routing_provider_health.attach_provider_health(db, candidates, config=config),
     )
-    health_allowed_candidates, health_rejected_candidates = _routing_provider_health.apply_provider_health_gate(
+    health_allowed_candidates, health_rejected_candidates = routing_provider_health.apply_provider_health_gate(
         candidates,
         config=config,
     )
@@ -446,17 +448,17 @@ async def resolve_routing_plan(
     if strategy in {"least_latency", "weighted_score"}:
         candidates = cast(
             list[RoutingCandidate],
-            await _routing_latency_stats.attach_latency_stats(db, candidates, config=config),
+            await routing_latency_stats.attach_latency_stats(db, candidates, config=config),
         )
     if strategy == "weighted_score":
         candidates = cast(
             list[RoutingCandidate],
-            _routing_weighted_scoring.attach_weighted_scores(candidates, config=config),
+            routing_weighted_scoring.attach_weighted_scores(candidates, config=config),
         )
     ordered_candidates = _order_candidates(candidates, strategy=strategy, target_tier=target_tier)
     ordered_candidates = cast(
         list[RoutingCandidate],
-        _routing_provider_health.apply_provider_health_order(ordered_candidates, config=config),
+        routing_provider_health.apply_provider_health_order(ordered_candidates, config=config),
     )
     fallback_enabled = _fallback_enabled(config, strategy=strategy)
     if not fallback_enabled:
