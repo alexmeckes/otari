@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from gateway.services.budget_service import calculate_next_reset
+from gateway.services.budget_periods import calculate_next_reset
 
 from .conftest import MODEL_NAME
 

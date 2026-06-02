@@ -31,7 +31,6 @@ record_project_budget_alerts_after_spend = _budget_alerts.record_project_budget_
 record_user_budget_alerts_after_spend = _budget_alerts.record_user_budget_alerts_after_spend
 budget_matches_tags = _budget_tags.budget_matches_tags
 reset_tag_budget = _budget_tags.reset_tag_budget
-calculate_next_reset = _budget_periods.calculate_next_reset
 
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
