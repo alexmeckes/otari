@@ -108,10 +108,6 @@ def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, 
     return headers
 
 
-def _platform_resolve_timeout_seconds(config: GatewayConfig) -> float:
-    return platform_timeout_seconds(config, "resolve_timeout_ms")
-
-
 def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
     try:
         payload = response.json()
@@ -160,7 +156,7 @@ async def _post_platform_resolution(
             url=resolve_url,
             headers=headers,
             body=body,
-            timeout_seconds=_platform_resolve_timeout_seconds(config),
+            timeout_seconds=platform_timeout_seconds(config, "resolve_timeout_ms"),
         )
     except (httpx.TimeoutException, httpx.NetworkError):
         raise HTTPException(
