@@ -103,12 +103,6 @@ def extract_web_search_tool(
     return _extract_first_matching_tool(tools, _is_web_search_tool_type)
 
 
-def _domain_config_tuple(value: Any) -> tuple[str, ...]:
-    if isinstance(value, list) and value:
-        return tuple(str(domain) for domain in value)
-    return ()
-
-
 def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> WebSearchBackend:
     """Construct a WebSearchBackend honoring environment and per-tool config."""
     kwargs: dict[str, Any] = {"base_url": base_url}
@@ -136,12 +130,10 @@ def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> We
     if extract_env is not None:
         kwargs["extract_content"] = bool_config(extract_env, True, coerce_strings=True)
 
-    allowed_domains = _domain_config_tuple(tool_entry.get("allowed_domains"))
-    if allowed_domains:
-        kwargs["allowed_domains"] = allowed_domains
-    blocked_domains = _domain_config_tuple(tool_entry.get("blocked_domains"))
-    if blocked_domains:
-        kwargs["blocked_domains"] = blocked_domains
+    for key in ("allowed_domains", "blocked_domains"):
+        domains = tool_entry.get(key)
+        if isinstance(domains, list) and domains:
+            kwargs[key] = tuple(str(domain) for domain in domains)
 
     purpose_hint = tool_entry.get("purpose_hint") or os.environ.get("GATEWAY_WEB_SEARCH_PURPOSE_HINT")
     if purpose_hint:

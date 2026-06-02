@@ -178,7 +178,7 @@ def test_build_web_search_backend_uses_shared_extract_env_bool_parsing(
     assert backend._extract_content is expected
 
 
-def test_build_web_search_backend_normalizes_domain_lists_with_shared_helper() -> None:
+def test_build_web_search_backend_normalizes_domain_lists() -> None:
     backend = build_web_search_backend(
         base_url="http://search.local",
         tool_entry={
