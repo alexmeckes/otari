@@ -20,9 +20,6 @@ from gateway.services import budget_tags as _budget_tags
 from gateway.services.budget_reset_logs import new_budget_reset_log
 from gateway.services.pricing_service import find_model_pricing, split_pricing_model_ref
 
-budget_matches_tags = _budget_tags.budget_matches_tags
-reset_tag_budget = _budget_tags.reset_tag_budget
-
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
     subject.budget_started_at, subject.next_budget_reset_at = _budget_periods.budget_period_window(
