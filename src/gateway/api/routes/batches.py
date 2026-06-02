@@ -92,19 +92,6 @@ def _batch_response(batch: Batch, provider: str) -> dict[str, Any]:
     return response_data
 
 
-def _write_batch_input_file(request: CreateBatchRequest, model: str) -> str:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
-        for req_item in request.requests:
-            line = {
-                "custom_id": req_item.custom_id,
-                "method": "POST",
-                "url": "/v1/chat/completions",
-                "body": {**req_item.body, "model": model},
-            }
-            tmp.write(json.dumps(line) + "\n")
-        return tmp.name
-
-
 @router.post("", response_model=None)
 async def create_batch(
     request: CreateBatchRequest,
@@ -131,7 +118,16 @@ async def create_batch(
             detail=f"Provider '{provider.value}' does not support batch operations",
         )
     provider_kwargs = get_provider_kwargs(config, provider)
-    tmp_path = _write_batch_input_file(request, model)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
+        for req_item in request.requests:
+            line = {
+                "custom_id": req_item.custom_id,
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {**req_item.body, "model": model},
+            }
+            tmp.write(json.dumps(line) + "\n")
+        tmp_path = tmp.name
 
     async def _log_create_error(error: str) -> None:
         await log_batch_usage(
