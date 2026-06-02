@@ -78,12 +78,6 @@ def _model_pricing_info(pricing: ModelPricing | None) -> ModelPricingInfo | None
     )
 
 
-def _created_epoch(value: datetime | None) -> int:
-    if value is None:
-        return 0
-    return int(calendar.timegm(value.utctimetuple()))
-
-
 def _iso_from_epoch(epoch_seconds: int | None) -> str | None:
     if epoch_seconds is None or epoch_seconds <= 0:
         return None
@@ -129,7 +123,7 @@ def _catalog_record_from_pricing(pricing: ModelPricing) -> CatalogRecord:
         model_key=pricing.model_key,
         provider=provider,
         provider_model=provider_model,
-        created=_created_epoch(pricing.created_at),
+        created=int(calendar.timegm(pricing.created_at.utctimetuple())) if pricing.created_at is not None else 0,
         created_at=optional_datetime_isoformat(pricing.created_at),
         updated_at=optional_datetime_isoformat(pricing.updated_at),
         pricing=_model_pricing_info(pricing),

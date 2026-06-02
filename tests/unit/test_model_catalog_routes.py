@@ -55,6 +55,7 @@ def test_catalog_record_from_pricing_formats_datetimes() -> None:
 
     record = _catalog_record_from_pricing(pricing)
 
+    assert record.created == int(created_at.timestamp())
     assert record.created_at == created_at.isoformat()
     assert record.updated_at == updated_at.isoformat()
 
