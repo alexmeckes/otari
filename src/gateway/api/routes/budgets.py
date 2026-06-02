@@ -16,9 +16,7 @@ from gateway.api.routes._database import commit_or_database_error, get_budget_or
 from gateway.models.entities import Budget, BudgetAlert
 from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhook
 from gateway.services.budget_periods import budget_period_window
-from gateway.services.budget_service import (
-    TAG_BUDGET_SCOPE,
-)
+from gateway.services.budget_tags import TAG_BUDGET_SCOPE
 
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
 

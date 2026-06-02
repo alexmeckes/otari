@@ -7,11 +7,11 @@ from pydantic import BaseModel, Field, field_validator
 
 from gateway.api.routes._response_datetime import datetime_isoformat, optional_datetime_isoformat
 from gateway.models.entities import Budget, BudgetAlert
-from gateway.services.budget_service import (
-    TAG_BUDGET_SCOPE,
+from gateway.services.budget_alerts import (
     normalize_alert_thresholds,
     normalize_alert_webhook_url,
 )
+from gateway.services.budget_tags import TAG_BUDGET_SCOPE
 from gateway.services.routing_config_values import lower_string_or_none
 
 

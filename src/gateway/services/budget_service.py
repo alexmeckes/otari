@@ -21,11 +21,8 @@ from gateway.services import budget_tags as _budget_tags
 from gateway.services.budget_reset_logs import new_budget_reset_log
 from gateway.services.pricing_service import find_model_pricing, split_pricing_model_ref
 
-TAG_BUDGET_SCOPE = _budget_tags.TAG_BUDGET_SCOPE
 BUDGET_ALERT_SCOPE_PROJECT = _budget_alerts.BUDGET_ALERT_SCOPE_PROJECT
 BUDGET_ALERT_SCOPE_USER = _budget_alerts.BUDGET_ALERT_SCOPE_USER
-normalize_alert_thresholds = _budget_alerts.normalize_alert_thresholds
-normalize_alert_webhook_url = _budget_alerts.normalize_alert_webhook_url
 record_budget_alerts = _budget_alerts.record_budget_alerts
 record_project_budget_alerts_after_spend = _budget_alerts.record_project_budget_alerts_after_spend
 record_user_budget_alerts_after_spend = _budget_alerts.record_user_budget_alerts_after_spend
