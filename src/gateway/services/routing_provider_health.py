@@ -38,10 +38,6 @@ class ProviderHealth:
         }
 
 
-def _provider_health_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
-    return dict_or_empty(config.get("health"))
-
-
 def _provider_health_enabled(health_config: Mapping[str, Any]) -> bool:
     return bool_config(health_config.get("enabled"), False)
 
@@ -106,7 +102,7 @@ async def attach_provider_health(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    health_config = _provider_health_config(config)
+    health_config = dict_or_empty(config.get("health"))
     if not _provider_health_enabled(health_config):
         return list(candidates)
 
@@ -153,7 +149,7 @@ def apply_provider_health_gate(
     *,
     config: Mapping[str, Any],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    health_config = _provider_health_config(config)
+    health_config = dict_or_empty(config.get("health"))
     if not _provider_health_enabled(health_config) or _provider_health_mode(health_config) != "skip_unhealthy":
         return list(candidates), []
 
@@ -180,7 +176,7 @@ def apply_provider_health_order(
     *,
     config: Mapping[str, Any],
 ) -> list[Any]:
-    health_config = _provider_health_config(config)
+    health_config = dict_or_empty(config.get("health"))
     if not _provider_health_enabled(health_config) or _provider_health_mode(health_config) != "downrank":
         return list(candidates)
     return sorted(

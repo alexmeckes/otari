@@ -2,7 +2,6 @@ from types import SimpleNamespace
 
 from gateway.services.routing_provider_health import (
     ProviderHealth,
-    _provider_health_config,
     _provider_health_enabled,
     _provider_health_from_counts,
     _provider_health_mode,
@@ -26,14 +25,11 @@ def _health(status: str, provider: str = "openai") -> ProviderHealth:
 
 
 def test_provider_health_helpers_read_shared_health_config_values() -> None:
-    config = {
-        "health": {
-            "enabled": True,
-            "mode": "skip_unhealthy",
-            "degraded_failure_rate": 2.0,
-        }
+    health_config = {
+        "enabled": True,
+        "mode": "skip_unhealthy",
+        "degraded_failure_rate": 2.0,
     }
-    health_config = _provider_health_config(config)
 
     assert _provider_health_enabled(health_config) is True
     assert _provider_health_mode(health_config) == "skip_unhealthy"
@@ -41,7 +37,7 @@ def test_provider_health_helpers_read_shared_health_config_values() -> None:
 
 
 def test_provider_health_mode_defaults_for_unknown_mode() -> None:
-    assert _provider_health_mode(_provider_health_config({"health": {"mode": "watch"}})) == "downrank"
+    assert _provider_health_mode({"mode": "watch"}) == "downrank"
 
 
 def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds() -> None:
@@ -187,6 +183,10 @@ def test_apply_provider_health_gate_requires_enabled_skip_mode() -> None:
         [unhealthy_candidate],
         config={"health": {"mode": "skip_unhealthy"}},
     ) == ([unhealthy_candidate], [])
+    assert apply_provider_health_gate(
+        [unhealthy_candidate],
+        config={"health": "skip_unhealthy"},
+    ) == ([unhealthy_candidate], [])
 
 
 def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
@@ -220,4 +220,8 @@ def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
     assert apply_provider_health_order(
         candidates,
         config={"health": {"mode": "downrank"}},
+    ) == candidates
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": "downrank"},
     ) == candidates
