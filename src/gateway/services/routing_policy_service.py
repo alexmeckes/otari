@@ -38,7 +38,6 @@ ROUTING_STRATEGIES = {
 }
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
-_TIER_ORDER = _routing_candidate_specs.TIER_ORDER
 classify_request_tier = _routing_request_analysis.classify_request_tier
 estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
 estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
@@ -222,8 +221,11 @@ def _by_weighted_score(candidate: RoutingCandidate) -> tuple[bool, float, int]:
 
 
 def _tier_fallback_order(target_tier: str) -> list[str]:
-    target_index = _TIER_ORDER.index(target_tier)
-    return [*_TIER_ORDER[target_index:], *reversed(_TIER_ORDER[:target_index])]
+    target_index = _routing_candidate_specs.TIER_ORDER.index(target_tier)
+    return [
+        *_routing_candidate_specs.TIER_ORDER[target_index:],
+        *reversed(_routing_candidate_specs.TIER_ORDER[:target_index]),
+    ]
 
 
 def _order_candidates(
