@@ -187,10 +187,11 @@ def apply_constraints(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
+        candidate_regions = _candidate_regions(candidate)
         reason = _provider_model_failure(candidate, constraint_sets)
         if reason is None:
             reason = _region_failure(
-                _candidate_regions(candidate),
+                candidate_regions,
                 constraint_sets,
                 requested_region,
             )
@@ -205,7 +206,7 @@ def apply_constraints(
                 "provider": candidate.provider,
                 "reason": reason,
                 "estimated_cost": candidate.estimated_cost,
-                "regions": sorted(_candidate_regions(candidate)),
+                "regions": sorted(candidate_regions),
             }
         )
     return allowed, rejected
