@@ -3,6 +3,8 @@ from gateway.services.routing_policy_service import (
     RoutingCandidate,
     _no_candidates_detail,
     _order_candidates,
+)
+from gateway.services.routing_request_analysis import (
     classify_request_tier,
     estimate_output_tokens,
     estimate_prompt_tokens,

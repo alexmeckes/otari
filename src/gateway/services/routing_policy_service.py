@@ -38,11 +38,6 @@ ROUTING_STRATEGIES = {
 }
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
-classify_request_tier = _routing_request_analysis.classify_request_tier
-estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
-estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
-
-
 def normalize_routing_model_selector(model: Any) -> str:
     """Normalize default-routing sentinels while preserving direct model selectors."""
     if model is None:
@@ -408,9 +403,13 @@ async def resolve_routing_plan(
         guardrails["redactions"] = redactions
 
     effective_request_body, context = apply_context_policy(config, redacted_request_body)
-    prompt_tokens = estimate_prompt_tokens(effective_request_body)
-    output_tokens = estimate_output_tokens(effective_request_body)
-    target_tier = classify_request_tier(effective_request_body, prompt_tokens=prompt_tokens, config=config)
+    prompt_tokens = _routing_request_analysis.estimate_prompt_tokens(effective_request_body)
+    output_tokens = _routing_request_analysis.estimate_output_tokens(effective_request_body)
+    target_tier = _routing_request_analysis.classify_request_tier(
+        effective_request_body,
+        prompt_tokens=prompt_tokens,
+        config=config,
+    )
     try:
         candidates = await _build_candidates(
             db,
