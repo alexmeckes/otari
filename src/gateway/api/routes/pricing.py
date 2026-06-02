@@ -18,26 +18,6 @@ from gateway.services.pricing_service import (
 router = APIRouter(prefix="/v1/pricing", tags=["pricing"])
 
 
-async def _pricing_rows(
-    db: AsyncSession,
-    model_keys: list[str],
-    *criteria: Any,
-    limit: int | None = None,
-) -> list[ModelPricing]:
-    for key in model_keys:
-        stmt = (
-            select(ModelPricing)
-            .where(ModelPricing.model_key == key, *criteria)
-            .order_by(ModelPricing.effective_at.desc())
-        )
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        pricings = list((await db.execute(stmt)).scalars().all())
-        if pricings:
-            return pricings
-    return []
-
-
 async def _pricing_rows_or_404(
     db: AsyncSession,
     model_key: str,
@@ -45,13 +25,22 @@ async def _pricing_rows_or_404(
     effective_at: datetime | None = None,
     limit: int | None = None,
 ) -> list[ModelPricing]:
-    rows = await _pricing_rows(db, candidate_pricing_model_refs(model_key), *criteria, limit=limit)
-    if not rows:
-        detail = f"Pricing for model '{model_key}' not found"
-        if effective_at is not None:
-            detail = f"Pricing for model '{model_key}' with effective_at {effective_at.isoformat()} not found"
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    return rows
+    for key in candidate_pricing_model_refs(model_key):
+        stmt = (
+            select(ModelPricing)
+            .where(ModelPricing.model_key == key, *criteria)
+            .order_by(ModelPricing.effective_at.desc())
+        )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = list((await db.execute(stmt)).scalars().all())
+        if rows:
+            return rows
+
+    detail = f"Pricing for model '{model_key}' not found"
+    if effective_at is not None:
+        detail = f"Pricing for model '{model_key}' with effective_at {effective_at.isoformat()} not found"
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
