@@ -96,16 +96,6 @@ class RouteTraceSummaryResponse(BaseModel):
     by_strategy: list[RouteTraceSummaryBucket]
 
 
-def _trace_latency_ms(trace: RouteTrace) -> float | None:
-    for attempt in trace.attempt_list():
-        if not isinstance(attempt, dict) or attempt.get("status") != "success":
-            continue
-        duration = attempt_duration_ms(attempt)
-        if duration is not None:
-            return duration
-    return None
-
-
 def _new_bucket(key: str) -> dict[str, Any]:
     return new_status_bucket(key, estimated_cost=0.0, latency_total_ms=0.0, latency_count=0)
 
@@ -148,7 +138,14 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
     total_bucket = _new_bucket("__total__")
 
     for trace in traces:
-        latency_ms = _trace_latency_ms(trace)
+        latency_ms = None
+        for attempt in trace.attempt_list():
+            if not isinstance(attempt, dict) or attempt.get("status") != "success":
+                continue
+            duration = attempt_duration_ms(attempt)
+            if duration is not None:
+                latency_ms = duration
+                break
         _add_trace_to_bucket(total_bucket, trace, latency_ms)
 
         for buckets, key in zip(
