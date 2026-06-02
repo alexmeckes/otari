@@ -284,7 +284,16 @@ async def report_platform_usage(
     if usage_request is None:
         return
 
-    payload = _platform_usage_payload(correlation_id, outcome, usage, error_class=error_class)
+    payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
+    if outcome == "success":
+        token_usage = usage or CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+        payload["usage"] = {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens,
+        }
+    elif error_class is not None:
+        payload["error_class"] = error_class
 
     delay_seconds = 0.25
     for attempt in range(1, usage_request.max_retries + 1):
@@ -321,23 +330,3 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
         timeout_seconds=platform_timeout_seconds(config, "usage_timeout_ms"),
         max_retries=platform_int_setting(config, "usage_max_retries", 3),
     )
-
-
-def _platform_usage_payload(
-    correlation_id: str,
-    outcome: str,
-    usage: CompletionUsage | None,
-    *,
-    error_class: str | None = None,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
-    if outcome == "success":
-        token_usage = usage or CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
-        payload["usage"] = {
-            "prompt_tokens": token_usage.prompt_tokens,
-            "completion_tokens": token_usage.completion_tokens,
-            "total_tokens": token_usage.total_tokens,
-        }
-    elif error_class is not None:
-        payload["error_class"] = error_class
-    return payload

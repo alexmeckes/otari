@@ -6,20 +6,53 @@ from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
 from gateway.services import platform_gateway
 from gateway.services.platform_gateway import (
     _platform_gateway_headers,
-    _platform_usage_payload,
     _platform_usage_report_request,
     report_platform_usage,
 )
 
 
-def test_platform_usage_payload_includes_success_usage() -> None:
-    payload = _platform_usage_payload(
+async def _reported_usage_body(
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    usage: CompletionUsage | None,
+    *,
+    error_class: str | None = None,
+) -> dict[str, object]:
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post_platform(
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, object],
+        timeout_seconds: float,
+    ) -> httpx.Response:
+        bodies.append(body)
+        return httpx.Response(204)
+
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post_platform)
+    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
+
+    await report_platform_usage(
+        GatewayConfig(platform={"base_url": "https://platform.local/api/v1"}),
         "corr-1",
+        outcome,
+        usage,
+        error_class=error_class,
+    )
+
+    assert len(bodies) == 1
+    return bodies[0]
+
+
+@pytest.mark.asyncio
+async def test_report_platform_usage_includes_success_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = await _reported_usage_body(
+        monkeypatch,
         "success",
         CompletionUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
     )
 
-    assert payload == {
+    assert body == {
         "correlation_id": "corr-1",
         "status": "success",
         "usage": {
@@ -30,10 +63,13 @@ def test_platform_usage_payload_includes_success_usage() -> None:
     }
 
 
-def test_platform_usage_payload_defaults_missing_success_usage_to_zero_tokens() -> None:
-    payload = _platform_usage_payload("corr-1", "success", None)
+@pytest.mark.asyncio
+async def test_report_platform_usage_defaults_missing_success_usage_to_zero_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = await _reported_usage_body(monkeypatch, "success", None)
 
-    assert payload == {
+    assert body == {
         "correlation_id": "corr-1",
         "status": "success",
         "usage": {
@@ -44,10 +80,11 @@ def test_platform_usage_payload_defaults_missing_success_usage_to_zero_tokens() 
     }
 
 
-def test_platform_usage_payload_includes_error_class_for_errors() -> None:
-    payload = _platform_usage_payload("corr-1", "error", None, error_class="http_503")
+@pytest.mark.asyncio
+async def test_report_platform_usage_includes_error_class_for_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = await _reported_usage_body(monkeypatch, "error", None, error_class="http_503")
 
-    assert payload == {
+    assert body == {
         "correlation_id": "corr-1",
         "status": "error",
         "error_class": "http_503",
