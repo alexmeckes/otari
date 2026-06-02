@@ -70,15 +70,6 @@ def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
     )
 
 
-def _candidate_regions(candidate: Any) -> set[str]:
-    metadata = dict_or_empty(candidate.metadata)
-    regions = _region_set(metadata.get("regions"))
-    region = string_or_none(metadata.get("region"))
-    if region is not None:
-        regions.add(region.lower())
-    return regions
-
-
 def _region_presence_failure(
     candidate_regions: set[str],
     *,
@@ -187,7 +178,11 @@ def apply_constraints(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        candidate_regions = _candidate_regions(candidate)
+        metadata = dict_or_empty(candidate.metadata)
+        candidate_regions = _region_set(metadata.get("regions"))
+        region = string_or_none(metadata.get("region"))
+        if region is not None:
+            candidate_regions.add(region.lower())
         reason = _provider_model_failure(candidate, constraint_sets)
         if reason is None:
             reason = _region_failure(

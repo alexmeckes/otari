@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 
 from gateway.services.routing_constraints import (
-    _candidate_regions,
     _constraint_sets,
     _cost_constraint,
     _estimated_cost_failure,
@@ -50,10 +49,30 @@ def test_constraint_sets_normalize_provider_model_and_region_values() -> None:
     assert constraint_sets.blocked_regions == {"us"}
 
 
-def test_candidate_regions_normalize_region_metadata() -> None:
-    candidate = SimpleNamespace(metadata={"regions": [" EU ", "us"], "region": " Apac "})
+def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={"regions": [" EU ", "us"], "region": " Apac "},
+    )
 
-    assert _candidate_regions(candidate) == {"eu", "us", "apac"}
+    allowed, rejected = apply_constraints(
+        [candidate],
+        config={"constraints": {"allowed_regions": ["latam"]}},
+        tags={},
+    )
+
+    assert allowed == []
+    assert rejected == [
+        {
+            "model": "openai:gpt-4o",
+            "provider": "openai",
+            "reason": "region_not_allowed",
+            "estimated_cost": None,
+            "regions": ["apac", "eu", "us"],
+        }
+    ]
 
 
 def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
