@@ -6,7 +6,6 @@ from gateway.services.routing_constraints import (
     _constraint_sets,
     _cost_constraint,
     _estimated_cost_failure,
-    _membership_failure,
     _normalize_model_key_for_constraint,
     _provider_model_failure,
     _region_failure,
@@ -72,39 +71,6 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
             "regions": ["apac", "eu", "us"],
         }
     ]
-
-
-def test_membership_failure_reuses_allowed_and_blocked_reasons() -> None:
-    assert (
-        _membership_failure(
-            "anthropic",
-            allowed_values={"openai"},
-            blocked_values=set(),
-            not_allowed_reason="provider_not_allowed",
-            blocked_reason="provider_blocked",
-        )
-        == "provider_not_allowed"
-    )
-    assert (
-        _membership_failure(
-            "openai:gpt-4o-mini",
-            allowed_values=set(),
-            blocked_values={"openai:gpt-4o-mini"},
-            not_allowed_reason="model_not_allowed",
-            blocked_reason="model_blocked",
-        )
-        == "model_blocked"
-    )
-    assert (
-        _membership_failure(
-            "openai",
-            allowed_values={"openai"},
-            blocked_values=set(),
-            not_allowed_reason="provider_not_allowed",
-            blocked_reason="provider_blocked",
-        )
-        is None
-    )
 
 
 def test_provider_model_failure_preserves_provider_before_model_order() -> None:

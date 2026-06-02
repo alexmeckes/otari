@@ -70,39 +70,16 @@ def _cost_constraint(constraints: Mapping[str, Any]) -> _CostConstraint:
     )
 
 
-def _membership_failure(
-    value: str,
-    *,
-    allowed_values: set[str],
-    blocked_values: set[str],
-    not_allowed_reason: str,
-    blocked_reason: str,
-) -> str | None:
-    if allowed_values and value not in allowed_values:
-        return not_allowed_reason
-    if value in blocked_values:
-        return blocked_reason
-    return None
-
-
 def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) -> str | None:
-    failure = _membership_failure(
-        candidate.provider,
-        allowed_values=constraint_sets.allowed_providers,
-        blocked_values=constraint_sets.blocked_providers,
-        not_allowed_reason="provider_not_allowed",
-        blocked_reason="provider_blocked",
-    )
-    if failure is not None:
-        return failure
-
-    return _membership_failure(
-        candidate.model,
-        allowed_values=constraint_sets.allowed_models,
-        blocked_values=constraint_sets.blocked_models,
-        not_allowed_reason="model_not_allowed",
-        blocked_reason="model_blocked",
-    )
+    if constraint_sets.allowed_providers and candidate.provider not in constraint_sets.allowed_providers:
+        return "provider_not_allowed"
+    if candidate.provider in constraint_sets.blocked_providers:
+        return "provider_blocked"
+    if constraint_sets.allowed_models and candidate.model not in constraint_sets.allowed_models:
+        return "model_not_allowed"
+    if candidate.model in constraint_sets.blocked_models:
+        return "model_blocked"
+    return None
 
 
 def _estimated_cost_failure(candidate: Any, cost_constraint: _CostConstraint) -> str | None:
