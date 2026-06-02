@@ -226,9 +226,11 @@ class WebSearchBackend:
         kept: list[dict[str, Any]] = []
         for r in results:
             host = (urlparse(str(r.get("url"))).hostname or "").lower()
-            if _host_matches_any_domain(host, self._blocked_domains):
+            if any(host == domain or host.endswith(f".{domain}") for domain in self._blocked_domains):
                 continue
-            if self._allowed_domains and not _host_matches_any_domain(host, self._allowed_domains):
+            if self._allowed_domains and not any(
+                host == domain or host.endswith(f".{domain}") for domain in self._allowed_domains
+            ):
                 continue
             kept.append(r)
         return kept
@@ -359,10 +361,6 @@ def _coerced_text(value: Any, *, default: str = "") -> str:
     if not value:
         return default
     return coerced_string_or_none(value) or ""
-
-
-def _host_matches_any_domain(host: str, domains: tuple[str, ...]) -> bool:
-    return any(host == domain or host.endswith(f".{domain}") for domain in domains)
 
 
 def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
