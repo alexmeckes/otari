@@ -1,8 +1,7 @@
 from typing import Annotated, Any
 
 from any_llm import AnyLLM, aresponses
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from fastapi import Response as FastAPIResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +36,7 @@ router = APIRouter(prefix="/v1", tags=["responses"])
 async def _run_default_routing_response(
     *,
     raw_request: Request,
-    response: FastAPIResponse,
+    response: Response,
     background_tasks: BackgroundTasks,
     request_body: ResponsesRequest,
     db: AsyncSession,
@@ -70,7 +69,7 @@ async def _run_default_routing_response(
 async def _run_provider_native_response(
     *,
     raw_request: Request,
-    response: FastAPIResponse,
+    response: Response,
     request_body: ResponsesRequest,
     auth_result: tuple[APIKey | None, bool],
     db: AsyncSession,
@@ -141,7 +140,7 @@ async def _run_provider_native_response(
 @router.post("/responses", response_model=None)
 async def create_response(
     raw_request: Request,
-    response: FastAPIResponse,
+    response: Response,
     background_tasks: BackgroundTasks,
     request_body: ResponsesRequest,
     auth_result: Annotated[tuple[APIKey | None, bool], Depends(verify_api_key_or_master_key)],

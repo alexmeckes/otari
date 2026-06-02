@@ -6,8 +6,7 @@ import uuid
 from typing import Any
 
 from any_llm.types.completion import ChatCompletion, CompletionUsage
-from fastapi import HTTPException, status
-from fastapi import Response as FastAPIResponse
+from fastapi import HTTPException, Response, status
 from openai.types.responses import ResponseUsage
 from openresponses_types.types import Usage as OpenResponsesUsage
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -136,7 +135,7 @@ def metadata_from_model_selector(model_selector: str) -> dict[str, str] | None:
     return served_metadata(provider, model)
 
 
-def set_served_headers(response: FastAPIResponse, metadata: dict[str, str]) -> None:
+def set_served_headers(response: Response, metadata: dict[str, str]) -> None:
     """Expose the model/vendor that served a Responses request."""
     response.headers["X-Response-Model"] = metadata["model"]
     response.headers["X-Response-Vendor"] = metadata["vendor"]

@@ -2,7 +2,7 @@ from typing import Any
 
 from any_llm.types.completion import CompletionUsage
 from any_llm.types.responses import ResponseStreamEvent
-from fastapi import Response as FastAPIResponse
+from fastapi import Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -118,7 +118,7 @@ def native_response_streaming_response(
 def native_response_payload(
     *,
     result: Any,
-    response: FastAPIResponse,
+    response: Response,
     context: OpenAIProviderRequestContext,
 ) -> dict[str, Any]:
     context.apply_rate_limit_headers(response)
