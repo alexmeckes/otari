@@ -15,14 +15,13 @@ from gateway.models.entities import Budget, BudgetAlert, Project, User
 from gateway.repositories.budgets_repository import get_budget_by_id
 from gateway.repositories.projects_repository import get_project_by_id
 from gateway.repositories.users_repository import get_active_user
-from gateway.services import budget_periods as _budget_periods
-from gateway.services import budget_tags as _budget_tags
+from gateway.services import budget_periods, budget_tags
 from gateway.services.budget_reset_logs import new_budget_reset_log
 from gateway.services.pricing_service import find_model_pricing, split_pricing_model_ref
 
 
 def start_budget_period(subject: User | Project, budget: Budget, start: datetime | None = None) -> None:
-    subject.budget_started_at, subject.next_budget_reset_at = _budget_periods.budget_period_window(
+    subject.budget_started_at, subject.next_budget_reset_at = budget_periods.budget_period_window(
         budget.budget_duration_sec,
         start,
     )
@@ -56,7 +55,7 @@ async def reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: d
 
 
 async def _cas_reset_user_budget(db: AsyncSession, user: User, budget: Budget, now: datetime) -> User:
-    _, next_reset_at = _budget_periods.budget_period_window(budget.budget_duration_sec, now)
+    _, next_reset_at = budget_periods.budget_period_window(budget.budget_duration_sec, now)
 
     result = await db.execute(
         update(User)
@@ -125,7 +124,7 @@ async def reset_project_budget(db: AsyncSession, project: Project, budget: Budge
 
 
 async def _cas_reset_project_budget(db: AsyncSession, project: Project, budget: Budget, now: datetime) -> Project:
-    _, next_reset_at = _budget_periods.budget_period_window(budget.budget_duration_sec, now)
+    _, next_reset_at = budget_periods.budget_period_window(budget.budget_duration_sec, now)
 
     result = await db.execute(
         update(Project)
@@ -172,7 +171,7 @@ async def validate_tag_budgets(
     *,
     strategy: str = "for_update",
 ) -> list[Budget]:
-    return await _budget_tags.validate_tag_budgets(
+    return await budget_tags.validate_tag_budgets(
         db,
         tags,
         model,
@@ -188,7 +187,7 @@ async def increment_matching_tag_budget_spend(
     cost: float | None,
     metadata: dict[str, Any] | None = None,
 ) -> list[BudgetAlert]:
-    return await _budget_tags.increment_matching_tag_budget_spend(
+    return await budget_tags.increment_matching_tag_budget_spend(
         db,
         tags=tags,
         cost=cost,
@@ -217,7 +216,7 @@ async def validate_user_budget(
         HTTPException: If user is blocked, doesn't exist, or exceeded budget
 
     """
-    normalized_strategy = _budget_tags.normalize_budget_strategy(strategy)
+    normalized_strategy = budget_tags.normalize_budget_strategy(strategy)
 
     lock_for_update = normalized_strategy == "for_update"
     user = await get_active_user(db, user_id, for_update=lock_for_update)
@@ -242,7 +241,7 @@ async def validate_user_budget(
         return user
 
     now = datetime.now(UTC)
-    if _budget_periods.budget_reset_due(user.next_budget_reset_at, now):
+    if budget_periods.budget_reset_due(user.next_budget_reset_at, now):
         if normalized_strategy == "cas":
             user = await _cas_reset_user_budget(db, user, budget, now)
         else:
@@ -269,7 +268,7 @@ async def validate_project_budget(
 ) -> Project:
     """Validate project exists, is active, is not blocked, and has available budget."""
 
-    normalized_strategy = _budget_tags.normalize_budget_strategy(strategy)
+    normalized_strategy = budget_tags.normalize_budget_strategy(strategy)
 
     project = await get_project_by_id(db, project_id, for_update=normalized_strategy == "for_update")
 
@@ -299,7 +298,7 @@ async def validate_project_budget(
         return project
 
     now = datetime.now(UTC)
-    if _budget_periods.budget_reset_due(project.next_budget_reset_at, now):
+    if budget_periods.budget_reset_due(project.next_budget_reset_at, now):
         if normalized_strategy == "cas":
             project = await _cas_reset_project_budget(db, project, budget, now)
         else:
