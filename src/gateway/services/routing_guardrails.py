@@ -162,15 +162,6 @@ def guardrail_action(config: Mapping[str, Any]) -> str:
     return "block"
 
 
-def _request_guardrail_text(request_body: Mapping[str, Any]) -> str:
-    parts = [
-        jsonable_text(request_body.get("messages")),
-        jsonable_text(request_body.get("input")),
-        jsonable_text(request_body.get("instructions")),
-    ]
-    return "\n".join(part for part in parts if part)
-
-
 def _case_insensitive_text_violations(
     kind: str,
     values: Iterable[str],
@@ -192,7 +183,15 @@ async def evaluate_guardrails(
     preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
     if preset_config:
         guardrails = _combine_guardrail_config(preset_config, guardrails)
-    request_text = _request_guardrail_text(request_body)
+    request_text = "\n".join(
+        part
+        for part in (
+            jsonable_text(request_body.get("messages")),
+            jsonable_text(request_body.get("input")),
+            jsonable_text(request_body.get("instructions")),
+        )
+        if part
+    )
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []

@@ -82,6 +82,34 @@ async def test_evaluate_guardrails_matches_blocked_terms_and_prompt_phrases_case
 
 
 @pytest.mark.asyncio
+async def test_evaluate_guardrails_checks_messages_input_and_instructions_text() -> None:
+    result = await evaluate_guardrails(
+        {
+            "guardrails": {
+                "enabled": True,
+                "blocked_terms": [
+                    "message marker",
+                    "input marker",
+                    "instruction marker",
+                ],
+            }
+        },
+        {
+            "messages": [{"role": "user", "content": "Message marker appears here."}],
+            "input": "Input marker appears here.",
+            "instructions": "Instruction marker appears here.",
+        },
+    )
+
+    assert result is not None
+    assert result["violations"] == [
+        {"type": "blocked_term", "rule": "message marker"},
+        {"type": "blocked_term", "rule": "input marker"},
+        {"type": "blocked_term", "rule": "instruction marker"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_evaluate_guardrails_matches_blocked_patterns_and_pii() -> None:
     result = await evaluate_guardrails(
         {
