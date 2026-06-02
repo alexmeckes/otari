@@ -1,12 +1,14 @@
+import httpx
 import pytest
 from any_llm.types.completion import CompletionUsage
 
 from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
+from gateway.services import platform_gateway
 from gateway.services.platform_gateway import (
     _platform_gateway_headers,
     _platform_usage_payload,
     _platform_usage_report_request,
-    _should_retry_usage_report_status,
+    report_platform_usage,
 )
 
 
@@ -103,20 +105,59 @@ def test_platform_usage_report_request_returns_none_without_base_url() -> None:
     assert _platform_usage_report_request(GatewayConfig(platform={})) is None
 
 
-def test_platform_usage_retry_status_accepts_no_content_without_retry() -> None:
-    assert _should_retry_usage_report_status(204) is False
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "expected_attempts"),
+    [
+        (204, 1),
+        (401, 1),
+        (404, 1),
+        (409, 1),
+        (422, 1),
+        (400, 1),
+        (429, 1),
+        (500, 3),
+        (503, 3),
+    ],
+)
+async def test_report_platform_usage_retries_only_server_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    expected_attempts: int,
+) -> None:
+    calls: list[dict[str, object]] = []
+    sleeps: list[float] = []
 
+    async def fake_post_platform(
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, object],
+        timeout_seconds: float,
+    ) -> httpx.Response:
+        calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "body": body,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        return httpx.Response(status_code)
 
-def test_platform_usage_retry_status_does_not_retry_non_retryable_statuses() -> None:
-    for status_code in (401, 404, 409, 422):
-        assert _should_retry_usage_report_status(status_code) is False
+    async def fake_sleep(delay_seconds: float) -> None:
+        sleeps.append(delay_seconds)
 
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post_platform)
+    monkeypatch.setattr(platform_gateway.asyncio, "sleep", fake_sleep)
+    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
 
-def test_platform_usage_retry_status_retries_server_errors() -> None:
-    for status_code in (500, 503):
-        assert _should_retry_usage_report_status(status_code) is True
+    await report_platform_usage(
+        GatewayConfig(platform={"base_url": "https://platform.local/api/v1", "usage_max_retries": 3}),
+        "corr-1",
+        "success",
+        CompletionUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+    )
 
-
-def test_platform_usage_retry_status_does_not_retry_other_non_server_errors() -> None:
-    for status_code in (400, 429):
-        assert _should_retry_usage_report_status(status_code) is False
+    assert len(calls) == expected_attempts
+    expected_sleeps = [0.25, 0.5] if expected_attempts == 3 else []
+    assert sleeps == expected_sleeps

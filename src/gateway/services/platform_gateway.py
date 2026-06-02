@@ -296,7 +296,10 @@ async def report_platform_usage(
                 body=payload,
                 timeout_seconds=usage_request.timeout_seconds,
             )
-            should_retry = _should_retry_usage_report_status(response.status_code)
+            if response.status_code == 204 or response.status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
+                should_retry = False
+            else:
+                should_retry = response.status_code >= 500
         except (httpx.TimeoutException, httpx.NetworkError):
             should_retry = True
 
@@ -318,14 +321,6 @@ def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageRepor
         timeout_seconds=platform_timeout_seconds(config, "usage_timeout_ms"),
         max_retries=platform_int_setting(config, "usage_max_retries", 3),
     )
-
-
-def _should_retry_usage_report_status(status_code: int) -> bool:
-    if status_code == 204:
-        return False
-    if status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
-        return False
-    return status_code >= 500
 
 
 def _platform_usage_payload(
