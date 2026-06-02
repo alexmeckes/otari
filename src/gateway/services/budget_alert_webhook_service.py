@@ -41,22 +41,6 @@ def _trim_error(value: str) -> str:
     return value[:_MAX_ERROR_CHARS]
 
 
-def _next_retry_at(
-    now: datetime,
-    *,
-    delivery_attempts: int,
-    backoff_seconds: float,
-    max_backoff_seconds: float,
-) -> datetime:
-    if backoff_seconds <= 0:
-        return now
-    multiplier = 2 ** max(delivery_attempts - 1, 0)
-    delay_seconds = backoff_seconds * multiplier
-    if max_backoff_seconds > 0:
-        delay_seconds = min(delay_seconds, max_backoff_seconds)
-    return now + timedelta(seconds=delay_seconds)
-
-
 async def _post_budget_alert_webhook(
     *,
     webhook_url: str,
@@ -212,12 +196,14 @@ async def dispatch_budget_alert_webhook(
             else:
                 alert.delivery_status = "failed"
                 alert.dead_lettered_at = None
-                alert.next_delivery_attempt_at = _next_retry_at(
-                    now,
-                    delivery_attempts=alert.delivery_attempts,
-                    backoff_seconds=backoff_seconds,
-                    max_backoff_seconds=max_backoff_seconds,
-                )
+                if backoff_seconds <= 0:
+                    alert.next_delivery_attempt_at = now
+                else:
+                    multiplier = 2 ** max(alert.delivery_attempts - 1, 0)
+                    delay_seconds = backoff_seconds * multiplier
+                    if max_backoff_seconds > 0:
+                        delay_seconds = min(delay_seconds, max_backoff_seconds)
+                    alert.next_delivery_attempt_at = now + timedelta(seconds=delay_seconds)
             logger.warning(
                 "Budget alert webhook delivery failed for alert %s: %s",
                 alert_id,
