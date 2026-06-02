@@ -41,7 +41,6 @@ ACTIVE_ROUTING_POLICY_STATUS = "active"
 classify_request_tier = _routing_request_analysis.classify_request_tier
 estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
 estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
-apply_guardrail_redactions = _routing_guardrails.apply_guardrail_redactions
 
 
 def normalize_routing_model_selector(model: Any) -> str:
@@ -397,7 +396,7 @@ async def resolve_routing_plan(
     if not specs:
         raise RoutingPolicyError(422, f"Routing policy '{policy.policy_id}' has no candidates")
 
-    redacted_request_body, redactions = apply_guardrail_redactions(config, request_body)
+    redacted_request_body, redactions = _routing_guardrails.apply_guardrail_redactions(config, request_body)
     if redactions is not None:
         if guardrails is None:
             guardrails = {
