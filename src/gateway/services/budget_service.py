@@ -31,9 +31,6 @@ record_project_budget_alerts_after_spend = _budget_alerts.record_project_budget_
 record_user_budget_alerts_after_spend = _budget_alerts.record_user_budget_alerts_after_spend
 budget_matches_tags = _budget_tags.budget_matches_tags
 reset_tag_budget = _budget_tags.reset_tag_budget
-_tag_scope_id = _budget_tags.tag_scope_id
-_matching_tag_budgets = _budget_tags.matching_tag_budgets
-_cas_reset_tag_budget = _budget_tags.cas_reset_tag_budget
 calculate_next_reset = _budget_periods.calculate_next_reset
 
 
