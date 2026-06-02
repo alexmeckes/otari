@@ -76,6 +76,7 @@ def _candidate(
     model: str,
     *,
     position: int,
+    tier: str | None = None,
     estimated_cost: float | None = None,
     average_latency_ms: float | None = None,
     routing_score: float | None = None,
@@ -85,7 +86,7 @@ def _candidate(
         provider="openai",
         provider_model=model,
         position=position,
-        tier=None,
+        tier=tier,
         estimated_cost=estimated_cost,
         input_price_per_million=None,
         output_price_per_million=None,
@@ -133,6 +134,28 @@ def test_order_candidates_sorts_weighted_scores_descending_with_unknown_last() -
     )
 
     assert [candidate.model for candidate in candidates] == ["higher", "lower", "unknown"]
+
+
+def test_order_candidates_uses_target_tier_then_fallback_tiers_and_cost() -> None:
+    candidates = _order_candidates(
+        [
+            _candidate("simple", position=1, tier="simple", estimated_cost=0.01),
+            _candidate("medium", position=2, tier="medium", estimated_cost=0.02),
+            _candidate("complex-expensive", position=3, tier="complex", estimated_cost=0.03),
+            _candidate("complex-cheap", position=4, tier="complex", estimated_cost=0.01),
+            _candidate("reasoning", position=5, tier="reasoning", estimated_cost=0.05),
+        ],
+        strategy="intelligent",
+        target_tier="complex",
+    )
+
+    assert [candidate.model for candidate in candidates] == [
+        "complex-cheap",
+        "complex-expensive",
+        "reasoning",
+        "medium",
+        "simple",
+    ]
 
 
 def test_no_candidates_detail_includes_sorted_unique_reasons() -> None:

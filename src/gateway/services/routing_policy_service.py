@@ -195,14 +195,6 @@ async def _build_candidates(
     return candidates
 
 
-def _tier_fallback_order(target_tier: str) -> list[str]:
-    target_index = routing_candidate_specs.TIER_ORDER.index(target_tier)
-    return [
-        *routing_candidate_specs.TIER_ORDER[target_index:],
-        *reversed(routing_candidate_specs.TIER_ORDER[:target_index]),
-    ]
-
-
 def _order_candidates(
     candidates: Sequence[RoutingCandidate],
     *,
@@ -233,7 +225,11 @@ def _order_candidates(
 
     ordered: list[RoutingCandidate] = []
     consumed: set[str] = set()
-    for tier in _tier_fallback_order(target_tier):
+    target_index = routing_candidate_specs.TIER_ORDER.index(target_tier)
+    for tier in (
+        *routing_candidate_specs.TIER_ORDER[target_index:],
+        *reversed(routing_candidate_specs.TIER_ORDER[:target_index]),
+    ):
         tier_candidates = [candidate for candidate in candidates if candidate.tier == tier]
         for candidate in sorted(tier_candidates, key=cost_key):
             ordered.append(candidate)
