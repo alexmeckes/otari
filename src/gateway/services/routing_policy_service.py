@@ -14,6 +14,7 @@ from gateway.models.entities import Project, RouteTrace, RoutingPolicy
 from gateway.repositories.projects_repository import get_project_by_id
 from gateway.services import routing_candidate_specs as _routing_candidate_specs
 from gateway.services import routing_constraints as _routing_constraints
+from gateway.services import routing_context_policy as _routing_context_policy
 from gateway.services import routing_guardrail_external as _routing_guardrail_external
 from gateway.services import routing_guardrails as _routing_guardrails
 from gateway.services import routing_latency_stats as _routing_latency_stats
@@ -23,9 +24,7 @@ from gateway.services import routing_request_analysis as _routing_request_analys
 from gateway.services import routing_weighted_scoring as _routing_weighted_scoring
 from gateway.services.pricing_service import find_model_pricing
 from gateway.services.routing_config_values import bool_config, string_or_none
-from gateway.services.routing_context_policy import apply_context_policy as apply_context_policy
 from gateway.services.routing_guardrail_redactions import apply_guardrail_redactions
-from gateway.services.routing_provider_health import ProviderHealth as ProviderHealth
 
 DEFAULT_ROUTING_MODEL = "default_routing"
 DEFAULT_ROUTE_TRACE_ENDPOINT = "/v1/chat/completions"
@@ -86,7 +85,7 @@ class RoutingCandidate:
     latency_sample_count: int
     routing_score: float | None
     score_components: dict[str, float] | None
-    provider_health: ProviderHealth | None
+    provider_health: _routing_provider_health.ProviderHealth | None
     metadata: dict[str, Any]
 
     def to_trace_dict(self) -> dict[str, Any]:
@@ -404,7 +403,7 @@ async def resolve_routing_plan(
             }
         guardrails["redactions"] = redactions
 
-    effective_request_body, context = apply_context_policy(config, redacted_request_body)
+    effective_request_body, context = _routing_context_policy.apply_context_policy(config, redacted_request_body)
     prompt_tokens = _routing_request_analysis.estimate_prompt_tokens(effective_request_body)
     output_tokens = _routing_request_analysis.estimate_output_tokens(effective_request_body)
     target_tier = _routing_request_analysis.classify_request_tier(
