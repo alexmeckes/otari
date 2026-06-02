@@ -159,15 +159,6 @@ def _guardrail_preset_expansion(
     return preset_config, metadata
 
 
-def _effective_guardrails_config(
-    guardrails: Mapping[str, Any],
-) -> tuple[Mapping[str, Any], dict[str, list[str]] | None]:
-    preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
-    if not preset_config:
-        return guardrails, preset_metadata
-    return _combine_guardrail_config(preset_config, guardrails), preset_metadata
-
-
 def guardrail_action(config: Mapping[str, Any]) -> str:
     action = string_or_none(guardrails_config(config).get("action"))
     if action is not None and action.lower() in _GUARDRAIL_ACTIONS:
@@ -202,7 +193,9 @@ async def evaluate_guardrails(
     if not bool_config(guardrails.get("enabled"), bool(guardrails)):
         return None
 
-    guardrails, preset_metadata = _effective_guardrails_config(guardrails)
+    preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
+    if preset_config:
+        guardrails = _combine_guardrail_config(preset_config, guardrails)
     request_text = _request_guardrail_text(request_body)
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
