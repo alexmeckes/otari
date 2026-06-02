@@ -21,28 +21,15 @@ _GATEWAY_INTERNAL_FIELDS = (
 )
 
 
-def _tool_type_matches(
-    type_value: Any,
-    *,
-    exact: tuple[str, ...],
-    prefixes: tuple[str, ...] = (),
-) -> bool:
-    if not isinstance(type_value, str):
-        return False
-    return type_value in exact or any(type_value.startswith(prefix) for prefix in prefixes)
-
-
 def _is_web_search_tool_type(type_value: Any) -> bool:
     """Recognise the tool-array shapes that map to the web_search backend."""
-    return _tool_type_matches(type_value, exact=("web_search",), prefixes=("web_search_",))
+    return isinstance(type_value, str) and (type_value == "web_search" or type_value.startswith("web_search_"))
 
 
 def _is_code_execution_tool_type(type_value: Any) -> bool:
     """Recognise the tool-array shapes that map to the code execution backend."""
-    return _tool_type_matches(
-        type_value,
-        exact=("code_execution", "code_interpreter"),
-        prefixes=("code_execution_",),
+    return isinstance(type_value, str) and (
+        type_value in ("code_execution", "code_interpreter") or type_value.startswith("code_execution_")
     )
 
 
