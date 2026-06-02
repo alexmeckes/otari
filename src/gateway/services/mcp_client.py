@@ -131,28 +131,25 @@ class MCPClientPool:
         result = await self._servers[owner].session.call_tool(name, arguments)
         parts: list[str] = []
         for block in result.content:
-            parts.append(_render_content_block(block))
+            text = getattr(block, "text", None)
+            if isinstance(text, str):
+                parts.append(text)
+                continue
+
+            btype = getattr(block, "type", None) or type(block).__name__.lower()
+            if btype in ("image", "image_content", "imagecontent"):
+                mime = getattr(block, "mimeType", None) or getattr(block, "mime_type", None) or "image"
+                data = getattr(block, "data", None)
+                size = len(data) if isinstance(data, (str, bytes)) else "?"
+                parts.append(f"[image type={mime} bytes_b64={size}]")
+                continue
+            if btype in ("resource", "embedded_resource", "embeddedresource"):
+                resource = getattr(block, "resource", None)
+                uri = getattr(resource, "uri", None) if resource else None
+                parts.append(f"[resource uri={uri or '?'}]")
+                continue
+            parts.append(f"[content type={btype}]")
         flattened = "\n".join(p for p in parts if p)
         if result.isError:
             return f"[tool error] {flattened}"
         return flattened
-
-
-def _render_content_block(block: Any) -> str:
-    """Render an MCP content block as a single string for inclusion in a tool message."""
-    text = getattr(block, "text", None)
-    if isinstance(text, str):
-        return text
-    btype = getattr(block, "type", None) or type(block).__name__.lower()
-    # ImageContent has `data` (base64) and `mimeType`; just summarize.
-    if btype in ("image", "image_content", "imagecontent"):
-        mime = getattr(block, "mimeType", None) or getattr(block, "mime_type", None) or "image"
-        data = getattr(block, "data", None)
-        size = len(data) if isinstance(data, (str, bytes)) else "?"
-        return f"[image type={mime} bytes_b64={size}]"
-    # EmbeddedResource has a `resource` with `uri` and either `text` or `blob`.
-    if btype in ("resource", "embedded_resource", "embeddedresource"):
-        resource = getattr(block, "resource", None)
-        uri = getattr(resource, "uri", None) if resource else None
-        return f"[resource uri={uri or '?'}]"
-    return f"[content type={btype}]"
