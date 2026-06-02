@@ -28,10 +28,6 @@ def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[
     return [classifier for classifier in classifiers if isinstance(classifier, dict)]
 
 
-def _external_classifier_name(classifier: Mapping[str, Any], index: int) -> str:
-    return string_or_none(classifier.get("name")) or f"classifier_{index}"
-
-
 def _external_classifier_headers(classifier: Mapping[str, Any]) -> dict[str, str] | None:
     headers = classifier.get("headers")
     if not isinstance(headers, dict):
@@ -123,7 +119,7 @@ async def evaluate_external_classifiers(
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
     for index, classifier in enumerate(_external_classifier_configs(guardrails), start=1):
-        name = _external_classifier_name(classifier, index)
+        name = string_or_none(classifier.get("name")) or f"classifier_{index}"
         url = string_or_none(classifier.get("url"))
         if url is None:
             classifier_results.append({"name": name, "status": "skipped", "reason": "missing_url"})
