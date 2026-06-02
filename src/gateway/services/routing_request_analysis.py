@@ -94,10 +94,6 @@ def estimate_output_tokens(request_body: Mapping[str, Any]) -> int:
     return _DEFAULT_OUTPUT_TOKENS
 
 
-def _tier_threshold(thresholds: Mapping[str, Any], key: str, default: int) -> int:
-    return int_config(thresholds.get(key), default)
-
-
 def classify_request_tier(
     request_body: Mapping[str, Any],
     *,
@@ -106,9 +102,9 @@ def classify_request_tier(
 ) -> str:
     """Classify a request into a ClawSwitch-style complexity tier."""
     threshold_map = dict_or_empty(config.get("tier_thresholds"))
-    medium_threshold = _tier_threshold(threshold_map, "medium", 800)
-    complex_threshold = _tier_threshold(threshold_map, "complex", 3000)
-    reasoning_threshold = _tier_threshold(threshold_map, "reasoning", 9000)
+    medium_threshold = int_config(threshold_map.get("medium"), 800)
+    complex_threshold = int_config(threshold_map.get("complex"), 3000)
+    reasoning_threshold = int_config(threshold_map.get("reasoning"), 9000)
 
     request_text = jsonable_text(request_body.get("messages")).lower()
     if prompt_tokens >= reasoning_threshold or any(hint in request_text for hint in _REASONING_HINTS):
