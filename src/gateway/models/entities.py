@@ -26,12 +26,6 @@ def _dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
     return value
 
 
-def _list_or_empty(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, list):
-        return value
-    return []
-
-
 def _isoformat_or_none(value: datetime | None) -> str | None:
     if value:
         return value.isoformat()
@@ -459,10 +453,14 @@ class RouteTrace(Base):
         return _dict_or_empty(self.context)
 
     def candidate_list(self) -> list[dict[str, Any]]:
-        return _list_or_empty(self.candidates)
+        if isinstance(self.candidates, list):
+            return self.candidates
+        return []
 
     def attempt_list(self) -> list[dict[str, Any]]:
-        return _list_or_empty(self.attempts)
+        if isinstance(self.attempts, list):
+            return self.attempts
+        return []
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
