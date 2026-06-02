@@ -112,6 +112,27 @@ def test_default_strategy_provider_validation_preserves_error_messages() -> None
         )
 
 
+@pytest.mark.parametrize(
+    ("providers", "message"),
+    [
+        (None, "default_strategy.providers must be a non-empty list"),
+        ([], "default_strategy.providers must be a non-empty list"),
+        ("openai", "default_strategy.providers must be a non-empty list"),
+        (["openai:gpt-4o"], "default_strategy.providers entries must be objects"),
+    ],
+)
+def test_default_strategy_provider_list_validation_preserves_error_messages(
+    providers: object,
+    message: str,
+) -> None:
+    default_strategy: dict[str, object] = {"type": "fallback"}
+    if providers is not None:
+        default_strategy["providers"] = providers
+
+    with pytest.raises(routing_policy_shape.RoutingPolicyShapeError, match=message):
+        routing_policy_shape.config_from_default_strategy(default_strategy)
+
+
 def test_default_strategy_from_internal_trims_candidate_models_and_skips_blanks() -> None:
     default_strategy = routing_policy_shape.default_strategy_from_internal(
         "priority",

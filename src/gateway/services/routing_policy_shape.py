@@ -83,18 +83,6 @@ def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[s
     return candidate
 
 
-def _default_strategy_providers(default_strategy: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    providers = default_strategy.get("providers")
-    if not isinstance(providers, list) or not providers:
-        raise RoutingPolicyShapeError("default_strategy.providers must be a non-empty list")
-    provider_items: list[Mapping[str, Any]] = []
-    for item in providers:
-        if not isinstance(item, dict):
-            raise RoutingPolicyShapeError("default_strategy.providers entries must be objects")
-        provider_items.append(item)
-    return provider_items
-
-
 def config_from_default_strategy(
     default_strategy: Mapping[str, Any],
     *,
@@ -111,7 +99,15 @@ def config_from_default_strategy(
             f"Unsupported default_strategy.type '{strategy_type_raw}'. Supported types: {supported}"
         )
 
-    provider_items = _default_strategy_providers(default_strategy)
+    providers = default_strategy.get("providers")
+    if not isinstance(providers, list) or not providers:
+        raise RoutingPolicyShapeError("default_strategy.providers must be a non-empty list")
+    provider_items: list[Mapping[str, Any]] = []
+    for item in providers:
+        if not isinstance(item, dict):
+            raise RoutingPolicyShapeError("default_strategy.providers entries must be objects")
+        provider_items.append(item)
+
     config = dict(base_config or {})
     for key in _DEFAULT_STRATEGY_CONFIG_KEYS:
         if key in default_strategy:
