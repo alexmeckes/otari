@@ -25,7 +25,6 @@ __all__ = ["BatchRequestItem", "CreateBatchRequest", "router"]
 router = APIRouter(prefix="/v1/batches", tags=["batches"])
 
 T = TypeVar("T")
-ErrorLogger = Callable[[str], Awaitable[None]]
 
 
 async def log_batch_usage(
@@ -67,7 +66,7 @@ async def _run_batch_operation(
     provider: str,
     operation: Callable[..., Awaitable[T]],
     call_kwargs: dict[str, Any],
-    on_error: ErrorLogger | None = None,
+    on_error: Callable[[str], Awaitable[None]] | None = None,
 ) -> T:
     try:
         return await operation(**call_kwargs)
