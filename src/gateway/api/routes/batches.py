@@ -129,13 +129,6 @@ def _write_batch_input_file(request: CreateBatchRequest, model: str) -> str:
         return tmp.name
 
 
-def _remove_batch_input_file(path: str) -> None:
-    try:
-        os.unlink(path)
-    except OSError:
-        logger.warning("Failed to remove temp file %s", path)
-
-
 @router.post("", response_model=None)
 async def create_batch(
     request: CreateBatchRequest,
@@ -180,7 +173,10 @@ async def create_batch(
             on_error=_log_create_error,
         )
     finally:
-        _remove_batch_input_file(tmp_path)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            logger.warning("Failed to remove temp file %s", tmp_path)
 
     await log_batch_usage(
         log_writer=log_writer,
