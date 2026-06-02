@@ -12,7 +12,6 @@ from gateway.services.routing_constraints import (
     _provider_model_failure,
     _region_failure,
     _region_presence_failure,
-    _request_region,
     apply_constraints,
 )
 
@@ -55,15 +54,6 @@ def test_candidate_regions_normalize_region_metadata() -> None:
     candidate = SimpleNamespace(metadata={"regions": [" EU ", "us"], "region": " Apac "})
 
     assert _candidate_regions(candidate) == {"eu", "us", "apac"}
-
-
-def test_request_region_uses_trimmed_region_tag_and_value() -> None:
-    assert _request_region({"region_tag": " request_region "}, {"request_region": " EU "}) == "eu"
-
-
-def test_request_region_ignores_blank_region_tag_and_value() -> None:
-    assert _request_region({"region_tag": " "}, {"region": "eu"}) is None
-    assert _request_region({"region_tag": "region"}, {"region": " "}) is None
 
 
 def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
@@ -257,6 +247,24 @@ def test_apply_constraints_ignores_request_region_unless_match_is_required() -> 
     assert rejected == []
 
 
+def test_apply_constraints_ignores_blank_request_region_inputs() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={"region": "us"},
+    )
+
+    for constraints, tags in (
+        ({"require_region_match": "true", "region_tag": " "}, {"region": "EU"}),
+        ({"require_region_match": "true", "region_tag": "request_region"}, {"request_region": " "}),
+    ):
+        allowed, rejected = apply_constraints([candidate], config={"constraints": constraints}, tags=tags)
+
+        assert allowed == [candidate]
+        assert rejected == []
+
+
 def test_apply_constraints_uses_configured_constraint_values() -> None:
     allowed, rejected = apply_constraints(
         [
@@ -295,7 +303,7 @@ def test_apply_constraints_uses_configured_constraint_values() -> None:
             "constraints": {
                 "allowed_providers": ["openai"],
                 "blocked_models": ["openai:gpt-4o-mini"],
-                "region_tag": "request_region",
+                "region_tag": " request_region ",
                 "require_region_match": "true",
                 "max_estimated_cost": 0.01,
                 "allow_unknown_cost": "true",

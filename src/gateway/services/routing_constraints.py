@@ -79,14 +79,6 @@ def _candidate_regions(candidate: Any) -> set[str]:
     return regions
 
 
-def _request_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
-    region_tag = string_or_none(constraints.get("region_tag", "region"))
-    if region_tag is None:
-        return None
-    region = string_or_none(tags.get(region_tag))
-    return region.lower() if region is not None else None
-
-
 def _region_presence_failure(
     candidate_regions: set[str],
     *,
@@ -185,11 +177,12 @@ def apply_constraints(
         return list(candidates), []
 
     constraint_sets = _constraint_sets(constraints)
-    requested_region = (
-        _request_region(constraints, tags)
-        if bool_config(constraints.get("require_region_match"), False, coerce_strings=True)
-        else None
-    )
+    requested_region = None
+    if bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
+        region_tag = string_or_none(constraints.get("region_tag", "region"))
+        if region_tag is not None:
+            region = string_or_none(tags.get(region_tag))
+            requested_region = region.lower() if region is not None else None
     cost_constraint = _cost_constraint(constraints)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
