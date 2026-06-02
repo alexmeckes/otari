@@ -37,10 +37,6 @@ class WebhookDeliveryResult:
         return self.error is None and self.status_code is not None and 200 <= self.status_code < 300
 
 
-def _trim_error(value: str) -> str:
-    return value[:_MAX_ERROR_CHARS]
-
-
 async def _post_budget_alert_webhook(
     *,
     webhook_url: str,
@@ -51,13 +47,13 @@ async def _post_budget_alert_webhook(
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(webhook_url, json=payload)
     except httpx.HTTPError as exc:
-        return WebhookDeliveryResult(status_code=None, error=_trim_error(str(exc)))
+        return WebhookDeliveryResult(status_code=None, error=str(exc)[:_MAX_ERROR_CHARS])
 
     if 200 <= response.status_code < 300:
         return WebhookDeliveryResult(status_code=response.status_code)
     return WebhookDeliveryResult(
         status_code=response.status_code,
-        error=_trim_error(f"HTTP {response.status_code}: {response.text}"),
+        error=f"HTTP {response.status_code}: {response.text}"[:_MAX_ERROR_CHARS],
     )
 
 
