@@ -9,7 +9,6 @@ from typing import Annotated, Any, TypeVar
 from any_llm import AnyLLM, LLMProvider
 from any_llm.api import acancel_batch, acreate_batch, alist_batches, aretrieve_batch, aretrieve_batch_results
 from any_llm.exceptions import BatchNotCompleteError, UnsupportedProviderError
-from any_llm.types.batch import Batch
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from gateway.api.deps import get_config, get_log_writer, verify_api_key_or_master_key
@@ -84,12 +83,6 @@ async def _run_batch_operation(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="LLM provider error",
         ) from e
-
-
-def _batch_response(batch: Batch, provider: str) -> dict[str, Any]:
-    response_data = batch.model_dump()
-    response_data["provider"] = provider
-    return response_data
 
 
 @router.post("", response_model=None)
@@ -170,7 +163,7 @@ async def create_batch(
         user_id=user_id,
     )
 
-    return _batch_response(batch, provider.value)
+    return {**batch.model_dump(), "provider": provider.value}
 
 
 @router.get("/{batch_id}", response_model=None)
@@ -188,7 +181,7 @@ async def retrieve_batch(
         operation=aretrieve_batch,
         call_kwargs={"provider": provider_enum, "batch_id": batch_id, **provider_kwargs},
     )
-    return _batch_response(batch, provider)
+    return {**batch.model_dump(), "provider": provider}
 
 
 @router.post("/{batch_id}/cancel", response_model=None)
@@ -206,7 +199,7 @@ async def cancel_batch(
         operation=acancel_batch,
         call_kwargs={"provider": provider_enum, "batch_id": batch_id, **provider_kwargs},
     )
-    return _batch_response(batch, provider)
+    return {**batch.model_dump(), "provider": provider}
 
 
 @router.get("", response_model=None)
