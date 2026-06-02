@@ -3,7 +3,6 @@
 import asyncio
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any, NoReturn
 
 import httpx
@@ -62,14 +61,6 @@ class ResolvedRoute(BaseModel):
     request_id: str
     fallback_enabled: bool
     attempts: list[ResolvedAttempt]
-
-
-@dataclass(frozen=True)
-class _PlatformUsageReportRequest:
-    url: str
-    headers: dict[str, str]
-    timeout_seconds: float
-    max_retries: int
 
 
 def extract_platform_user_token(request: Request) -> str:
@@ -280,9 +271,13 @@ async def report_platform_usage(
     usage: CompletionUsage | None,
     error_class: str | None = None,
 ) -> None:
-    usage_request = _platform_usage_report_request(config)
-    if usage_request is None:
+    base_url = platform_base_url(config)
+    if not base_url:
         return
+    usage_url = platform_url(base_url, "/gateway/usage")
+    headers = _platform_gateway_headers(config)
+    timeout_seconds = platform_timeout_seconds(config, "usage_timeout_ms")
+    max_retries = platform_int_setting(config, "usage_max_retries", 3)
 
     payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
     if outcome == "success":
@@ -296,14 +291,14 @@ async def report_platform_usage(
         payload["error_class"] = error_class
 
     delay_seconds = 0.25
-    for attempt in range(1, usage_request.max_retries + 1):
+    for attempt in range(1, max_retries + 1):
         should_retry = False
         try:
             response = await _post_platform(
-                url=usage_request.url,
-                headers=usage_request.headers,
+                url=usage_url,
+                headers=headers,
                 body=payload,
-                timeout_seconds=usage_request.timeout_seconds,
+                timeout_seconds=timeout_seconds,
             )
             if response.status_code == 204 or response.status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
                 should_retry = False
@@ -312,21 +307,8 @@ async def report_platform_usage(
         except (httpx.TimeoutException, httpx.NetworkError):
             should_retry = True
 
-        if not should_retry or attempt == usage_request.max_retries:
+        if not should_retry or attempt == max_retries:
             return
 
         await asyncio.sleep(delay_seconds)
         delay_seconds *= 2
-
-
-def _platform_usage_report_request(config: GatewayConfig) -> _PlatformUsageReportRequest | None:
-    base_url = platform_base_url(config)
-    if not base_url:
-        return None
-
-    return _PlatformUsageReportRequest(
-        url=platform_url(base_url, "/gateway/usage"),
-        headers=_platform_gateway_headers(config),
-        timeout_seconds=platform_timeout_seconds(config, "usage_timeout_ms"),
-        max_retries=platform_int_setting(config, "usage_max_retries", 3),
-    )

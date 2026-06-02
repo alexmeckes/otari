@@ -6,7 +6,6 @@ from gateway.core.config import PLATFORM_TOKEN_ENV_VARS, GatewayConfig
 from gateway.services import platform_gateway
 from gateway.services.platform_gateway import (
     _platform_gateway_headers,
-    _platform_usage_report_request,
     report_platform_usage,
 )
 
@@ -42,6 +41,48 @@ async def _reported_usage_body(
 
     assert len(bodies) == 1
     return bodies[0]
+
+
+async def _reported_usage_calls(
+    monkeypatch: pytest.MonkeyPatch,
+    config: GatewayConfig,
+    *,
+    status_code: int = 204,
+) -> tuple[list[dict[str, object]], list[float]]:
+    calls: list[dict[str, object]] = []
+    sleeps: list[float] = []
+
+    async def fake_post_platform(
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, object],
+        timeout_seconds: float,
+    ) -> httpx.Response:
+        calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "body": body,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        return httpx.Response(status_code)
+
+    async def fake_sleep(delay_seconds: float) -> None:
+        sleeps.append(delay_seconds)
+
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post_platform)
+    monkeypatch.setattr(platform_gateway.asyncio, "sleep", fake_sleep)
+    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
+
+    await report_platform_usage(
+        config,
+        "corr-1",
+        "success",
+        CompletionUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+    )
+
+    return calls, sleeps
 
 
 @pytest.mark.asyncio
@@ -104,42 +145,48 @@ def test_platform_gateway_headers_default_missing_token_to_empty(monkeypatch: py
     assert _platform_gateway_headers(GatewayConfig()) == {"X-Gateway-Token": ""}
 
 
-def test_platform_usage_report_request_uses_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
-
-    usage_request = _platform_usage_report_request(
-        GatewayConfig(platform={"base_url": "https://platform.local/api/v1/"})
+@pytest.mark.asyncio
+async def test_report_platform_usage_uses_default_request_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, sleeps = await _reported_usage_calls(
+        monkeypatch,
+        GatewayConfig(platform={"base_url": "https://platform.local/api/v1/"}),
+        status_code=500,
     )
 
-    assert usage_request is not None
-    assert usage_request.url == "https://platform.local/api/v1/gateway/usage"
-    assert usage_request.headers == {"X-Gateway-Token": "gw-test-token"}
-    assert usage_request.timeout_seconds == 5
-    assert usage_request.max_retries == 3
+    assert len(calls) == 3
+    assert calls[0]["url"] == "https://platform.local/api/v1/gateway/usage"
+    assert calls[0]["headers"] == {"X-Gateway-Token": "gw-test-token"}
+    assert calls[0]["timeout_seconds"] == 5
+    assert sleeps == [0.25, 0.5]
 
 
-def test_platform_usage_report_request_uses_configured_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
-
-    usage_request = _platform_usage_report_request(
+@pytest.mark.asyncio
+async def test_report_platform_usage_uses_configured_request_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, sleeps = await _reported_usage_calls(
+        monkeypatch,
         GatewayConfig(
             platform={
                 "base_url": "https://platform.local/api/v1",
                 "usage_timeout_ms": 2500,
                 "usage_max_retries": 7,
             }
-        )
+        ),
+        status_code=500,
     )
 
-    assert usage_request is not None
-    assert usage_request.url == "https://platform.local/api/v1/gateway/usage"
-    assert usage_request.headers == {"X-Gateway-Token": "gw-test-token"}
-    assert usage_request.timeout_seconds == 2.5
-    assert usage_request.max_retries == 7
+    assert len(calls) == 7
+    assert calls[0]["url"] == "https://platform.local/api/v1/gateway/usage"
+    assert calls[0]["headers"] == {"X-Gateway-Token": "gw-test-token"}
+    assert calls[0]["timeout_seconds"] == 2.5
+    assert sleeps == [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
 
 
-def test_platform_usage_report_request_returns_none_without_base_url() -> None:
-    assert _platform_usage_report_request(GatewayConfig(platform={})) is None
+@pytest.mark.asyncio
+async def test_report_platform_usage_returns_without_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, sleeps = await _reported_usage_calls(monkeypatch, GatewayConfig(platform={}))
+
+    assert calls == []
+    assert sleeps == []
 
 
 @pytest.mark.asyncio
@@ -162,37 +209,10 @@ async def test_report_platform_usage_retries_only_server_statuses(
     status_code: int,
     expected_attempts: int,
 ) -> None:
-    calls: list[dict[str, object]] = []
-    sleeps: list[float] = []
-
-    async def fake_post_platform(
-        url: str,
-        headers: dict[str, str],
-        body: dict[str, object],
-        timeout_seconds: float,
-    ) -> httpx.Response:
-        calls.append(
-            {
-                "url": url,
-                "headers": headers,
-                "body": body,
-                "timeout_seconds": timeout_seconds,
-            }
-        )
-        return httpx.Response(status_code)
-
-    async def fake_sleep(delay_seconds: float) -> None:
-        sleeps.append(delay_seconds)
-
-    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post_platform)
-    monkeypatch.setattr(platform_gateway.asyncio, "sleep", fake_sleep)
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
-
-    await report_platform_usage(
+    calls, sleeps = await _reported_usage_calls(
+        monkeypatch,
         GatewayConfig(platform={"base_url": "https://platform.local/api/v1", "usage_max_retries": 3}),
-        "corr-1",
-        "success",
-        CompletionUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+        status_code=status_code,
     )
 
     assert len(calls) == expected_attempts
