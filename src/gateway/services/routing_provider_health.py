@@ -156,7 +156,8 @@ def apply_provider_health_gate(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        if candidate.provider_health is None or candidate.provider_health.status != "unhealthy":
+        provider_health = candidate.provider_health
+        if provider_health is None or provider_health.status != "unhealthy":
             allowed.append(candidate)
             continue
         rejected.append(
@@ -165,7 +166,7 @@ def apply_provider_health_gate(
                 "provider": candidate.provider,
                 "reason": "provider_unhealthy",
                 "estimated_cost": candidate.estimated_cost,
-                "provider_health": candidate.provider_health.to_dict(),
+                "provider_health": provider_health.to_dict(),
             }
         )
     return allowed, rejected
