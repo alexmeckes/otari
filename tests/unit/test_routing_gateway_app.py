@@ -2086,6 +2086,47 @@ def test_default_routing_respects_disabled_fallback(
     assert [attempt["status"] for attempt in trace["attempts"]] == ["error"]
 
 
+def test_default_routing_single_strategy_disables_fallback(
+    routing_client: tuple[TestClient, dict[str, str], dict[str, str]],
+) -> None:
+    client, master_header, api_key_header = routing_client
+    _create_policy(
+        client,
+        master_header,
+        strategy="single",
+        config={
+            "fallback_enabled": True,
+            "candidates": [
+                "openai:gpt-4o-mini",
+                "anthropic:claude-3-5-haiku-latest",
+            ],
+        },
+    )
+    captured_models: list[str] = []
+
+    async def mock_acompletion(**kwargs: Any) -> ChatCompletion:
+        model = str(kwargs["model"])
+        captured_models.append(model)
+        raise RuntimeError("provider failure")
+
+    with patch("gateway.api.routes.chat.acompletion", new=mock_acompletion):
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "default_routing", "messages": [{"role": "user", "content": "Say hello"}]},
+            headers=api_key_header,
+        )
+
+    assert response.status_code == 502
+    assert captured_models == ["openai:gpt-4o-mini"]
+
+    traces_response = client.get("/v1/route-traces", headers=master_header)
+    assert traces_response.status_code == 200
+    trace = traces_response.json()[0]
+    assert trace["status"] == "error"
+    assert trace["fallback_enabled"] is False
+    assert [attempt["status"] for attempt in trace["attempts"]] == ["error"]
+
+
 def test_default_routing_intelligent_strategy_uses_complexity_tiers(
     routing_client: tuple[TestClient, dict[str, str], dict[str, str]],
 ) -> None:

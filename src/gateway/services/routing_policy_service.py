@@ -240,12 +240,6 @@ def _order_candidates(
     return ordered
 
 
-def _fallback_enabled(config: Mapping[str, Any], *, strategy: str) -> bool:
-    if strategy == "single":
-        return False
-    return bool_config(config.get("fallback_enabled"), True)
-
-
 def _no_candidates_detail(
     policy_id: str,
     stage: str,
@@ -450,7 +444,7 @@ async def resolve_routing_plan(
         list[RoutingCandidate],
         routing_provider_health.apply_provider_health_order(ordered_candidates, config=config),
     )
-    fallback_enabled = _fallback_enabled(config, strategy=strategy)
+    fallback_enabled = False if strategy == "single" else bool_config(config.get("fallback_enabled"), True)
     if not fallback_enabled:
         ordered_candidates = ordered_candidates[:1]
     if not ordered_candidates:
