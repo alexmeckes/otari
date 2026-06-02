@@ -13,7 +13,6 @@ from gateway.services.routing_constraints import (
     _region_failure,
     _region_presence_failure,
     _request_region,
-    _required_request_region,
     apply_constraints,
 )
 
@@ -65,17 +64,6 @@ def test_request_region_uses_trimmed_region_tag_and_value() -> None:
 def test_request_region_ignores_blank_region_tag_and_value() -> None:
     assert _request_region({"region_tag": " "}, {"region": "eu"}) is None
     assert _request_region({"region_tag": "region"}, {"region": " "}) is None
-
-
-def test_required_request_region_only_returns_region_when_match_is_required() -> None:
-    assert _required_request_region({"region_tag": "request_region"}, {"request_region": "EU"}) is None
-    assert (
-        _required_request_region(
-            {"require_region_match": "true", "region_tag": "request_region"},
-            {"request_region": "EU"},
-        )
-        == "eu"
-    )
 
 
 def test_region_presence_failure_reuses_unknown_and_mismatch_reasons() -> None:
@@ -249,6 +237,24 @@ def test_apply_constraints_normalizes_legacy_slash_model_constraints() -> None:
             "regions": [],
         }
     ]
+
+
+def test_apply_constraints_ignores_request_region_unless_match_is_required() -> None:
+    candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={"region": "us"},
+    )
+
+    allowed, rejected = apply_constraints(
+        [candidate],
+        config={"constraints": {"region_tag": "request_region"}},
+        tags={"request_region": "EU"},
+    )
+
+    assert allowed == [candidate]
+    assert rejected == []
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:
