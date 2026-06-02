@@ -124,10 +124,6 @@ def _bucket_response(bucket: dict[str, Any]) -> RouteTraceSummaryBucket:
     )
 
 
-def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[RouteTraceSummaryBucket]:
-    return [_bucket_response(bucket) for bucket in buckets.values()]
-
-
 def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryResponse:
     model_buckets: dict[str, dict[str, Any]] = {}
     policy_buckets: dict[str, dict[str, Any]] = {}
@@ -177,10 +173,10 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
         error_count=total.error_count,
         estimated_cost=total.estimated_cost,
         average_latency_ms=total.average_latency_ms,
-        by_model=_bucket_responses(model_buckets),
-        by_policy=_bucket_responses(policy_buckets),
-        by_policy_source=_bucket_responses(policy_source_buckets),
-        by_endpoint=_bucket_responses(endpoint_buckets),
-        by_provider=_bucket_responses(provider_buckets),
-        by_strategy=_bucket_responses(strategy_buckets),
+        by_model=[_bucket_response(bucket) for bucket in model_buckets.values()],
+        by_policy=[_bucket_response(bucket) for bucket in policy_buckets.values()],
+        by_policy_source=[_bucket_response(bucket) for bucket in policy_source_buckets.values()],
+        by_endpoint=[_bucket_response(bucket) for bucket in endpoint_buckets.values()],
+        by_provider=[_bucket_response(bucket) for bucket in provider_buckets.values()],
+        by_strategy=[_bucket_response(bucket) for bucket in strategy_buckets.values()],
     )
