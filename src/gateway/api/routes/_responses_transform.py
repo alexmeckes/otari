@@ -8,7 +8,7 @@ from typing import Any
 from any_llm.types.completion import ChatCompletion, CompletionUsage
 from fastapi import HTTPException, Response, status
 from openai.types.responses import ResponseUsage
-from openresponses_types.types import Usage as OpenResponsesUsage
+from openresponses_types.types import Usage
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gateway.api.routes._chat_request import ChatCompletionRequest
@@ -39,7 +39,7 @@ class ResponsesRequest(BaseModel):
 
 
 def usage_to_completion_usage(
-    usage: ResponseUsage | OpenResponsesUsage | None,
+    usage: ResponseUsage | Usage | None,
 ) -> CompletionUsage | None:
     if usage is None:
         return None
