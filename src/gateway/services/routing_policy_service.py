@@ -275,21 +275,6 @@ def _no_candidates_detail(
     return detail
 
 
-async def _post_external_guardrail_classifier(
-    *,
-    url: str,
-    request_text: str,
-    timeout_seconds: float,
-    headers: dict[str, str] | None,
-) -> tuple[int | None, dict[str, Any] | None, str | None]:
-    return await _routing_guardrails.post_external_guardrail_classifier(
-        url=url,
-        request_text=request_text,
-        timeout_seconds=timeout_seconds,
-        headers=headers,
-    )
-
-
 async def _default_policy(db: AsyncSession) -> RoutingPolicy | None:
     result = await db.execute(
         select(RoutingPolicy)
@@ -399,7 +384,7 @@ async def resolve_routing_plan(
     guardrails = await _routing_guardrails.evaluate_guardrails(
         config,
         request_body,
-        post_classifier=_post_external_guardrail_classifier,
+        post_classifier=_routing_guardrails.post_external_guardrail_classifier,
     )
     if guardrails is not None and guardrails["status"] == "blocked":
         first_violation = guardrails["violations"][0] if guardrails["violations"] else {}
