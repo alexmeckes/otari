@@ -2,7 +2,7 @@
 
 import copy
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 from gateway.services import routing_guardrail_external
@@ -162,14 +162,6 @@ def guardrail_action(config: Mapping[str, Any]) -> str:
     return "block"
 
 
-def _case_insensitive_text_violations(
-    kind: str,
-    values: Iterable[str],
-    normalized_text: str,
-) -> list[dict[str, str]]:
-    return [guardrail_violation(kind, value) for value in values if value.lower() in normalized_text]
-
-
 async def evaluate_guardrails(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -197,11 +189,9 @@ async def evaluate_guardrails(
     classifier_results: list[dict[str, Any]] = []
 
     violations.extend(
-        _case_insensitive_text_violations(
-            "blocked_term",
-            string_list(guardrails.get("blocked_terms")),
-            normalized_text,
-        )
+        guardrail_violation("blocked_term", value)
+        for value in string_list(guardrails.get("blocked_terms"))
+        if value.lower() in normalized_text
     )
 
     for name, pattern in named_patterns(guardrails.get("blocked_patterns")):
@@ -220,11 +210,9 @@ async def evaluate_guardrails(
     if injection_enabled:
         phrases = string_list(guardrail_config_value(injection_config, "phrases"))
         violations.extend(
-            _case_insensitive_text_violations(
-                "prompt_injection",
-                [*phrases, *_PROMPT_INJECTION_PHRASES],
-                normalized_text,
-            )
+            guardrail_violation("prompt_injection", phrase)
+            for phrase in [*phrases, *_PROMPT_INJECTION_PHRASES]
+            if phrase.lower() in normalized_text
         )
 
     classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier
