@@ -39,7 +39,6 @@ ROUTING_STRATEGIES = {
 ACTIVE_ROUTING_POLICY_STATUS = "active"
 
 _TIER_ORDER = _routing_candidate_specs.TIER_ORDER
-_jsonable_text = _routing_request_analysis.jsonable_text
 classify_request_tier = _routing_request_analysis.classify_request_tier
 estimate_output_tokens = _routing_request_analysis.estimate_output_tokens
 estimate_prompt_tokens = _routing_request_analysis.estimate_prompt_tokens
