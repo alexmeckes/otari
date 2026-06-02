@@ -32,12 +32,6 @@ def _list_or_empty(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _float_list_or_empty(value: Any) -> list[float]:
-    if isinstance(value, list):
-        return value
-    return []
-
-
 def _isoformat_or_none(value: datetime | None) -> str | None:
     if value:
         return value.isoformat()
@@ -114,7 +108,9 @@ class Budget(Base):
         return _dict_or_empty(self.match_tags)
 
     def alert_threshold_list(self) -> list[float]:
-        return _float_list_or_empty(self.alert_thresholds)
+        if isinstance(self.alert_thresholds, list):
+            return self.alert_thresholds
+        return []
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
