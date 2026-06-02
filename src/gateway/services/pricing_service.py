@@ -81,20 +81,6 @@ def normalize_effective_at(value: datetime | None) -> datetime:
     return normalized.astimezone(UTC)
 
 
-async def _find_by_model_key(db: AsyncSession, model_key: str, as_of: datetime) -> ModelPricing | None:
-    stmt = (
-        select(ModelPricing)
-        .where(
-            ModelPricing.model_key == model_key,
-            ModelPricing.effective_at <= as_of,
-        )
-        .order_by(ModelPricing.effective_at.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
-
-
 async def find_model_pricing(
     db: AsyncSession,
     provider: str | None,
@@ -105,10 +91,21 @@ async def find_model_pricing(
     """Look up model pricing as of a timestamp, with legacy key fallback."""
 
     lookup_time = normalize_effective_at(as_of)
-    model_key = pricing_model_ref(provider, model)
-    pricing = await _find_by_model_key(db, model_key, lookup_time)
-    if pricing or not provider:
-        return pricing
+    model_keys = [pricing_model_ref(provider, model)]
+    if provider:
+        model_keys.append(legacy_pricing_model_ref(provider, model))
 
-    legacy_key = legacy_pricing_model_ref(provider, model)
-    return await _find_by_model_key(db, legacy_key, lookup_time)
+    for model_key in model_keys:
+        stmt = (
+            select(ModelPricing)
+            .where(
+                ModelPricing.model_key == model_key,
+                ModelPricing.effective_at <= lookup_time,
+            )
+            .order_by(ModelPricing.effective_at.desc())
+            .limit(1)
+        )
+        pricing = (await db.execute(stmt)).scalar_one_or_none()
+        if pricing is not None:
+            return pricing
+    return None
