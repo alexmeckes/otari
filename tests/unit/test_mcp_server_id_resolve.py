@@ -25,26 +25,36 @@ def _ok_response(servers: list[dict[str, Any]]) -> httpx.Response:
     return httpx.Response(200, json={"servers": servers})
 
 
-def test_mcp_server_config_from_payload_preserves_optional_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_resolve_preserves_optional_payload_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "true")
 
-    config = platform_gateway._mcp_server_config_from_payload(
-        {
-            "name": "calendar",
-            "url": "https://example.com/mcp",
-            "authorization_token": "ya29.x",
-            "purpose_hint": "scheduling",
-            "allowed_tools": ["list_events"],
-        }
-    )
+    async def fake_post(**kwargs: Any) -> httpx.Response:
+        return _ok_response(
+            [
+                {
+                    "name": "calendar",
+                    "url": "https://example.com/mcp",
+                    "authorization_token": "ya29.x",
+                    "purpose_hint": "scheduling",
+                    "allowed_tools": ["list_events"],
+                },
+            ]
+        )
 
-    assert config == McpServerConfig(
-        name="calendar",
-        url="https://example.com/mcp",
-        authorization_token="ya29.x",
-        purpose_hint="scheduling",
-        allowed_tools=["list_events"],
-    )
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
+
+    configs = await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+
+    assert configs == [
+        McpServerConfig(
+            name="calendar",
+            url="https://example.com/mcp",
+            authorization_token="ya29.x",
+            purpose_hint="scheduling",
+            allowed_tools=["list_events"],
+        )
+    ]
 
 
 @pytest.mark.asyncio

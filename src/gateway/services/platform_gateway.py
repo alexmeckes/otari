@@ -259,19 +259,18 @@ async def resolve_platform_mcp_servers(
 
     if response.status_code == 200:
         payload = response.json()
-        return [_mcp_server_config_from_payload(server) for server in payload.get("servers", [])]
+        return [
+            McpServerConfig(
+                name=server["name"],
+                url=server["url"],
+                authorization_token=server.get("authorization_token"),
+                purpose_hint=server.get("purpose_hint"),
+                allowed_tools=server.get("allowed_tools"),
+            )
+            for server in payload.get("servers", [])
+        ]
 
     _raise_platform_resolution_error(response, "MCP server resolution failed")
-
-
-def _mcp_server_config_from_payload(payload: Mapping[str, Any]) -> McpServerConfig:
-    return McpServerConfig(
-        name=payload["name"],
-        url=payload["url"],
-        authorization_token=payload.get("authorization_token"),
-        purpose_hint=payload.get("purpose_hint"),
-        allowed_tools=payload.get("allowed_tools"),
-    )
 
 
 async def report_platform_usage(
