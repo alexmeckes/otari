@@ -74,7 +74,6 @@ class RoutingPolicyError(Exception):
         self.detail = detail
 
 
-_CandidateSpec = _routing_candidate_specs.CandidateSpec
 split_model_selector = _routing_candidate_specs.split_model_selector
 
 
@@ -160,7 +159,7 @@ class _PolicyMatch:
 
 async def _build_candidates(
     db: AsyncSession,
-    specs: Sequence[_CandidateSpec],
+    specs: Sequence[_routing_candidate_specs.CandidateSpec],
     *,
     prompt_tokens: int,
     output_tokens: int,
