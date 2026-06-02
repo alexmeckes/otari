@@ -62,15 +62,6 @@ def _parse_provider(provider: str) -> LLMProvider:
         ) from e
 
 
-def _ensure_batch_supported(provider: LLMProvider) -> None:
-    provider_class = AnyLLM.get_provider_class(provider)
-    if not getattr(provider_class, "SUPPORTS_BATCH", False):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Provider '{provider.value}' does not support batch operations",
-        )
-
-
 def _batch_provider_context(config: GatewayConfig, provider: str) -> tuple[LLMProvider, dict[str, Any]]:
     provider_enum = _parse_provider(provider)
     return provider_enum, get_provider_kwargs(config, provider_enum)
@@ -138,7 +129,12 @@ async def create_batch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid request: {e}",
         ) from e
-    _ensure_batch_supported(provider)
+    provider_class = AnyLLM.get_provider_class(provider)
+    if not getattr(provider_class, "SUPPORTS_BATCH", False):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Provider '{provider.value}' does not support batch operations",
+        )
     provider_kwargs = get_provider_kwargs(config, provider)
     tmp_path = _write_batch_input_file(request, model)
 
