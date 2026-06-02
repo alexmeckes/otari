@@ -160,12 +160,15 @@ def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Map
     if group is not None:
         conditions, logic = group
         return _evaluate_condition_group(conditions, request_tags, logic=logic)
-    conditions = match_config.get("conditions")
     if "conditions" not in match_config:
         return False
     logic_value = match_config.get("logic", "and")
     logic = coerced_lower_string(logic_value)
-    return _evaluate_condition_group(conditions, request_tags, logic="or" if logic in {"or", "any"} else "and")
+    return _evaluate_condition_group(
+        match_config.get("conditions"),
+        request_tags,
+        logic="or" if logic in {"or", "any"} else "and",
+    )
 
 
 def matches_policy_match_config(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
