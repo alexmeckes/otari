@@ -16,7 +16,7 @@ from gateway.api.routes._chat_request import ChatCompletionRequest
 from gateway.api.routes._completion_usage import completion_usage_from_token_counts
 from gateway.services.pricing_service import legacy_pricing_model_ref
 from gateway.services.routing_policy_service import DEFAULT_ROUTING_MODEL, require_routing_model_selector
-from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
+from gateway.services.routing_policy_shape import split_model_selector
 
 
 class ResponsesRequest(BaseModel):
@@ -130,7 +130,7 @@ def served_metadata(provider: str, model: str) -> dict[str, str]:
 
 def metadata_from_model_selector(model_selector: str) -> dict[str, str] | None:
     """Build served metadata from a provider-qualified model selector."""
-    provider, model = _split_model_selector(model_selector)
+    provider, model = split_model_selector(model_selector)
     if provider is None:
         return None
     return served_metadata(provider, model)
@@ -192,7 +192,7 @@ def response_payload_with_served_metadata(
     provider_from_payload: str | None = None
     model_from_payload = requested_model
     if isinstance(model_value, str):
-        provider_from_payload, model_from_payload = _split_model_selector(model_value)
+        provider_from_payload, model_from_payload = split_model_selector(model_value)
 
     served_provider = provider_from_payload or provider
     payload["model"] = served_metadata(served_provider, model_from_payload)["model"]

@@ -21,7 +21,7 @@ from gateway.services.platform_config import (
 )
 from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import string_or_none
-from gateway.services.routing_policy_shape import split_model_selector as _split_model_selector
+from gateway.services.routing_policy_shape import split_model_selector
 
 _USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
 _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES = {401, 402, 403, 404, 429}
@@ -174,7 +174,7 @@ async def resolve_platform_credentials(
     user_token: str,
     model_selector: str,
 ) -> ResolvedRoute:
-    provider, model_name = _split_model_selector(model_selector)
+    provider, model_name = split_model_selector(model_selector)
     resolve_body: dict[str, Any] = {"model": model_name}
     if provider:
         resolve_body["provider"] = provider
