@@ -124,15 +124,6 @@ def test_resolved_attempt_provider_kwargs_omit_missing_api_base() -> None:
     assert attempt.provider_kwargs == {"api_key": "sk-test"}
 
 
-def test_platform_user_headers_include_gateway_and_user_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OTARI_AI_TOKEN", "gw-test-token")
-
-    assert platform_gateway._platform_user_headers(GatewayConfig(), "user-token") == {
-        "X-Gateway-Token": "gw-test-token",
-        "X-User-Token": "user-token",
-    }
-
-
 def test_parse_resolve_payload_maps_legacy_payload_to_single_attempt() -> None:
     route = platform_gateway.parse_resolve_payload(
         {

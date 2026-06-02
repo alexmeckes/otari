@@ -83,12 +83,6 @@ def _platform_gateway_headers(config: GatewayConfig) -> dict[str, str]:
     return {"X-Gateway-Token": config.platform_token or ""}
 
 
-def _platform_user_headers(config: GatewayConfig, user_token: str) -> dict[str, str]:
-    headers = _platform_gateway_headers(config)
-    headers["X-User-Token"] = user_token
-    return headers
-
-
 def _safe_detail_from_platform(response: httpx.Response, fallback: str) -> str:
     try:
         payload = response.json()
@@ -136,7 +130,8 @@ async def _post_platform_resolution(
             detail="Platform mode is misconfigured",
         )
     resolve_url = platform_url(base_url, path)
-    headers = _platform_user_headers(config, user_token)
+    headers = _platform_gateway_headers(config)
+    headers["X-User-Token"] = user_token
     try:
         return await _post_platform(
             url=resolve_url,
