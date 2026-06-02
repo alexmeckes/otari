@@ -64,23 +64,6 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _classifier_violations(name: str, payload: Mapping[str, Any], threshold: float | None) -> list[dict[str, str]]:
-    violations: list[dict[str, str]] = []
-    raw_violations = payload.get("violations")
-    if isinstance(raw_violations, list):
-        for item in raw_violations:
-            violations.append(guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
-
-    flagged = payload.get("blocked") is True or payload.get("flagged") is True
-    score = non_negative_float_or_none(payload.get("score"))
-    if threshold is not None and score is not None and score >= threshold:
-        flagged = True
-    if flagged and not violations:
-        label = _classifier_rule(payload.get("label"), fallback=name)
-        violations.append(guardrail_violation("external_classifier", label))
-    return violations
-
-
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -133,9 +116,22 @@ async def evaluate_external_classifiers(
                 violations.append(guardrail_violation("external_classifier_error", name))
             continue
         assert payload is not None
-        classifier_violations = _classifier_violations(name, payload, threshold)
-        violations.extend(classifier_violations)
+        classifier_violations: list[dict[str, str]] = []
+        raw_violations = payload.get("violations")
+        if isinstance(raw_violations, list):
+            for item in raw_violations:
+                classifier_violations.append(
+                    guardrail_violation("external_classifier", _classifier_rule(item, fallback=name))
+                )
+
         score = non_negative_float_or_none(payload.get("score"))
+        flagged = payload.get("blocked") is True or payload.get("flagged") is True
+        if threshold is not None and score is not None and score >= threshold:
+            flagged = True
+        if flagged and not classifier_violations:
+            violation_label = _classifier_rule(payload.get("label"), fallback=name)
+            classifier_violations.append(guardrail_violation("external_classifier", violation_label))
+        violations.extend(classifier_violations)
         label = payload.get("label") if isinstance(payload.get("label"), str) else None
         classifier_results.append(
             {
