@@ -1,7 +1,6 @@
 """Helpers for gateway-managed chat tools and request-field filtering."""
 
 import os
-from collections.abc import Callable
 from typing import Any
 
 from gateway.log_config import logger
@@ -19,18 +18,6 @@ _GATEWAY_INTERNAL_FIELDS = (
     "project_id",
     "tags",
 )
-
-
-def _is_web_search_tool_type(type_value: Any) -> bool:
-    """Recognise the tool-array shapes that map to the web_search backend."""
-    return isinstance(type_value, str) and (type_value == "web_search" or type_value.startswith("web_search_"))
-
-
-def _is_code_execution_tool_type(type_value: Any) -> bool:
-    """Recognise the tool-array shapes that map to the code execution backend."""
-    return isinstance(type_value, str) and (
-        type_value in ("code_execution", "code_interpreter") or type_value.startswith("code_execution_")
-    )
 
 
 def strip_gateway_fields(
@@ -61,15 +48,20 @@ def resolve_sandbox_purpose_hint(sandbox_tool_entry: dict[str, Any] | None) -> s
 
 def _extract_first_matching_tool(
     tools: list[dict[str, Any]] | None,
-    predicate: Callable[[Any], bool],
+    *,
+    exact_types: tuple[str, ...],
+    prefixes: tuple[str, ...] = (),
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-    """Pull the first tool entry whose ``type`` matches ``predicate``."""
+    """Pull the first tool entry whose ``type`` matches the configured shapes."""
     if not tools:
         return None, tools
     entry: dict[str, Any] | None = None
     remaining: list[dict[str, Any]] = []
     for tool in tools:
-        if entry is None and isinstance(tool, dict) and predicate(tool.get("type")):
+        type_value = tool.get("type") if isinstance(tool, dict) else None
+        if entry is None and isinstance(type_value, str) and (
+            type_value in exact_types or any(type_value.startswith(prefix) for prefix in prefixes)
+        ):
             entry = tool
         else:
             remaining.append(tool)
@@ -80,14 +72,22 @@ def extract_code_execution_tool(
     tools: list[dict[str, Any]] | None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
     """Pull the first code-execution-style entry out of ``tools``."""
-    return _extract_first_matching_tool(tools, _is_code_execution_tool_type)
+    return _extract_first_matching_tool(
+        tools,
+        exact_types=("code_execution", "code_interpreter"),
+        prefixes=("code_execution_",),
+    )
 
 
 def extract_web_search_tool(
     tools: list[dict[str, Any]] | None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
     """Pull the first web-search-style entry out of ``tools``."""
-    return _extract_first_matching_tool(tools, _is_web_search_tool_type)
+    return _extract_first_matching_tool(
+        tools,
+        exact_types=("web_search",),
+        prefixes=("web_search_",),
+    )
 
 
 def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> WebSearchBackend:
