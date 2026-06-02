@@ -9,20 +9,6 @@ from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
 
-def _redaction_rules(redactions: Mapping[str, Any]) -> list[tuple[str, str, re.Pattern[str]]]:
-    rules: list[tuple[str, str, re.Pattern[str]]] = []
-
-    for pii_type, pattern in pii_patterns_from_config(
-        redactions.get("pii"),
-        fallback_types=redactions.get("pii_types"),
-    ):
-        rules.append(("pii", pii_type, pattern))
-
-    for name, pattern in named_patterns(redactions.get("patterns")):
-        rules.append(("pattern", name, pattern))
-    return rules
-
-
 def _redact_content(
     value: Any,
     *,
@@ -58,7 +44,15 @@ def apply_guardrail_redactions(
     if not bool_config(redactions.get("enabled"), bool(redactions)):
         return body, None
 
-    rules = _redaction_rules(redactions)
+    rules: list[tuple[str, str, re.Pattern[str]]] = []
+    for pii_type, pattern in pii_patterns_from_config(
+        redactions.get("pii"),
+        fallback_types=redactions.get("pii_types"),
+    ):
+        rules.append(("pii", pii_type, pattern))
+    for name, pattern in named_patterns(redactions.get("patterns")):
+        rules.append(("pattern", name, pattern))
+
     replacement = redactions.get("replacement")
     if not isinstance(replacement, str):
         replacement = "[REDACTED]"
