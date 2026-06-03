@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 
 from gateway.services.routing_constraints import (
-    _constraint_sets,
     _normalize_model_key_for_constraint,
     apply_constraints,
 )
@@ -22,25 +21,66 @@ def test_normalize_model_key_for_constraint_preserves_invalid_selector() -> None
     assert _normalize_model_key_for_constraint("gpt-4o") == "gpt-4o"
 
 
-def test_constraint_sets_normalize_provider_model_and_region_values() -> None:
+def test_apply_constraints_normalizes_provider_model_and_region_constraint_values() -> None:
+    allowed_candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={"region": "eu"},
+    )
+
     with pytest.warns(DeprecationWarning, match="provider/model"):
-        constraint_sets = _constraint_sets(
-            {
-                "allowed_providers": [" openai "],
-                "blocked_providers": ["anthropic"],
-                "allowed_models": ["openai/gpt-4o"],
-                "blocked_models": ["openai:gpt-4o-mini"],
-                "allowed_regions": [" EU "],
-                "blocked_regions": ["us"],
-            }
+        allowed, rejected = apply_constraints(
+            [allowed_candidate],
+            config={
+                "constraints": {
+                    "allowed_providers": [" openai "],
+                    "allowed_models": ["openai/gpt-4o"],
+                    "allowed_regions": [" EU "],
+                }
+            },
+            tags={},
         )
 
-    assert constraint_sets.allowed_providers == {"openai"}
-    assert constraint_sets.blocked_providers == {"anthropic"}
-    assert constraint_sets.allowed_models == {"openai:gpt-4o"}
-    assert constraint_sets.blocked_models == {"openai:gpt-4o-mini"}
-    assert constraint_sets.allowed_regions == {"eu"}
-    assert constraint_sets.blocked_regions == {"us"}
+    assert allowed == [allowed_candidate]
+    assert rejected == []
+
+    blocked_candidates = [
+        SimpleNamespace(
+            model="anthropic:claude-3-5-haiku-latest",
+            provider="anthropic",
+            estimated_cost=None,
+            metadata={"region": "eu"},
+        ),
+        SimpleNamespace(
+            model="openai:gpt-4o-mini",
+            provider="openai",
+            estimated_cost=None,
+            metadata={"region": "eu"},
+        ),
+        SimpleNamespace(
+            model="openai:gpt-4o",
+            provider="openai",
+            estimated_cost=None,
+            metadata={"region": "us"},
+        ),
+    ]
+
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        allowed, rejected = apply_constraints(
+            blocked_candidates,
+            config={
+                "constraints": {
+                    "blocked_providers": [" anthropic "],
+                    "blocked_models": ["openai/gpt-4o-mini"],
+                    "blocked_regions": [" US "],
+                }
+            },
+            tags={},
+        )
+
+    assert allowed == []
+    assert [item["reason"] for item in rejected] == ["provider_blocked", "model_blocked", "region_blocked"]
 
 
 def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:

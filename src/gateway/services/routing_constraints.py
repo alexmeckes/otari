@@ -1,5 +1,4 @@
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any
 
 from gateway.services.routing_candidate_specs import split_model_selector
@@ -28,31 +27,6 @@ def _region_set(value: Any) -> set[str]:
     return {item.lower() for item in _string_set(value)}
 
 
-@dataclass(frozen=True)
-class _ConstraintSets:
-    allowed_providers: set[str]
-    blocked_providers: set[str]
-    allowed_models: set[str]
-    blocked_models: set[str]
-    allowed_regions: set[str]
-    blocked_regions: set[str]
-
-
-def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
-    return _ConstraintSets(
-        allowed_providers=_string_set(constraints.get("allowed_providers")),
-        blocked_providers=_string_set(constraints.get("blocked_providers")),
-        allowed_models={
-            _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("allowed_models"))
-        },
-        blocked_models={
-            _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("blocked_models"))
-        },
-        allowed_regions=_region_set(constraints.get("allowed_regions")),
-        blocked_regions=_region_set(constraints.get("blocked_regions")),
-    )
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -63,7 +37,16 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
-    constraint_sets = _constraint_sets(constraints)
+    allowed_providers = _string_set(constraints.get("allowed_providers"))
+    blocked_providers = _string_set(constraints.get("blocked_providers"))
+    allowed_models = {
+        _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("allowed_models"))
+    }
+    blocked_models = {
+        _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("blocked_models"))
+    }
+    allowed_regions = _region_set(constraints.get("allowed_regions"))
+    blocked_regions = _region_set(constraints.get("blocked_regions"))
     requested_region = None
     if bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
         region_tag = string_or_none(constraints.get("region_tag", "region"))
@@ -85,25 +68,21 @@ def apply_constraints(
         if region is not None:
             candidate_regions.add(region.lower())
         reason = None
-        if constraint_sets.allowed_providers and candidate.provider not in constraint_sets.allowed_providers:
+        if allowed_providers and candidate.provider not in allowed_providers:
             reason = "provider_not_allowed"
-        elif candidate.provider in constraint_sets.blocked_providers:
+        elif candidate.provider in blocked_providers:
             reason = "provider_blocked"
-        elif constraint_sets.allowed_models and candidate.model not in constraint_sets.allowed_models:
+        elif allowed_models and candidate.model not in allowed_models:
             reason = "model_not_allowed"
-        elif candidate.model in constraint_sets.blocked_models:
+        elif candidate.model in blocked_models:
             reason = "model_blocked"
         if reason is None:
-            if constraint_sets.allowed_regions:
+            if allowed_regions:
                 if not candidate_regions:
                     reason = "region_unknown"
-                elif not candidate_regions & constraint_sets.allowed_regions:
+                elif not candidate_regions & allowed_regions:
                     reason = "region_not_allowed"
-            if (
-                reason is None
-                and constraint_sets.blocked_regions
-                and candidate_regions & constraint_sets.blocked_regions
-            ):
+            if reason is None and blocked_regions and candidate_regions & blocked_regions:
                 reason = "region_blocked"
             if reason is None and requested_region is not None:
                 if not candidate_regions:
