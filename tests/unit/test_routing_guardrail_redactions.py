@@ -1,6 +1,7 @@
 from gateway.services.routing_guardrail_redactions import (
     _REDACTABLE_REQUEST_FIELDS,
     _missing_redaction_rules_trace,
+    _pattern_redaction_rules,
     _redact_list,
     _redact_mapping,
     _redact_message,
@@ -145,6 +146,22 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
 
 def test_redactable_request_fields_names_supported_provider_fields() -> None:
     assert _REDACTABLE_REQUEST_FIELDS == ("input", "instructions")
+
+
+def test_pattern_redaction_rules_preserves_named_patterns() -> None:
+    rules = _pattern_redaction_rules(
+        [
+            {"name": "token", "pattern": r"token-[0-9]+"},
+            {"name": "secret", "pattern": r"secret-[a-z]+"},
+        ]
+    )
+
+    assert [(kind, name) for kind, name, _pattern in rules] == [
+        ("pattern", "token"),
+        ("pattern", "secret"),
+    ]
+    assert rules[0][2].pattern == r"token-[0-9]+"
+    assert _pattern_redaction_rules("not-a-list") == []
 
 
 def test_redact_request_fields_redacts_supported_fields_only() -> None:

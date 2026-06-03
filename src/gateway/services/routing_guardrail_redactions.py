@@ -69,6 +69,10 @@ def _redact_mapping(
     }
 
 
+def _pattern_redaction_rules(patterns: Any) -> list[_RedactionRule]:
+    return [("pattern", name, pattern) for name, pattern in named_patterns(patterns)]
+
+
 def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
     rules: list[_RedactionRule] = []
     for pii_type, pattern in pii_patterns_from_config(
@@ -76,9 +80,8 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule
         fallback_types=redactions.get("pii_types"),
     ):
         rules.append(("pii", pii_type, pattern))
-    pattern_rules = named_patterns(redactions.get("patterns"))
-    for name, pattern in pattern_rules:
-        rules.append(("pattern", name, pattern))
+    pattern_rules = _pattern_redaction_rules(redactions.get("patterns"))
+    rules.extend(pattern_rules)
     return rules, len(pattern_rules)
 
 
