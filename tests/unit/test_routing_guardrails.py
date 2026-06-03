@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from gateway.services.routing_guardrails import (
@@ -15,6 +17,7 @@ from gateway.services.routing_guardrails import (
     _guardrail_result,
     _local_guardrail_violations,
     _normalized_guardrail_preset,
+    _pattern_search_violations,
     _pii_violations,
     _prompt_injection_enabled,
     _prompt_injection_phrase_violations,
@@ -209,6 +212,19 @@ def test_blocked_pattern_violations_preserve_order_and_fallback_names() -> None:
 def test_blocked_pattern_violations_default_empty_for_unsupported_config() -> None:
     assert _blocked_pattern_violations({"blocked_patterns": {"pattern": "secret"}}, "secret") == []
     assert _blocked_pattern_violations({}, "secret") == []
+
+
+def test_pattern_search_violations_preserve_order_and_rule_values() -> None:
+    rules = [
+        ("token", re.compile(r"token-[0-9]+", re.IGNORECASE)),
+        ("email", re.compile(r"@example\.com", re.IGNORECASE)),
+        ("missing", re.compile(r"not-present")),
+    ]
+
+    assert _pattern_search_violations("blocked_pattern", rules, "TOKEN-123 at ada@example.com") == [
+        {"type": "blocked_pattern", "rule": "token"},
+        {"type": "blocked_pattern", "rule": "email"},
+    ]
 
 
 def test_pii_violations_preserve_configured_type_order() -> None:

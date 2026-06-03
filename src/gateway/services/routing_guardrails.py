@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -19,6 +20,7 @@ from gateway.services.routing_request_analysis import jsonable_text
 
 _GUARDRAIL_ACTIONS = {"block", "observe"}
 _GUARDRAIL_LIST_CONFIG_KEYS = {"blocked_terms", "blocked_patterns", "external_classifiers"}
+_PatternRule = tuple[str, re.Pattern[str]]
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
     "ignore all previous instructions",
@@ -204,20 +206,32 @@ def _blocked_term_violations(guardrails: Mapping[str, Any], normalized_text: str
     )
 
 
-def _blocked_pattern_violations(guardrails: Mapping[str, Any], request_text: str) -> list[dict[str, str]]:
+def _pattern_search_violations(
+    violation_type: str,
+    rules: list[_PatternRule],
+    request_text: str,
+) -> list[dict[str, str]]:
     return [
-        guardrail_violation("blocked_pattern", name)
-        for name, pattern in named_patterns(guardrails.get("blocked_patterns"))
+        guardrail_violation(violation_type, rule)
+        for rule, pattern in rules
         if pattern.search(request_text)
     ]
 
 
+def _blocked_pattern_violations(guardrails: Mapping[str, Any], request_text: str) -> list[dict[str, str]]:
+    return _pattern_search_violations(
+        "blocked_pattern",
+        named_patterns(guardrails.get("blocked_patterns")),
+        request_text,
+    )
+
+
 def _pii_violations(guardrails: Mapping[str, Any], request_text: str) -> list[dict[str, str]]:
-    return [
-        guardrail_violation("pii", pii_type)
-        for pii_type, pii_pattern in pii_patterns_from_config(guardrails.get("pii"))
-        if pii_pattern.search(request_text)
-    ]
+    return _pattern_search_violations(
+        "pii",
+        pii_patterns_from_config(guardrails.get("pii")),
+        request_text,
+    )
 
 
 def _prompt_injection_enabled(injection_config: Any) -> bool:
