@@ -6,14 +6,6 @@ import pytest
 from gateway.services import routing_guardrail_external
 
 
-def test_classifier_response_payload_accepts_object_json_only() -> None:
-    assert routing_guardrail_external._classifier_response_payload(
-        httpx.Response(200, json={"score": 0.5})
-    ) == {"score": 0.5}
-    assert routing_guardrail_external._classifier_response_payload(httpx.Response(200, json=["not-object"])) is None
-    assert routing_guardrail_external._classifier_response_payload(httpx.Response(200, content=b"not json")) is None
-
-
 def test_classifier_http_error_text_prefers_payload_detail() -> None:
     response = httpx.Response(429, text="body fallback")
 
@@ -653,6 +645,45 @@ async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> 
 
 
 @pytest.mark.asyncio
+async def test_external_classifier_object_json_returns_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def post(
+            self,
+            url: str,
+            *,
+            json: dict[str, str],
+            headers: dict[str, str] | None,
+        ) -> httpx.Response:
+            assert self.timeout == 3.0
+            assert url == "https://classifier.example.test/check"
+            assert json == {"text": "hello"}
+            assert headers is None
+            return httpx.Response(200, json={"score": 0.5})
+
+    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
+
+    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
+        url="https://classifier.example.test/check",
+        request_text="hello",
+        timeout_seconds=3.0,
+        headers=None,
+    )
+
+    assert status_code == 200
+    assert payload == {"score": 0.5}
+    assert error is None
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_http_error_uses_trimmed_detail(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAsyncClient:
         def __init__(self, *, timeout: float) -> None:
@@ -732,7 +763,17 @@ async def test_external_classifier_redirect_response_uses_http_error_path(
 
 
 @pytest.mark.asyncio
-async def test_external_classifier_non_object_json_reports_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, json=["not-object"]),
+        httpx.Response(200, content=b"not-json"),
+    ],
+)
+async def test_external_classifier_non_object_json_reports_error(
+    monkeypatch: pytest.MonkeyPatch,
+    response: httpx.Response,
+) -> None:
     class FakeAsyncClient:
         def __init__(self, *, timeout: float) -> None:
             self.timeout = timeout
@@ -754,7 +795,7 @@ async def test_external_classifier_non_object_json_reports_error(monkeypatch: py
             assert url == "https://classifier.example.test/check"
             assert json == {"text": "hello"}
             assert headers is None
-            return httpx.Response(200, text="not-json")
+            return response
 
     monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
 
