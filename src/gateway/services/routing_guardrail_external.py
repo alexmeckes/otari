@@ -20,6 +20,7 @@ ExternalClassifierPost = Callable[
 ]
 
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
+_CLASSIFIER_ERROR_TEXT_LIMIT = 200
 
 
 @dataclass(frozen=True)
@@ -164,7 +165,7 @@ def _classifier_success_result(
 
 
 def _classifier_error_text(error: str) -> str:
-    return error[:200]
+    return error[:_CLASSIFIER_ERROR_TEXT_LIMIT]
 
 
 def _classifier_error_result(

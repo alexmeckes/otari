@@ -211,21 +211,25 @@ def test_classifier_success_result_passed_omits_non_string_label() -> None:
 
 
 def test_classifier_error_text_truncates_long_errors_only() -> None:
-    assert routing_guardrail_external._classifier_error_text("x" * 205) == "x" * 200
+    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
+
+    assert routing_guardrail_external._classifier_error_text("x" * (limit + 5)) == "x" * limit
     assert routing_guardrail_external._classifier_error_text("short error") == "short error"
 
 
 def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> None:
+    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
+
     assert routing_guardrail_external._classifier_error_result(
         name="dlp",
         status_code=503,
-        error="x" * 205,
+        error="x" * (limit + 5),
         fail_closed=True,
     ) == {
         "name": "dlp",
         "status": "error",
         "status_code": 503,
-        "error": "x" * 200,
+        "error": "x" * limit,
         "fail_closed": True,
     }
 
