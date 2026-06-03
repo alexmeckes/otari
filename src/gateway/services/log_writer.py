@@ -36,7 +36,10 @@ class LogWriter(Protocol):
     async def stop(self) -> None: ...
 
 
-async def _dispatch_new_alert_webhooks(alerts: list[BudgetAlert]) -> None:
+async def _record_and_dispatch_new_budget_alerts(alerts: list[BudgetAlert]) -> None:
+    for alert in alerts:
+        record_budget_alert_created(alert.scope_type, alert.delivery_status)
+
     alert_ids = [alert.id for alert in alerts if alert.id is not None and alert.webhook_url]
     if not alert_ids:
         return
@@ -44,11 +47,6 @@ async def _dispatch_new_alert_webhooks(alerts: list[BudgetAlert]) -> None:
         await dispatch_budget_alert_webhooks(alert_ids)
     except Exception as exc:  # pragma: no cover - post-commit defensive logging
         logger.error("Budget alert webhook dispatch failed after usage commit: %s", exc)
-
-
-def _record_new_budget_alert_metrics(alerts: list[BudgetAlert]) -> None:
-    for alert in alerts:
-        record_budget_alert_created(alert.scope_type, alert.delivery_status)
 
 
 async def _add_log_and_record_budget_alerts(db: AsyncSession, log: UsageLog) -> list[BudgetAlert]:
@@ -116,8 +114,7 @@ class SingleLogWriter:
                 log_writer_rows.labels(writer="single", result="dropped").inc()
                 return
 
-        _record_new_budget_alert_metrics(created_alerts)
-        await _dispatch_new_alert_webhooks(created_alerts)
+        await _record_and_dispatch_new_budget_alerts(created_alerts)
 
     async def start(self) -> None:
         pass
@@ -198,8 +195,7 @@ class BatchLogWriter:
             log_writer_flush_duration.labels(writer="batch", result="error").observe(time.monotonic() - start)
             return
 
-        _record_new_budget_alert_metrics(created_alerts)
-        await _dispatch_new_alert_webhooks(created_alerts)
+        await _record_and_dispatch_new_budget_alerts(created_alerts)
 
     async def _flush_all(self) -> None:
         batch: list[UsageLog] = []
