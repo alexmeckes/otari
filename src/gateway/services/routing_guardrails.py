@@ -18,7 +18,6 @@ from gateway.services.routing_guardrail_helpers import (
 )
 from gateway.services.routing_request_analysis import jsonable_text
 
-_GUARDRAIL_LIST_CONFIG_KEYS = {"blocked_terms", "blocked_patterns", "external_classifiers"}
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
     "ignore all previous instructions",
@@ -93,7 +92,7 @@ def _combine_guardrail_list(existing: Any, incoming: Any) -> list[Any]:
 
 
 def _combine_guardrail_value(key: str, existing: Any, incoming: Any) -> Any:
-    if key in _GUARDRAIL_LIST_CONFIG_KEYS:
+    if key in {"blocked_terms", "blocked_patterns", "external_classifiers"}:
         return _combine_guardrail_list(existing, incoming)
     if isinstance(existing, dict) and isinstance(incoming, dict):
         return {**existing, **copy.deepcopy(incoming)}
