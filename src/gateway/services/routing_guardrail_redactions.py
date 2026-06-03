@@ -9,6 +9,8 @@ from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
 _RedactionRule = tuple[str, str, re.Pattern[str]]
+_RedactionCountKey = tuple[str, str]
+_RedactionCounts = dict[_RedactionCountKey, int]
 
 
 def _redact_string(
@@ -16,7 +18,7 @@ def _redact_string(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> str:
     redacted = value
     for kind, rule, pattern in rules:
@@ -32,7 +34,7 @@ def _redact_content(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> Any:
     if isinstance(value, str):
         return _redact_string(value, rules=rules, replacement=replacement, counts=counts)
@@ -48,7 +50,7 @@ def _redact_list(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> list[Any]:
     return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
 
@@ -58,7 +60,7 @@ def _redact_mapping(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> dict[Any, Any]:
     return {
         key: _redact_content(item, rules=rules, replacement=replacement, counts=counts)
@@ -99,7 +101,7 @@ def _redact_messages(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> list[Any] | None:
     if not isinstance(messages, list):
         return None
@@ -125,7 +127,7 @@ def _redact_request_fields(
     *,
     rules: Sequence[_RedactionRule],
     replacement: str,
-    counts: dict[tuple[str, str], int],
+    counts: _RedactionCounts,
 ) -> None:
     for key in ("input", "instructions"):
         if key in body:
@@ -144,7 +146,7 @@ def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
 def _redaction_trace(
     *,
     replacement: str,
-    counts: Mapping[tuple[str, str], int],
+    counts: Mapping[_RedactionCountKey, int],
     pattern_count: int,
 ) -> dict[str, Any]:
     count_items = [
@@ -177,7 +179,7 @@ def apply_guardrail_redactions(
     if not rules:
         return body, _missing_redaction_rules_trace(replacement)
 
-    counts: dict[tuple[str, str], int] = {}
+    counts: _RedactionCounts = {}
     redacted_messages = _redact_messages(
         body.get("messages"),
         rules=rules,
