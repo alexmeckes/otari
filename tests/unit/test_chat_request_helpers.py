@@ -208,6 +208,39 @@ def test_build_web_search_backend_ignores_blank_env_engines(monkeypatch: pytest.
     assert backend._engines == default_backend._engines
 
 
+def test_build_web_search_backend_uses_env_max_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_MAX_RESULTS", "7")
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._max_results == 7
+
+
+@pytest.mark.parametrize("env_value", ["not-an-int", "0", "-3"])
+def test_build_web_search_backend_ignores_invalid_env_max_results(
+    env_value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GATEWAY_WEB_SEARCH_MAX_RESULTS", raising=False)
+    default_backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_MAX_RESULTS", env_value)
+
+    backend = build_web_search_backend(base_url="http://search.local", tool_entry={"type": "web_search"})
+
+    assert backend._max_results == default_backend._max_results
+
+
+def test_build_web_search_backend_tool_max_results_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_WEB_SEARCH_MAX_RESULTS", "7")
+
+    backend = build_web_search_backend(
+        base_url="http://search.local",
+        tool_entry={"type": "web_search", "max_results": 3},
+    )
+
+    assert backend._max_results == 3
+
+
 @pytest.mark.parametrize(
     ("env_value", "expected"),
     [
