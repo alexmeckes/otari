@@ -49,6 +49,10 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule
     return rules, len(pattern_rules)
 
 
+def _redactions_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    return dict_or_empty(guardrails_config(config).get("redactions"))
+
+
 def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
     replacement = redactions.get("replacement")
     if isinstance(replacement, str):
@@ -134,7 +138,7 @@ def apply_guardrail_redactions(
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Apply policy redactions to provider-bound request content."""
     body = copy.deepcopy(dict(request_body))
-    redactions = dict_or_empty(guardrails_config(config).get("redactions"))
+    redactions = _redactions_config(config)
     if not _redactions_enabled(redactions):
         return body, None
 

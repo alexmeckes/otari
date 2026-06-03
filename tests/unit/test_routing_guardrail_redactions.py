@@ -5,6 +5,7 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
+    _redactions_config,
     _redactions_enabled,
     apply_guardrail_redactions,
 )
@@ -24,6 +25,15 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
         ("pattern", "token"),
     ]
     assert pattern_count == 1
+
+
+def test_redactions_config_extracts_nested_redactions_mapping() -> None:
+    redactions = {"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]}
+
+    assert _redactions_config({"guardrails": {"redactions": redactions}}) == redactions
+    assert _redactions_config({}) == {}
+    assert _redactions_config({"guardrails": ["redactions"]}) == {}
+    assert _redactions_config({"guardrails": {"redactions": ["enabled"]}}) == {}
 
 
 def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> None:
