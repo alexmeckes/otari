@@ -154,8 +154,7 @@ def _guardrail_preset_expansion(
 
     if not applied and not ignored:
         return preset_config, None
-    metadata = {"applied": applied, "ignored": ignored}
-    return preset_config, metadata
+    return preset_config, {"applied": applied, "ignored": ignored}
 
 
 def _effective_guardrails(
