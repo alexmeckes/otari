@@ -556,4 +556,4 @@ async def test_external_classifier_non_object_json_reports_error(monkeypatch: py
 
     assert status_code == 200
     assert payload is None
-    assert error == "classifier returned non-object JSON"
+    assert error == routing_guardrail_external._CLASSIFIER_NON_OBJECT_JSON_ERROR

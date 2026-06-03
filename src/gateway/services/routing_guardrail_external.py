@@ -22,6 +22,7 @@ ExternalClassifierPost = Callable[
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
 _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS = 2.0
+_CLASSIFIER_NON_OBJECT_JSON_ERROR = "classifier returned non-object JSON"
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ async def post_external_guardrail_classifier(
     if not response.is_success:
         return response.status_code, payload, _classifier_http_error_text(response, payload)
     if payload is None:
-        return response.status_code, None, "classifier returned non-object JSON"
+        return response.status_code, None, _CLASSIFIER_NON_OBJECT_JSON_ERROR
     return response.status_code, payload, None
 
 
