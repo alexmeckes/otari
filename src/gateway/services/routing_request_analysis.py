@@ -22,7 +22,6 @@ __all__ = [
     "stable_json_text",
 ]
 
-_DEFAULT_OUTPUT_TOKENS = 700
 _REASONING_HINTS = (
     "prove",
     "proof",
@@ -96,7 +95,7 @@ def estimate_output_tokens(request_body: Mapping[str, Any]) -> int:
         value = request_body.get(key)
         if isinstance(value, int) and value > 0:
             return value
-    return _DEFAULT_OUTPUT_TOKENS
+    return 700
 
 
 def _matches_tier(prompt_tokens: int, threshold: int, request_text: str, hints: tuple[str, ...]) -> bool:

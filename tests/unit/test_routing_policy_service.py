@@ -79,6 +79,7 @@ def test_estimates_prompt_and_output_tokens_from_request() -> None:
 
     assert estimate_prompt_tokens(request) >= 20
     assert estimate_output_tokens(request) == 123
+    assert estimate_output_tokens({}) == 700
 
 
 def test_stable_json_text_sorts_keys_for_json_payloads() -> None:
