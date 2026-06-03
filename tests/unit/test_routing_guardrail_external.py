@@ -59,6 +59,15 @@ def test_classifier_configs_accept_single_dict_and_list_dicts() -> None:
     assert routing_guardrail_external._classifier_configs(None) == []
 
 
+def test_classifier_flagged_preserves_boolean_and_threshold_rules() -> None:
+    assert routing_guardrail_external._classifier_flagged({"blocked": True}, score=None, threshold=None)
+    assert routing_guardrail_external._classifier_flagged({"flagged": True}, score=None, threshold=None)
+    assert routing_guardrail_external._classifier_flagged({"score": 0.8}, score=0.8, threshold=0.8)
+    assert not routing_guardrail_external._classifier_flagged({"score": 0.7}, score=0.7, threshold=0.8)
+    assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=None, threshold=0.8)
+    assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=0.9, threshold=None)
+
+
 def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
     violations, score = routing_guardrail_external._classifier_violations(
         {

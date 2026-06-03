@@ -100,6 +100,17 @@ def _classifier_configs(value: Any) -> list[Mapping[str, Any]]:
     return []
 
 
+def _classifier_flagged(
+    payload: Mapping[str, Any],
+    *,
+    score: float | None,
+    threshold: float | None,
+) -> bool:
+    if payload.get("blocked") is True or payload.get("flagged") is True:
+        return True
+    return threshold is not None and score is not None and score >= threshold
+
+
 def _classifier_violations(
     payload: Mapping[str, Any],
     *,
@@ -113,10 +124,7 @@ def _classifier_violations(
             violations.append(guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
 
     score = non_negative_float_or_none(payload.get("score"))
-    flagged = payload.get("blocked") is True or payload.get("flagged") is True
-    if threshold is not None and score is not None and score >= threshold:
-        flagged = True
-    if flagged and not violations:
+    if _classifier_flagged(payload, score=score, threshold=threshold) and not violations:
         violation_label = _classifier_rule(payload.get("label"), fallback=name)
         violations.append(guardrail_violation("external_classifier", violation_label))
     return violations, score
