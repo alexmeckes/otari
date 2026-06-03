@@ -57,6 +57,27 @@ def test_configured_candidate_specs_trims_models_skips_blanks_and_normalizes_tie
     ]
 
 
+def test_configured_candidate_specs_collects_tiered_candidates() -> None:
+    specs = configured_candidate_specs(
+        {
+            "tiers": {
+                " Simple ": [
+                    " openai:gpt-4o-mini ",
+                    " ",
+                    {"model": "anthropic:claude-3-5-sonnet-latest", "tier": "Reasoning"},
+                ],
+                "unknown": ["openai:gpt-4o"],
+                "complex": {"model": "anthropic:claude-3-opus-latest"},
+            }
+        }
+    )
+
+    assert [(spec.model, spec.tier) for spec in specs] == [
+        ("openai:gpt-4o-mini", "simple"),
+        ("anthropic:claude-3-5-sonnet-latest", "reasoning"),
+    ]
+
+
 def test_configured_candidate_specs_reads_quality_score_aliases_from_metadata() -> None:
     specs = configured_candidate_specs(
         {

@@ -68,6 +68,16 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
     )
 
 
+def _candidate_specs_from_items(items: Any, *, tier: str | None) -> list[CandidateSpec]:
+    if not isinstance(items, list):
+        return []
+    return [
+        spec
+        for item in items
+        if (spec := _candidate_spec_from_item(item, tier=tier)) is not None
+    ]
+
+
 def infer_tier_from_output_price(output_price_per_million: float | None) -> str | None:
     """Infer an internal complexity tier from output-token pricing."""
     if output_price_per_million is None:
@@ -86,14 +96,7 @@ def split_model_selector(model_selector: str) -> tuple[str, str, str]:
 
 
 def configured_candidate_specs(config: Mapping[str, Any]) -> list[CandidateSpec]:
-    specs: list[CandidateSpec] = []
-
-    candidates = config.get("candidates")
-    if isinstance(candidates, list):
-        for item in candidates:
-            spec = _candidate_spec_from_item(item, tier=None)
-            if spec is not None:
-                specs.append(spec)
+    specs = _candidate_specs_from_items(config.get("candidates"), tier=None)
 
     tiers = config.get("tiers")
     if isinstance(tiers, dict):
@@ -101,10 +104,7 @@ def configured_candidate_specs(config: Mapping[str, Any]) -> list[CandidateSpec]
             tier = _normalize_tier(tier_name)
             if tier is None or not isinstance(items, list):
                 continue
-            for item in items:
-                spec = _candidate_spec_from_item(item, tier=tier)
-                if spec is not None:
-                    specs.append(spec)
+            specs.extend(_candidate_specs_from_items(items, tier=tier))
 
     deduped: list[CandidateSpec] = []
     seen: set[str] = set()
