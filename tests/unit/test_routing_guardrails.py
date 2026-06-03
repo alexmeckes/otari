@@ -4,7 +4,6 @@ from gateway.services.routing_guardrails import (
     _combine_guardrail_list,
     _guardrail_list_items,
     _guardrail_preset_expansion,
-    _guardrail_preset_values,
     _normalize_guardrail_preset_name,
     evaluate_guardrails,
     guardrail_action,
@@ -17,10 +16,16 @@ def test_normalize_guardrail_preset_name_trims_and_applies_aliases() -> None:
     assert _normalize_guardrail_preset_name({"name": " "}) is None
 
 
-def test_guardrail_preset_values_accepts_trimmed_string_sources() -> None:
-    assert _guardrail_preset_values({"presets": " pii "}) == ["pii"]
-    assert _guardrail_preset_values({"managed_presets": " dlp "}) == ["dlp"]
-    assert _guardrail_preset_values({"presets": " "}) == []
+def test_guardrail_preset_expansion_accepts_trimmed_string_sources() -> None:
+    _config, metadata = _guardrail_preset_expansion({"presets": " pii "})
+    assert metadata == {"applied": ["pii"], "ignored": []}
+
+    _config, metadata = _guardrail_preset_expansion({"managed_presets": " dlp "})
+    assert metadata == {"applied": ["dlp"], "ignored": []}
+
+    config, metadata = _guardrail_preset_expansion({"presets": " "})
+    assert config == {}
+    assert metadata is None
 
 
 def test_guardrail_list_items_accepts_trimmed_string_values() -> None:

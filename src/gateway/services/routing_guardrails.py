@@ -76,18 +76,6 @@ def _normalize_guardrail_preset_name(value: Any) -> str | None:
     return _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
 
 
-def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
-    presets = guardrails.get("presets")
-    if presets is None:
-        presets = guardrails.get("managed_presets")
-    if isinstance(presets, list):
-        return presets
-    preset = string_or_none(presets)
-    if preset is not None:
-        return [preset]
-    return []
-
-
 def _guardrail_list_items(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
@@ -136,7 +124,16 @@ def _guardrail_preset_expansion(
     applied: list[str] = []
     ignored: list[str] = []
     seen: set[str] = set()
-    for value in _guardrail_preset_values(guardrails):
+    presets = guardrails.get("presets")
+    if presets is None:
+        presets = guardrails.get("managed_presets")
+    preset_values: list[Any]
+    if isinstance(presets, list):
+        preset_values = presets
+    else:
+        preset = string_or_none(presets)
+        preset_values = [preset] if preset is not None else []
+    for value in preset_values:
         normalized = _normalize_guardrail_preset_name(value)
         if normalized is None:
             continue
