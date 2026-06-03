@@ -213,3 +213,42 @@ async def test_external_classifier_http_error_uses_trimmed_detail(monkeypatch: p
     assert status_code == 400
     assert payload == {"detail": " blocked by classifier "}
     assert error == "HTTP 400: blocked by classifier"
+
+
+@pytest.mark.asyncio
+async def test_external_classifier_non_object_json_reports_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: float) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def post(
+            self,
+            url: str,
+            *,
+            json: dict[str, str],
+            headers: dict[str, str] | None,
+        ) -> httpx.Response:
+            assert self.timeout == 3.0
+            assert url == "https://classifier.example.test/check"
+            assert json == {"text": "hello"}
+            assert headers is None
+            return httpx.Response(200, text="not-json")
+
+    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
+
+    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
+        url="https://classifier.example.test/check",
+        request_text="hello",
+        timeout_seconds=3.0,
+        headers=None,
+    )
+
+    assert status_code == 200
+    assert payload is None
+    assert error == "classifier returned non-object JSON"

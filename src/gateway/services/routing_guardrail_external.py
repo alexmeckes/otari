@@ -38,7 +38,7 @@ async def post_external_guardrail_classifier(
         if isinstance(parsed, dict):
             payload = parsed
     except ValueError:
-        payload = None
+        pass
 
     if response.status_code < 200 or response.status_code >= 300:
         error = response.text
