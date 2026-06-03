@@ -81,6 +81,33 @@ def test_context_policy_blank_summary_prefix_uses_default() -> None:
     assert body["messages"][0]["content"].startswith("Earlier conversation summary:")
 
 
+def test_context_policy_invalid_summary_role_uses_system() -> None:
+    messages = [
+        {"role": "user", "content": "alpha " * 80},
+        {"role": "assistant", "content": "beta " * 80},
+        {"role": "user", "content": "final"},
+    ]
+
+    body, trace = apply_context_policy(
+        {
+            "context": {
+                "enabled": True,
+                "strategy": "summarize_messages",
+                "max_prompt_tokens": 80,
+                "preserve_system_messages": False,
+                "preserve_last_messages": 1,
+                "summary_max_tokens": 40,
+                "summary_role": "assistant",
+            }
+        },
+        {"messages": messages},
+    )
+
+    assert trace is not None
+    assert trace["summary_message_role"] == "system"
+    assert body["messages"][0]["role"] == "system"
+
+
 def test_context_policy_uses_context_policy_fallback_when_context_is_not_dict() -> None:
     messages = [
         {"role": "user", "content": "alpha " * 80},

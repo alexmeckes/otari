@@ -18,6 +18,8 @@ from gateway.services.routing_request_analysis import (
 )
 
 _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
+_SYSTEM_MESSAGE_ROLES = {"system", "developer"}
+_SUMMARY_MESSAGE_ROLES = {*_SYSTEM_MESSAGE_ROLES, "user"}
 
 
 def _message_role(message: Any) -> str:
@@ -50,7 +52,7 @@ def _context_kept_message_indexes(
     kept_indexes: set[int] = set()
     if preserve_system_messages:
         for index, message in enumerate(messages):
-            if _message_role(message) in {"system", "developer"}:
+            if _message_role(message) in _SYSTEM_MESSAGE_ROLES:
                 kept_indexes.add(index)
 
     if preserve_last_messages:
@@ -103,7 +105,7 @@ def _messages_with_summary(
     for index, message in enumerate(messages):
         if index not in kept_indexes:
             continue
-        if not summary_inserted and _message_role(message) not in {"system", "developer"}:
+        if not summary_inserted and _message_role(message) not in _SYSTEM_MESSAGE_ROLES:
             result.append(summary_message)
             summary_inserted = True
         result.append(message)
@@ -212,9 +214,8 @@ def apply_context_policy(
             prefix=str(context_config.get("summary_prefix") or "Earlier conversation summary:"),
             max_message_chars=int_config(context_config.get("summary_message_max_chars"), 240),
         )
-        configured_summary_role = string_or_none(context_config.get("summary_role"))
-        summary_role = configured_summary_role.lower() if configured_summary_role is not None else "system"
-        if summary_role not in {"system", "developer", "user"}:
+        summary_role = (string_or_none(context_config.get("summary_role")) or "system").lower()
+        if summary_role not in _SUMMARY_MESSAGE_ROLES:
             summary_role = "system"
         summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
         body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
