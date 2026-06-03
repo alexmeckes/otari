@@ -67,6 +67,29 @@ def test_attach_weighted_scores_uses_configured_default_and_unknown_scores() -> 
     }
 
 
+def test_attach_weighted_scores_uses_defaults_for_invalid_score_settings() -> None:
+    scored = attach_weighted_scores(
+        [_candidate()],
+        config={
+            "scoring": {
+                "default_quality_score": 101,
+                "unknown_cost_score": -1,
+                "unknown_latency_score": True,
+            }
+        },
+    )
+
+    assert scored[0].routing_score == pytest.approx(0.35)
+    assert scored[0].score_components == {
+        "quality": 0.5,
+        "cost": 0.0,
+        "latency": 0.5,
+        "quality_weight": 0.5,
+        "cost_weight": 0.3,
+        "latency_weight": 0.2,
+    }
+
+
 def test_attach_weighted_scores_falls_back_when_configured_weights_sum_to_zero() -> None:
     scored = attach_weighted_scores(
         [_candidate(quality_score=1.0, estimated_cost=1.0, average_latency_ms=20.0)],

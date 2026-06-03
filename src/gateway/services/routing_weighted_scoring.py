@@ -27,6 +27,11 @@ def _normalized_lower_is_better(
     return max(0.0, min(1.0, 1.0 - ((value - minimum) / (maximum - minimum))))
 
 
+def _score_setting(scoring: Mapping[str, Any], key: str, default: float) -> float:
+    parsed = score_or_none(scoring.get(key))
+    return default if parsed is None else parsed
+
+
 def attach_weighted_scores(
     candidates: Sequence[Any],
     *,
@@ -47,15 +52,9 @@ def attach_weighted_scores(
     if weight_total <= 0:
         weights = dict(_DEFAULT_SCORE_WEIGHTS)
         weight_total = sum(weights.values())
-    default_quality_score = score_or_none(scoring.get("default_quality_score"))
-    if default_quality_score is None:
-        default_quality_score = _DEFAULT_QUALITY_SCORE
-    unknown_cost_score = score_or_none(scoring.get("unknown_cost_score"))
-    if unknown_cost_score is None:
-        unknown_cost_score = _DEFAULT_UNKNOWN_COST_SCORE
-    unknown_latency_score = score_or_none(scoring.get("unknown_latency_score"))
-    if unknown_latency_score is None:
-        unknown_latency_score = _DEFAULT_UNKNOWN_LATENCY_SCORE
+    default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
+    unknown_cost_score = _score_setting(scoring, "unknown_cost_score", _DEFAULT_UNKNOWN_COST_SCORE)
+    unknown_latency_score = _score_setting(scoring, "unknown_latency_score", _DEFAULT_UNKNOWN_LATENCY_SCORE)
 
     known_costs = [
         candidate.estimated_cost
