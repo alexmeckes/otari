@@ -165,6 +165,10 @@ def _classifier_success_result(
     }
 
 
+def _classifier_error_text(error: str) -> str:
+    return error[:200]
+
+
 def _classifier_error_result(
     *,
     name: str,
@@ -176,7 +180,7 @@ def _classifier_error_result(
         "name": name,
         "status": "error",
         "status_code": status_code,
-        "error": error[:200],
+        "error": _classifier_error_text(error),
         "fail_closed": fail_closed,
     }
 
