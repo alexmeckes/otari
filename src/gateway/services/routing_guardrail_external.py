@@ -44,7 +44,7 @@ async def post_external_guardrail_classifier(
         return None, None, str(exc)
 
     payload = _classifier_response_payload(response)
-    if response.status_code < 200 or response.status_code >= 300:
+    if not response.is_success:
         return response.status_code, payload, _classifier_http_error_text(response, payload)
     if payload is None:
         return response.status_code, None, "classifier returned non-object JSON"
