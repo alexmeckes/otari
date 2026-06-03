@@ -48,17 +48,6 @@ def test_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None
     assert routing_guardrail_external._classifier_headers(["Authorization"]) is None
 
 
-def test_classifier_configs_accept_single_dict_and_list_dicts() -> None:
-    single = {"url": "https://classifier.example.test/check"}
-    first = {"name": "first"}
-    second = {"url": "https://classifier.example.test/other"}
-
-    assert routing_guardrail_external._classifier_configs(single) == [single]
-    assert routing_guardrail_external._classifier_configs([first, "skip", None, second]) == [first, second]
-    assert routing_guardrail_external._classifier_configs("disabled") == []
-    assert routing_guardrail_external._classifier_configs(None) == []
-
-
 def test_classifier_rule_uses_configured_field_precedence() -> None:
     assert (
         routing_guardrail_external._classifier_rule(
@@ -461,6 +450,64 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
     assert violations == [{"type": "external_classifier", "rule": "customer_pii"}]
     assert results[0]["name"] == "dlp"
     assert results[0]["status"] == "flagged"
+
+
+@pytest.mark.asyncio
+async def test_external_classifier_configs_accept_single_dict_and_list_dicts() -> None:
+    captured_urls: list[str] = []
+
+    async def post_classifier(
+        *,
+        url: str,
+        request_text: str,
+        timeout_seconds: float,
+        headers: dict[str, str] | None,
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
+        captured_urls.append(url)
+        return 200, {"violations": []}, None
+
+    violations, results = await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={"external_classifiers": {"name": "single", "url": "https://classifier.example.test/single"}},
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+    assert captured_urls == ["https://classifier.example.test/single"]
+    assert violations == []
+    assert [result["name"] for result in results] == ["single"]
+
+    captured_urls.clear()
+    violations, results = await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={
+            "external_classifiers": [
+                {"name": "first", "url": "https://classifier.example.test/first"},
+                "skip",
+                None,
+                {"name": "second", "url": "https://classifier.example.test/second"},
+            ]
+        },
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+    assert captured_urls == [
+        "https://classifier.example.test/first",
+        "https://classifier.example.test/second",
+    ]
+    assert violations == []
+    assert [result["name"] for result in results] == ["first", "second"]
+
+    async def unexpected_post_classifier(**kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
+        raise AssertionError(f"unexpected classifier post: {kwargs}")
+
+    assert await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={"external_classifiers": "disabled"},
+        request_text="hello",
+        post_classifier=unexpected_post_classifier,
+    ) == ([], [])
+    assert await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={},
+        request_text="hello",
+        post_classifier=unexpected_post_classifier,
+    ) == ([], [])
 
 
 @pytest.mark.asyncio
