@@ -239,61 +239,6 @@ def test_classifier_violations_default_empty_when_not_flagged() -> None:
     assert score == 0.7
 
 
-def test_classifier_success_result_preserves_flagged_shape_and_string_label() -> None:
-    violations = [{"type": "external_classifier", "rule": "prompt_injection"}]
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="prompt-shield",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=0.8,
-        headers=None,
-        fail_closed=False,
-    )
-
-    assert routing_guardrail_external._classifier_success_result(
-        settings,
-        status_code=200,
-        payload={"label": " prompt_injection "},
-        score=0.82,
-        violations=violations,
-    ) == {
-        "name": "prompt-shield",
-        "status": "flagged",
-        "status_code": 200,
-        "score": 0.82,
-        "threshold": 0.8,
-        "label": " prompt_injection ",
-        "violations": violations,
-    }
-
-
-def test_classifier_success_result_passed_omits_non_string_label() -> None:
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="classifier_1",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=False,
-    )
-
-    assert routing_guardrail_external._classifier_success_result(
-        settings,
-        status_code=204,
-        payload={"label": {"rule": "ignored"}},
-        score=None,
-        violations=[],
-    ) == {
-        "name": "classifier_1",
-        "status": "passed",
-        "status_code": 204,
-        "score": None,
-        "threshold": None,
-        "label": None,
-        "violations": [],
-    }
-
-
 def test_classifier_success_evaluation_preserves_flagged_and_passed_results() -> None:
     flagged_settings = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",

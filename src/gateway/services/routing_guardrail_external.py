@@ -135,15 +135,14 @@ def _classifier_violations(
     ], score
 
 
-def _classifier_success_result(
+def _classifier_success_evaluation(
     settings: _ClassifierSettings,
     *,
     status_code: int | None,
     payload: Mapping[str, Any],
-    score: float | None,
-    violations: list[dict[str, str]],
-) -> dict[str, Any]:
-    return {
+) -> _ClassifierEvaluationResult:
+    violations, score = _classifier_violations(settings, payload)
+    return violations, {
         "name": settings.name,
         "status": "flagged" if violations else "passed",
         "status_code": status_code,
@@ -152,22 +151,6 @@ def _classifier_success_result(
         "label": label if isinstance(label := payload.get("label"), str) else None,
         "violations": violations,
     }
-
-
-def _classifier_success_evaluation(
-    settings: _ClassifierSettings,
-    *,
-    status_code: int | None,
-    payload: Mapping[str, Any],
-) -> _ClassifierEvaluationResult:
-    violations, score = _classifier_violations(settings, payload)
-    return violations, _classifier_success_result(
-        settings,
-        status_code=status_code,
-        payload=payload,
-        score=score,
-        violations=violations,
-    )
 
 
 def _classifier_error_result(
