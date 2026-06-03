@@ -23,6 +23,7 @@ _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
 _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS = 2.0
 _CLASSIFIER_NON_OBJECT_JSON_ERROR = "classifier returned non-object JSON"
+_CLASSIFIER_MISSING_URL_REASON = "missing_url"
 
 
 @dataclass(frozen=True)
@@ -187,7 +188,7 @@ def _classifier_error_result(
 
 
 def _classifier_skipped_result(name: str) -> dict[str, str]:
-    return {"name": name, "status": "skipped", "reason": "missing_url"}
+    return {"name": name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
 
 
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:

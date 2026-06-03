@@ -238,7 +238,7 @@ def test_classifier_skipped_result_uses_missing_url_reason() -> None:
     assert routing_guardrail_external._classifier_skipped_result("classifier_1") == {
         "name": "classifier_1",
         "status": "skipped",
-        "reason": "missing_url",
+        "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,
     }
 
 
@@ -438,7 +438,13 @@ async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> 
     )
 
     assert violations == []
-    assert results == [{"name": "classifier_1", "status": "skipped", "reason": "missing_url"}]
+    assert results == [
+        {
+            "name": "classifier_1",
+            "status": "skipped",
+            "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,
+        }
+    ]
 
 
 @pytest.mark.asyncio
