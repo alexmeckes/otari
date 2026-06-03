@@ -70,21 +70,14 @@ def _compiled_named_pattern(name: str, pattern_value: str) -> tuple[str, re.Patt
         return None
 
 
-def _compiled_named_pattern_item(item: Any, index: int) -> tuple[str, re.Pattern[str]] | None:
-    pattern_item = _named_pattern_item(item, index)
-    if pattern_item is None:
-        return None
-    name, pattern_value = pattern_item
-    return _compiled_named_pattern(name, pattern_value)
-
-
 def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
     if not isinstance(value, list):
         return []
     return [
         pattern
         for index, item in enumerate(value, start=1)
-        if (pattern := _compiled_named_pattern_item(item, index)) is not None
+        if (pattern_item := _named_pattern_item(item, index)) is not None
+        if (pattern := _compiled_named_pattern(*pattern_item)) is not None
     ]
 
 
