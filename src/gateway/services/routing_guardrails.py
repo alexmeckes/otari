@@ -311,9 +311,8 @@ async def evaluate_guardrails(
         post_classifier=classifier_post,
     )
 
-    action = guardrail_action(config)
     return _guardrail_result(
-        action=action,
+        action=guardrail_action(config),
         violations=[*local_violations, *external_violations],
         classifier_results=classifier_results,
         checked_text_chars=len(request_text),
