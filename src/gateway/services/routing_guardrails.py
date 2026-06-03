@@ -106,6 +106,27 @@ def _combine_guardrail_config(base: Mapping[str, Any], override: Mapping[str, An
     return combined
 
 
+def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
+    presets = guardrails.get("presets")
+    if presets is None:
+        presets = guardrails.get("managed_presets")
+    if isinstance(presets, list):
+        return presets
+    preset = string_or_none(presets)
+    return [preset] if preset is not None else []
+
+
+def _normalized_guardrail_preset(value: Any) -> str | None:
+    name: Any = value
+    if isinstance(value, dict):
+        name = value.get("name") or value.get("preset")
+    name_value = string_or_none(name)
+    if name_value is None:
+        return None
+    normalized = name_value.lower().replace("-", "_")
+    return _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
+
+
 def _guardrail_preset_expansion(
     guardrails: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, list[str]] | None]:
@@ -113,24 +134,10 @@ def _guardrail_preset_expansion(
     applied: list[str] = []
     ignored: list[str] = []
     seen: set[str] = set()
-    presets = guardrails.get("presets")
-    if presets is None:
-        presets = guardrails.get("managed_presets")
-    preset_values: list[Any]
-    if isinstance(presets, list):
-        preset_values = presets
-    else:
-        preset = string_or_none(presets)
-        preset_values = [preset] if preset is not None else []
-    for value in preset_values:
-        name: Any = value
-        if isinstance(value, dict):
-            name = value.get("name") or value.get("preset")
-        name_value = string_or_none(name)
-        if name_value is None:
+    for value in _guardrail_preset_values(guardrails):
+        normalized = _normalized_guardrail_preset(value)
+        if normalized is None:
             continue
-        normalized = name_value.lower().replace("-", "_")
-        normalized = _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
         if normalized not in _GUARDRAIL_PRESETS:
             ignored.append(normalized)
             continue

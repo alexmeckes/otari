@@ -7,9 +7,11 @@ from gateway.services.routing_guardrails import (
     _effective_guardrails,
     _guardrail_list_items,
     _guardrail_preset_expansion,
+    _guardrail_preset_values,
     _guardrail_request_text,
     _guardrail_result,
     _local_guardrail_violations,
+    _normalized_guardrail_preset,
     _pii_violations,
     _prompt_injection_violations,
     evaluate_guardrails,
@@ -55,6 +57,19 @@ def test_guardrail_preset_expansion_reports_applied_and_ignored_presets() -> Non
     _config, metadata = _guardrail_preset_expansion({"presets": [" pii ", "unknown-preset", "pii"]})
 
     assert metadata == {"applied": ["pii"], "ignored": ["unknown_preset"]}
+
+
+def test_guardrail_preset_values_prefers_presets_over_managed_presets() -> None:
+    assert _guardrail_preset_values({"presets": [" pii "], "managed_presets": "dlp"}) == [" pii "]
+    assert _guardrail_preset_values({"managed_presets": " dlp "}) == ["dlp"]
+    assert _guardrail_preset_values({"presets": " "}) == []
+
+
+def test_normalized_guardrail_preset_accepts_strings_dicts_and_aliases() -> None:
+    assert _normalized_guardrail_preset(" prompt-shield ") == "prompt_injection"
+    assert _normalized_guardrail_preset({"preset": " credential "}) == "credential_leak"
+    assert _normalized_guardrail_preset({"name": "unknown-preset"}) == "unknown_preset"
+    assert _normalized_guardrail_preset({"name": " "}) is None
 
 
 def test_effective_guardrails_applies_presets_before_explicit_overrides() -> None:
