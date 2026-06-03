@@ -18,7 +18,6 @@ from gateway.services.routing_guardrail_helpers import (
 )
 from gateway.services.routing_request_analysis import jsonable_text
 
-_GUARDRAIL_ACTIONS = {"block", "observe"}
 _GUARDRAIL_LIST_CONFIG_KEYS = {"blocked_terms", "blocked_patterns", "external_classifiers"}
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
@@ -164,7 +163,7 @@ def _effective_guardrails(
 
 def guardrail_action(config: Mapping[str, Any]) -> str:
     action = string_or_none(guardrails_config(config).get("action"))
-    if action is not None and action.lower() in _GUARDRAIL_ACTIONS:
+    if action is not None and action.lower() in {"block", "observe"}:
         return action.lower()
     return "block"
 
