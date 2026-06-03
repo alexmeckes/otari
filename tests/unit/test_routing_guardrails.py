@@ -144,7 +144,6 @@ def test_local_guardrail_violations_preserve_source_order() -> None:
             "prompt_injection": {"enabled": True, "phrases": ["Reveal Admin Token"]},
         },
         request_text,
-        request_text.lower(),
     )
 
     assert violations == [
