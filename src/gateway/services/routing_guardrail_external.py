@@ -153,24 +153,6 @@ def _classifier_success_evaluation(
     }
 
 
-def _classifier_error_evaluation(
-    settings: _ClassifierSettings,
-    *,
-    status_code: int | None,
-    error: str,
-) -> _ClassifierEvaluationResult:
-    return (
-        [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
-        {
-            "name": settings.name,
-            "status": "error",
-            "status_code": status_code,
-            "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
-            "fail_closed": settings.fail_closed,
-        },
-    )
-
-
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
@@ -199,10 +181,15 @@ async def _evaluate_classifier_from_settings(
         headers=settings.headers,
     )
     if error is not None:
-        return _classifier_error_evaluation(
-            settings,
-            status_code=status_code,
-            error=error,
+        return (
+            [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
+            {
+                "name": settings.name,
+                "status": "error",
+                "status_code": status_code,
+                "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
+                "fail_closed": settings.fail_closed,
+            },
         )
 
     assert payload is not None

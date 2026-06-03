@@ -290,54 +290,6 @@ def test_classifier_success_evaluation_preserves_flagged_and_passed_results() ->
     }
 
 
-def test_classifier_error_evaluation_preserves_result_and_fail_closed_violations() -> None:
-    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
-    fail_closed = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=True,
-    )
-    fail_open = routing_guardrail_external._ClassifierSettings(
-        name="prompt-shield",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=False,
-    )
-
-    violations, result = routing_guardrail_external._classifier_error_evaluation(
-        fail_closed,
-        status_code=503,
-        error="x" * (limit + 5),
-    )
-    assert violations == [{"type": "external_classifier_error", "rule": "dlp"}]
-    assert result == {
-        "name": "dlp",
-        "status": "error",
-        "status_code": 503,
-        "error": "x" * limit,
-        "fail_closed": True,
-    }
-
-    violations, result = routing_guardrail_external._classifier_error_evaluation(
-        fail_open,
-        status_code=None,
-        error="timeout",
-    )
-    assert violations == []
-    assert result == {
-        "name": "prompt-shield",
-        "status": "error",
-        "status_code": None,
-        "error": "timeout",
-        "fail_closed": False,
-    }
-
-
 def test_classifier_settings_normalizes_request_fields() -> None:
     default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
 
@@ -367,6 +319,7 @@ def test_classifier_settings_uses_index_name_fallback() -> None:
 
 @pytest.mark.asyncio
 async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_success_paths() -> None:
+    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
     skipped_settings = routing_guardrail_external._ClassifierSettings(
         name="classifier_1",
         url=None,
@@ -382,6 +335,14 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
         threshold=None,
         headers=None,
         fail_closed=True,
+    )
+    fail_open_error_settings = routing_guardrail_external._ClassifierSettings(
+        name="fail-open",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
     )
     success_settings = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
@@ -409,7 +370,7 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
     )
 
     async def error_post_classifier(**_kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
-        return 503, None, "classifier down"
+        return 503, None, "x" * (limit + 5)
 
     violations, result = await routing_guardrail_external._evaluate_classifier_from_settings(
         error_settings,
@@ -421,8 +382,27 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
         "name": "dlp",
         "status": "error",
         "status_code": 503,
-        "error": "classifier down",
+        "error": "x" * limit,
         "fail_closed": True,
+    }
+
+    async def fail_open_error_post_classifier(
+        **_kwargs: Any,
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
+        return None, None, "timeout"
+
+    violations, result = await routing_guardrail_external._evaluate_classifier_from_settings(
+        fail_open_error_settings,
+        request_text="hello",
+        post_classifier=fail_open_error_post_classifier,
+    )
+    assert violations == []
+    assert result == {
+        "name": "fail-open",
+        "status": "error",
+        "status_code": None,
+        "error": "timeout",
+        "fail_closed": False,
     }
 
     async def success_post_classifier(**_kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
