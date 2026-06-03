@@ -1,4 +1,20 @@
-from gateway.services.routing_guardrail_redactions import apply_guardrail_redactions
+from gateway.services.routing_guardrail_redactions import _redaction_rules, apply_guardrail_redactions
+
+
+def test_redaction_rules_collects_pii_and_named_patterns() -> None:
+    rules, pattern_count = _redaction_rules(
+        {
+            "pii": True,
+            "pii_types": ["email"],
+            "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+        }
+    )
+
+    assert [(kind, rule) for kind, rule, _pattern in rules] == [
+        ("pii", "email"),
+        ("pattern", "token"),
+    ]
+    assert pattern_count == 1
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:

@@ -8,11 +8,13 @@ from typing import Any
 from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
+_RedactionRule = tuple[str, str, re.Pattern[str]]
+
 
 def _redact_content(
     value: Any,
     *,
-    rules: Sequence[tuple[str, str, re.Pattern[str]]],
+    rules: Sequence[_RedactionRule],
     replacement: str,
     counts: dict[tuple[str, str], int],
 ) -> Any:
@@ -34,6 +36,19 @@ def _redact_content(
     return value
 
 
+def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
+    rules: list[_RedactionRule] = []
+    for pii_type, pattern in pii_patterns_from_config(
+        redactions.get("pii"),
+        fallback_types=redactions.get("pii_types"),
+    ):
+        rules.append(("pii", pii_type, pattern))
+    pattern_rules = named_patterns(redactions.get("patterns"))
+    for name, pattern in pattern_rules:
+        rules.append(("pattern", name, pattern))
+    return rules, len(pattern_rules)
+
+
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -44,16 +59,7 @@ def apply_guardrail_redactions(
     if not bool_config(redactions.get("enabled"), bool(redactions)):
         return body, None
 
-    rules: list[tuple[str, str, re.Pattern[str]]] = []
-    for pii_type, pattern in pii_patterns_from_config(
-        redactions.get("pii"),
-        fallback_types=redactions.get("pii_types"),
-    ):
-        rules.append(("pii", pii_type, pattern))
-    pattern_rules = named_patterns(redactions.get("patterns"))
-    for name, pattern in pattern_rules:
-        rules.append(("pattern", name, pattern))
-
+    rules, pattern_count = _redaction_rules(redactions)
     replacement = redactions.get("replacement")
     if not isinstance(replacement, str):
         replacement = "[REDACTED]"
@@ -98,5 +104,5 @@ def apply_guardrail_redactions(
         "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": count_items,
-        "pattern_count": len(pattern_rules),
+        "pattern_count": pattern_count,
     }
