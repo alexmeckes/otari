@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 from gateway.services.pricing_service import pricing_model_ref
@@ -75,12 +75,6 @@ def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[s
     return candidate
 
 
-def _candidates_from_default_strategy_providers(
-    provider_items: Iterable[Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    return [_candidate_from_default_strategy_provider(provider_item) for provider_item in provider_items]
-
-
 def config_from_default_strategy(
     default_strategy: Mapping[str, Any],
     *,
@@ -119,16 +113,20 @@ def config_from_default_strategy(
                 indexed[0],
             ),
         )
-        config["candidates"] = _candidates_from_default_strategy_providers(
-            provider_item for _, provider_item in ordered_providers
-        )
+        config["candidates"] = [
+            _candidate_from_default_strategy_provider(provider_item)
+            for _, provider_item in ordered_providers
+        ]
         if "fallback_enabled" in default_strategy:
             config["fallback_enabled"] = bool(default_strategy["fallback_enabled"])
         strategy = "single" if len(provider_items) == 1 else "priority"
         return strategy, config
 
     if strategy_type == "weighted_score":
-        config["candidates"] = _candidates_from_default_strategy_providers(provider_items)
+        config["candidates"] = [
+            _candidate_from_default_strategy_provider(provider_item)
+            for provider_item in provider_items
+        ]
         scoring_config = dict_or_empty(default_strategy.get("scoring"), copy_value=True)
         for key in (
             "weights",
@@ -154,7 +152,10 @@ def config_from_default_strategy(
     if axis not in INTELLIGENT_AXES:
         supported = ", ".join(sorted(INTELLIGENT_AXES))
         raise RoutingPolicyShapeError(f"Unsupported default_strategy.axis '{axis_raw}'. Supported axes: {supported}")
-    config["candidates"] = _candidates_from_default_strategy_providers(provider_items)
+    config["candidates"] = [
+        _candidate_from_default_strategy_provider(provider_item)
+        for provider_item in provider_items
+    ]
     config["axis"] = axis
     config.setdefault("fallback_enabled", True)
     config.setdefault("tier_thresholds", AXIS_TIER_THRESHOLDS[axis])
