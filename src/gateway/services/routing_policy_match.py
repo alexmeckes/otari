@@ -153,27 +153,21 @@ def matches_tag_condition(condition: Any, request_tags: Mapping[str, str]) -> bo
     return _evaluate_tag_condition(condition, request_tags)
 
 
-def _matches_condition_config(match_config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
-    group = _condition_group(match_config)
-    if group is not None:
-        conditions, logic = group
-        return _evaluate_condition_group(conditions, request_tags, logic=logic)
-    if "conditions" not in match_config:
-        return False
-    logic_value = match_config.get("logic", "and")
-    logic = coerced_lower_string(logic_value)
-    return _evaluate_condition_group(
-        match_config.get("conditions"),
-        request_tags,
-        logic="or" if logic in {"or", "any"} else "and",
-    )
-
-
 def matches_policy_match_config(config: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
     match_config = policy_match_config(config)
     legacy_tags = policy_match_tags(config)
     if legacy_tags and not all(request_tags.get(key) == value for key, value in legacy_tags.items()):
         return False
-    if "conditions" in match_config or _condition_group(match_config) is not None:
-        return _matches_condition_config(match_config, request_tags)
+    group = _condition_group(match_config)
+    if group is not None:
+        conditions, logic = group
+        return _evaluate_condition_group(conditions, request_tags, logic=logic)
+    if "conditions" in match_config:
+        logic_value = match_config.get("logic", "and")
+        logic = coerced_lower_string(logic_value)
+        return _evaluate_condition_group(
+            match_config.get("conditions"),
+            request_tags,
+            logic="or" if logic in {"or", "any"} else "and",
+        )
     return bool(legacy_tags)
