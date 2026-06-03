@@ -111,12 +111,13 @@ def _redact_message(
     context: _RedactionContext,
 ) -> Any:
     if isinstance(message, dict) and "content" in message:
-        redacted_message = dict(message)
-        redacted_message["content"] = _redact_content(
-            message.get("content"),
-            context=context,
-        )
-        return redacted_message
+        return {
+            **message,
+            "content": _redact_content(
+                message.get("content"),
+                context=context,
+            ),
+        }
     return message
 
 
