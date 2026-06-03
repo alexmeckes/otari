@@ -29,11 +29,12 @@ def strip_gateway_fields(
     """Strip gateway-internal fields from a request payload before provider dispatch."""
     for key in _GATEWAY_INTERNAL_FIELDS:
         fields.pop(key, None)
-    if tools_extracted:
-        if remaining_user_tools:
-            fields["tools"] = remaining_user_tools
-        else:
-            fields.pop("tools", None)
+    if not tools_extracted:
+        return fields
+    if remaining_user_tools:
+        fields["tools"] = remaining_user_tools
+        return fields
+    fields.pop("tools", None)
     return fields
 
 

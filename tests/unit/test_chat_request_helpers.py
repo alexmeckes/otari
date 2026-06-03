@@ -19,8 +19,61 @@ from gateway.services.chat_tool_config import (
     build_web_search_backend,
     extract_code_execution_tool,
     extract_web_search_tool,
+    strip_gateway_fields,
 )
 from gateway.services.web_search_backend import WebSearchBackend
+
+
+def test_strip_gateway_fields_preserves_tools_when_not_extracted() -> None:
+    user_tool = {"type": "function", "function": {"name": "get_weather"}}
+
+    fields = strip_gateway_fields(
+        {
+            "model": "openai:gpt-4o-mini",
+            "messages": [{"role": "user", "content": "hi"}],
+            "user": "user-1",
+            "project_id": "project-1",
+            "tags": {"team": "platform"},
+            "tools": [user_tool],
+            "tools_header": "prefer external tools",
+            "max_tool_iterations": 3,
+        }
+    )
+
+    assert fields == {
+        "model": "openai:gpt-4o-mini",
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": [user_tool],
+    }
+
+
+def test_strip_gateway_fields_replaces_tools_with_remaining_user_tools() -> None:
+    user_tool = {"type": "function", "function": {"name": "get_weather"}}
+
+    fields = strip_gateway_fields(
+        {
+            "model": "openai:gpt-4o-mini",
+            "tools": [{"type": "web_search"}, user_tool],
+            "tools_header": "prefer external tools",
+        },
+        tools_extracted=True,
+        remaining_user_tools=[user_tool],
+    )
+
+    assert fields == {"model": "openai:gpt-4o-mini", "tools": [user_tool]}
+
+
+def test_strip_gateway_fields_removes_tools_when_none_remain() -> None:
+    fields = strip_gateway_fields(
+        {
+            "model": "openai:gpt-4o-mini",
+            "tools": [{"type": "web_search"}],
+            "tools_header": "prefer external tools",
+        },
+        tools_extracted=True,
+    )
+
+    assert fields == {"model": "openai:gpt-4o-mini"}
 
 
 def test_extracts_gateway_native_short_form() -> None:
