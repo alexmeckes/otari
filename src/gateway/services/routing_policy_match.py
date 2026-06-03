@@ -5,8 +5,6 @@ from typing import Any
 
 from gateway.services.routing_config_values import coerced_lower_string, dict_or_empty, float_or_none
 
-_CONDITION_GROUP_KEYS = (("any", "or"), ("or", "or"), ("all", "and"), ("and", "and"))
-
 
 def policy_match_tags(config: Mapping[str, Any]) -> dict[str, str]:
     tags = dict_or_empty(policy_match_config(config).get("tags"))
@@ -137,7 +135,7 @@ def _evaluate_condition_group(
 
 
 def _condition_group(config: Mapping[str, Any]) -> tuple[Any, str] | None:
-    for key, logic in _CONDITION_GROUP_KEYS:
+    for key, logic in (("any", "or"), ("or", "or"), ("all", "and"), ("and", "and")):
         if key in config:
             return config[key], logic
     return None
