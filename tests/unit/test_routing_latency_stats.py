@@ -28,10 +28,10 @@ def _candidate(model: str, *, position: int) -> RoutingCandidate:
 
 
 class _Trace:
-    def __init__(self, attempts: list[dict[str, Any]]) -> None:
+    def __init__(self, attempts: list[Any]) -> None:
         self._attempts = attempts
 
-    def attempt_list(self) -> list[dict[str, Any]]:
+    def attempt_list(self) -> list[Any]:
         return self._attempts
 
 
@@ -114,4 +114,30 @@ async def test_attach_latency_stats_uses_defaults_for_invalid_config_values() ->
     assert db.statement is not None
     assert db.statement._limit_clause.value == 200
     assert enriched[0].average_latency_ms == 42.0
+    assert enriched[0].latency_sample_count == 1
+
+
+@pytest.mark.asyncio
+async def test_attach_latency_stats_ignores_unusable_success_attempts() -> None:
+    db = _Db(
+        [
+            _Trace(
+                [
+                    "not an attempt",
+                    {"model_key": "openai:gpt-4o", "status": "success", "duration_ms": "slow"},
+                    {"model_key": "anthropic:claude-3", "status": "success", "duration_ms": 10.0},
+                    {"model_key": "openai:gpt-4o", "status": "error", "duration_ms": 5.0},
+                    {"provider": "openai", "model": "gpt-4o", "status": "success", "duration_ms": 30.0},
+                ]
+            )
+        ]
+    )
+
+    enriched = await attach_latency_stats(
+        db,
+        [_candidate("openai:gpt-4o", position=1)],
+        config={"latency_min_samples": 1},
+    )
+
+    assert enriched[0].average_latency_ms == 30.0
     assert enriched[0].latency_sample_count == 1
