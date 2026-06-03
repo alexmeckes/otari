@@ -2,6 +2,7 @@ from gateway.services.routing_guardrail_redactions import (
     _missing_redaction_rules_trace,
     _redact_messages,
     _redact_request_fields,
+    _redact_string,
     _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
@@ -34,6 +35,18 @@ def test_redactions_config_extracts_nested_redactions_mapping() -> None:
     assert _redactions_config({}) == {}
     assert _redactions_config({"guardrails": ["redactions"]}) == {}
     assert _redactions_config({"guardrails": {"redactions": ["enabled"]}}) == {}
+
+
+def test_redact_string_replaces_matches_and_updates_counts() -> None:
+    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
+    counts: dict[tuple[str, str], int] = {}
+
+    redacted = _redact_string("token-123 and token-456", rules=rules, replacement="[MASKED]", counts=counts)
+
+    assert redacted == "[MASKED] and [MASKED]"
+    assert counts == {("pattern", "token"): 2}
+    assert _redact_string("nothing to mask", rules=rules, replacement="[MASKED]", counts=counts) == "nothing to mask"
+    assert counts == {("pattern", "token"): 2}
 
 
 def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> None:

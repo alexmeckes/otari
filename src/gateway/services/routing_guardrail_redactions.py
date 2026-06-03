@@ -11,6 +11,22 @@ from gateway.services.routing_guardrail_helpers import guardrails_config, named_
 _RedactionRule = tuple[str, str, re.Pattern[str]]
 
 
+def _redact_string(
+    value: str,
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: dict[tuple[str, str], int],
+) -> str:
+    redacted = value
+    for kind, rule, pattern in rules:
+        redacted, count = pattern.subn(replacement, redacted)
+        if count:
+            key = (kind, rule)
+            counts[key] = counts.get(key, 0) + count
+    return redacted
+
+
 def _redact_content(
     value: Any,
     *,
@@ -19,13 +35,7 @@ def _redact_content(
     counts: dict[tuple[str, str], int],
 ) -> Any:
     if isinstance(value, str):
-        redacted = value
-        for kind, rule, pattern in rules:
-            redacted, count = pattern.subn(replacement, redacted)
-            if count:
-                key = (kind, rule)
-                counts[key] = counts.get(key, 0) + count
-        return redacted
+        return _redact_string(value, rules=rules, replacement=replacement, counts=counts)
     if isinstance(value, list):
         return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
     if isinstance(value, dict):
