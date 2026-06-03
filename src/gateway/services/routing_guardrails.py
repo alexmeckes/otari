@@ -98,9 +98,7 @@ def _combine_guardrail_value(key: str, existing: Any, incoming: Any) -> Any:
     if key in _GUARDRAIL_LIST_CONFIG_KEYS:
         return _combine_guardrail_list(existing, incoming)
     if isinstance(existing, dict) and isinstance(incoming, dict):
-        nested = dict(existing)
-        nested.update(copy.deepcopy(incoming))
-        return nested
+        return {**existing, **copy.deepcopy(incoming)}
     return copy.deepcopy(incoming)
 
 
