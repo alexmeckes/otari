@@ -9,8 +9,6 @@ from gateway.models.entities import RouteTrace
 from gateway.services.routing_config_values import bool_config, dict_or_empty, int_config, non_negative_float_or_none
 from gateway.services.routing_trace_attempts import attempt_outcome, attempt_provider
 
-_HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
-
 
 @dataclass(frozen=True)
 class ProviderHealth:
@@ -164,12 +162,18 @@ def apply_provider_health_order(
     health_config = dict_or_empty(config.get("health"))
     if not bool_config(health_config.get("enabled"), False) or _health_mode(health_config) != "downrank":
         return list(candidates)
+    health_rank = {
+        "healthy": 0,
+        "unknown": 1,
+        "degraded": 2,
+        "unhealthy": 3,
+    }
     return sorted(
         candidates,
         key=lambda candidate: (
-            _HEALTH_RANK.get(
+            health_rank.get(
                 candidate.provider_health.status if candidate.provider_health else "unknown",
-                _HEALTH_RANK["unknown"],
+                health_rank["unknown"],
             ),
             candidate.position,
         ),
