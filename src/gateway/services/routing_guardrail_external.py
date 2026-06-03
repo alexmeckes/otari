@@ -121,6 +121,10 @@ def _explicit_classifier_violations(payload: Mapping[str, Any], *, name: str) ->
     ]
 
 
+def _fallback_classifier_violation(payload: Mapping[str, Any], *, name: str) -> dict[str, str]:
+    return guardrail_violation("external_classifier", _classifier_rule(payload.get("label"), fallback=name))
+
+
 def _classifier_violations(
     payload: Mapping[str, Any],
     *,
@@ -130,8 +134,7 @@ def _classifier_violations(
     violations = _explicit_classifier_violations(payload, name=name)
     score = non_negative_float_or_none(payload.get("score"))
     if _classifier_flagged(payload, score=score, threshold=threshold) and not violations:
-        violation_label = _classifier_rule(payload.get("label"), fallback=name)
-        violations.append(guardrail_violation("external_classifier", violation_label))
+        violations.append(_fallback_classifier_violation(payload, name=name))
     return violations, score
 
 

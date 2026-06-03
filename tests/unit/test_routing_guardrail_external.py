@@ -90,6 +90,21 @@ def test_explicit_classifier_violations_default_empty_for_unsupported_payloads()
     assert routing_guardrail_external._explicit_classifier_violations({}, name="dlp") == []
 
 
+def test_fallback_classifier_violation_preserves_label_fallback_rules() -> None:
+    assert routing_guardrail_external._fallback_classifier_violation(
+        {"label": " prompt_injection "},
+        name="prompt-shield",
+    ) == {"type": "external_classifier", "rule": "prompt_injection"}
+    assert routing_guardrail_external._fallback_classifier_violation(
+        {"label": {"category": " customer_pii "}},
+        name="dlp",
+    ) == {"type": "external_classifier", "rule": "customer_pii"}
+    assert routing_guardrail_external._fallback_classifier_violation({"label": " "}, name="dlp") == {
+        "type": "external_classifier",
+        "rule": "dlp",
+    }
+
+
 def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
     violations, score = routing_guardrail_external._classifier_violations(
         {
