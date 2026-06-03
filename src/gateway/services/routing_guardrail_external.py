@@ -153,21 +153,6 @@ def _classifier_success_evaluation(
     }
 
 
-def _classifier_error_result(
-    settings: _ClassifierSettings,
-    *,
-    status_code: int | None,
-    error: str,
-) -> dict[str, Any]:
-    return {
-        "name": settings.name,
-        "status": "error",
-        "status_code": status_code,
-        "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
-        "fail_closed": settings.fail_closed,
-    }
-
-
 def _classifier_error_evaluation(
     settings: _ClassifierSettings,
     *,
@@ -176,11 +161,13 @@ def _classifier_error_evaluation(
 ) -> _ClassifierEvaluationResult:
     return (
         [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
-        _classifier_error_result(
-            settings,
-            status_code=status_code,
-            error=error,
-        ),
+        {
+            "name": settings.name,
+            "status": "error",
+            "status_code": status_code,
+            "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
+            "fail_closed": settings.fail_closed,
+        },
     )
 
 

@@ -290,31 +290,8 @@ def test_classifier_success_evaluation_preserves_flagged_and_passed_results() ->
     }
 
 
-def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> None:
-    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=True,
-    )
-
-    assert routing_guardrail_external._classifier_error_result(
-        settings,
-        status_code=503,
-        error="x" * (limit + 5),
-    ) == {
-        "name": "dlp",
-        "status": "error",
-        "status_code": 503,
-        "error": "x" * limit,
-        "fail_closed": True,
-    }
-
-
 def test_classifier_error_evaluation_preserves_result_and_fail_closed_violations() -> None:
+    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
     fail_closed = routing_guardrail_external._ClassifierSettings(
         name="dlp",
         url="https://classifier.example.test/check",
@@ -335,14 +312,14 @@ def test_classifier_error_evaluation_preserves_result_and_fail_closed_violations
     violations, result = routing_guardrail_external._classifier_error_evaluation(
         fail_closed,
         status_code=503,
-        error="classifier down",
+        error="x" * (limit + 5),
     )
     assert violations == [{"type": "external_classifier_error", "rule": "dlp"}]
     assert result == {
         "name": "dlp",
         "status": "error",
         "status_code": 503,
-        "error": "classifier down",
+        "error": "x" * limit,
         "fail_closed": True,
     }
 
