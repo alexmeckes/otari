@@ -2,8 +2,8 @@
 
 import copy
 import json
-import re
 from collections.abc import Mapping
+from re import Pattern
 from typing import Any
 
 from gateway.services import routing_guardrail_external
@@ -20,7 +20,6 @@ from gateway.services.routing_request_analysis import jsonable_text
 
 _GUARDRAIL_ACTIONS = {"block", "observe"}
 _GUARDRAIL_LIST_CONFIG_KEYS = {"blocked_terms", "blocked_patterns", "external_classifiers"}
-_PatternRule = tuple[str, re.Pattern[str]]
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
     "ignore all previous instructions",
@@ -204,7 +203,7 @@ def _blocked_term_violations(guardrails: Mapping[str, Any], normalized_text: str
 
 def _pattern_search_violations(
     violation_type: str,
-    rules: list[_PatternRule],
+    rules: list[tuple[str, Pattern[str]]],
     request_text: str,
 ) -> list[dict[str, str]]:
     return [
