@@ -5,7 +5,6 @@ from gateway.services.routing_provider_health import (
     _provider_health_enabled,
     _provider_health_from_counts,
     _provider_health_mode,
-    _provider_health_rate,
     _record_provider_outcome,
     apply_provider_health_gate,
     apply_provider_health_order,
@@ -28,12 +27,10 @@ def test_provider_health_helpers_read_shared_health_config_values() -> None:
     health_config = {
         "enabled": True,
         "mode": "skip_unhealthy",
-        "degraded_failure_rate": 2.0,
     }
 
     assert _provider_health_enabled(health_config) is True
     assert _provider_health_mode(health_config) == "skip_unhealthy"
-    assert _provider_health_rate(health_config, "degraded_failure_rate", 0.25) == 1.0
 
 
 def test_provider_health_mode_defaults_for_unknown_mode() -> None:
@@ -105,6 +102,23 @@ def test_provider_health_from_counts_preserves_unhealthy_results() -> None:
     assert health.status == "unhealthy"
     assert health.sample_count == 4
     assert health.failure_rate == 0.75
+    assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
+
+
+def test_provider_health_from_counts_caps_configured_thresholds() -> None:
+    health = _provider_health_from_counts(
+        "openai",
+        success_count=0,
+        error_count=4,
+        health_config={
+            "min_samples": 1,
+            "degraded_failure_rate": 2.0,
+            "unhealthy_failure_rate": 2.0,
+        },
+    )
+
+    assert health.status == "unhealthy"
+    assert health.failure_rate == 1.0
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
 
 

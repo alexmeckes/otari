@@ -47,13 +47,6 @@ def _provider_health_mode(health_config: Mapping[str, Any]) -> str:
     return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
 
 
-def _provider_health_rate(health_config: Mapping[str, Any], key: str, default: float) -> float:
-    rate = non_negative_float_or_none(health_config.get(key))
-    if rate is None:
-        return default
-    return min(rate, 1.0)
-
-
 def _record_provider_outcome(
     counts_by_provider: dict[str, dict[str, int]],
     provider: str | None,
@@ -73,8 +66,16 @@ def _provider_health_from_counts(
 ) -> ProviderHealth:
     sample_count = success_count + error_count
     min_samples = int_config(health_config.get("min_samples"), 3)
-    degraded_rate = _provider_health_rate(health_config, "degraded_failure_rate", 0.25)
-    unhealthy_rate = _provider_health_rate(health_config, "unhealthy_failure_rate", 0.50)
+    degraded_rate = non_negative_float_or_none(health_config.get("degraded_failure_rate"))
+    if degraded_rate is None:
+        degraded_rate = 0.25
+    else:
+        degraded_rate = min(degraded_rate, 1.0)
+    unhealthy_rate = non_negative_float_or_none(health_config.get("unhealthy_failure_rate"))
+    if unhealthy_rate is None:
+        unhealthy_rate = 0.50
+    else:
+        unhealthy_rate = min(unhealthy_rate, 1.0)
     failure_rate = None if sample_count == 0 else error_count / sample_count
     if sample_count < min_samples or failure_rate is None:
         status, reason = "unknown", "insufficient_samples"
