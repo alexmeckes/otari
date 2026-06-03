@@ -56,9 +56,7 @@ def _classifier_response_payload(response: httpx.Response) -> dict[str, Any] | N
         parsed = response.json()
     except ValueError:
         return None
-    if isinstance(parsed, dict):
-        return parsed
-    return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _classifier_http_error_text(response: httpx.Response, payload: Mapping[str, Any] | None) -> str:
