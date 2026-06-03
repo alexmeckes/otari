@@ -2,6 +2,7 @@ from gateway.services.routing_guardrail_redactions import (
     _missing_redaction_rules_trace,
     _redact_messages,
     _redact_request_fields,
+    _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
     apply_guardrail_redactions,
@@ -22,6 +23,13 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
         ("pattern", "token"),
     ]
     assert pattern_count == 1
+
+
+def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> None:
+    assert _redaction_replacement({"replacement": "[MASKED]"}) == "[MASKED]"
+    assert _redaction_replacement({}) == "[REDACTED]"
+    assert _redaction_replacement({"replacement": None}) == "[REDACTED]"
+    assert _redaction_replacement({"replacement": 123}) == "[REDACTED]"
 
 
 def test_redact_messages_redacts_content_and_preserves_other_items() -> None:

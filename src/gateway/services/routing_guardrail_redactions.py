@@ -49,6 +49,13 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule
     return rules, len(pattern_rules)
 
 
+def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
+    replacement = redactions.get("replacement")
+    if isinstance(replacement, str):
+        return replacement
+    return "[REDACTED]"
+
+
 def _redact_messages(
     messages: Any,
     *,
@@ -128,9 +135,7 @@ def apply_guardrail_redactions(
         return body, None
 
     rules, pattern_count = _redaction_rules(redactions)
-    replacement = redactions.get("replacement")
-    if not isinstance(replacement, str):
-        replacement = "[REDACTED]"
+    replacement = _redaction_replacement(redactions)
     if not rules:
         return body, _missing_redaction_rules_trace(replacement)
 
