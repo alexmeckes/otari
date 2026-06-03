@@ -48,15 +48,9 @@ def _provider_health_from_counts(
     sample_count = success_count + error_count
     min_samples = int_config(health_config.get("min_samples"), 3)
     degraded_rate = non_negative_float_or_none(health_config.get("degraded_failure_rate"))
-    if degraded_rate is None:
-        degraded_rate = 0.25
-    else:
-        degraded_rate = min(degraded_rate, 1.0)
+    degraded_rate = 0.25 if degraded_rate is None else min(degraded_rate, 1.0)
     unhealthy_rate = non_negative_float_or_none(health_config.get("unhealthy_failure_rate"))
-    if unhealthy_rate is None:
-        unhealthy_rate = 0.50
-    else:
-        unhealthy_rate = min(unhealthy_rate, 1.0)
+    unhealthy_rate = 0.50 if unhealthy_rate is None else min(unhealthy_rate, 1.0)
     failure_rate = None if sample_count == 0 else error_count / sample_count
     if sample_count < min_samples or failure_rate is None:
         status, reason = "unknown", "insufficient_samples"

@@ -173,6 +173,23 @@ def test_provider_health_from_counts_caps_configured_thresholds() -> None:
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
 
 
+def test_provider_health_from_counts_preserves_zero_thresholds() -> None:
+    health = _provider_health_from_counts(
+        "openai",
+        success_count=4,
+        error_count=0,
+        health_config={
+            "min_samples": 1,
+            "degraded_failure_rate": 0.0,
+            "unhealthy_failure_rate": 0.0,
+        },
+    )
+
+    assert health.status == "unhealthy"
+    assert health.failure_rate == 0.0
+    assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
+
+
 @pytest.mark.asyncio
 async def test_attach_provider_health_counts_known_attempt_and_trace_outcomes() -> None:
     db = _Db(
