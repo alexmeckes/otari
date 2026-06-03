@@ -280,12 +280,9 @@ def _guardrail_result(
     checked_text_chars: int,
     preset_metadata: dict[str, list[str]] | None,
 ) -> dict[str, Any]:
-    status_value = "passed"
-    if violations:
-        status_value = "blocked" if action == "block" else "observed"
     result: dict[str, Any] = {
         "enabled": True,
-        "status": status_value,
+        "status": "passed" if not violations else "blocked" if action == "block" else "observed",
         "action": action,
         "violations": violations,
         "external_classifiers": classifier_results,
