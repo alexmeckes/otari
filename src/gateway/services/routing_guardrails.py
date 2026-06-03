@@ -18,6 +18,7 @@ from gateway.services.routing_guardrail_helpers import (
 from gateway.services.routing_request_analysis import jsonable_text
 
 _GUARDRAIL_ACTIONS = {"block", "observe"}
+_GUARDRAIL_LIST_CONFIG_KEYS = {"blocked_terms", "blocked_patterns", "external_classifiers"}
 _PROMPT_INJECTION_PHRASES = (
     "ignore previous instructions",
     "ignore all previous instructions",
@@ -91,18 +92,20 @@ def _combine_guardrail_list(existing: Any, incoming: Any) -> list[Any]:
     return values
 
 
+def _combine_guardrail_value(key: str, existing: Any, incoming: Any) -> Any:
+    if key in _GUARDRAIL_LIST_CONFIG_KEYS:
+        return _combine_guardrail_list(existing, incoming)
+    if isinstance(existing, dict) and isinstance(incoming, dict):
+        nested = dict(existing)
+        nested.update(copy.deepcopy(incoming))
+        return nested
+    return copy.deepcopy(incoming)
+
+
 def _combine_guardrail_config(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
     combined = copy.deepcopy(dict(base))
     for key, value in override.items():
-        if key in {"blocked_terms", "blocked_patterns", "external_classifiers"}:
-            combined[key] = _combine_guardrail_list(combined.get(key), value)
-            continue
-        if isinstance(combined.get(key), dict) and isinstance(value, dict):
-            nested = dict(combined[key])
-            nested.update(copy.deepcopy(value))
-            combined[key] = nested
-            continue
-        combined[key] = copy.deepcopy(value)
+        combined[key] = _combine_guardrail_value(key, combined.get(key), value)
     return combined
 
 

@@ -3,7 +3,9 @@ import pytest
 from gateway.services.routing_guardrails import (
     _blocked_pattern_violations,
     _blocked_term_violations,
+    _combine_guardrail_config,
     _combine_guardrail_list,
+    _combine_guardrail_value,
     _effective_guardrails,
     _guardrail_list_items,
     _guardrail_preset_expansion,
@@ -51,6 +53,45 @@ def test_combine_guardrail_list_keeps_existing_deduping_behavior() -> None:
     )
 
     assert combined == [{"name": "secret", "pattern": "token"}, "openai"]
+
+
+def test_combine_guardrail_value_preserves_list_nested_and_scalar_rules() -> None:
+    assert _combine_guardrail_value(
+        "blocked_patterns",
+        [{"name": "secret", "pattern": "token"}],
+        [{"name": "secret", "pattern": "token"}, "openai"],
+    ) == [{"name": "secret", "pattern": "token"}, "openai"]
+
+    assert _combine_guardrail_value(
+        "pii",
+        {"enabled": True, "types": ["email"]},
+        {"enabled": False},
+    ) == {"enabled": False, "types": ["email"]}
+
+    incoming = {"enabled": True, "types": ["email"]}
+    combined = _combine_guardrail_value("prompt_injection", True, incoming)
+    incoming["types"].append("ssn")
+
+    assert combined == {"enabled": True, "types": ["email"]}
+
+
+def test_combine_guardrail_config_delegates_per_key_merge_rules() -> None:
+    assert _combine_guardrail_config(
+        {
+            "blocked_terms": ["base-secret"],
+            "pii": {"enabled": True, "types": ["email"]},
+            "action": "observe",
+        },
+        {
+            "blocked_terms": ["base-secret", "override-secret"],
+            "pii": {"enabled": False},
+            "action": "block",
+        },
+    ) == {
+        "blocked_terms": ["base-secret", "override-secret"],
+        "pii": {"enabled": False, "types": ["email"]},
+        "action": "block",
+    }
 
 
 def test_guardrail_preset_expansion_reports_applied_and_ignored_presets() -> None:
