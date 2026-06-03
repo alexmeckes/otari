@@ -22,27 +22,18 @@ def get_provider_kwargs(
         Dictionary of provider kwargs (credentials, client_args, etc.)
 
     """
-    kwargs: dict[str, Any] = {}
-    if provider.value in config.providers:
-        provider_config = config.providers[provider.value]
+    provider_config = config.providers.get(provider.value)
+    if provider_config is None:
+        return {}
 
-        if provider == LLMProvider.VERTEXAI:
-            vertex_creds = provider_config.get("credentials")
-            vertex_project = provider_config.get("project")
-            vertex_location = provider_config.get("location")
+    if provider == LLMProvider.VERTEXAI:
+        kwargs = setup_vertex_environment(
+            credentials=provider_config.get("credentials"),
+            project=provider_config.get("project"),
+            location=provider_config.get("location"),
+        )
+        if "client_args" in provider_config:
+            kwargs["client_args"] = provider_config["client_args"]
+        return kwargs
 
-            kwargs.update(
-                setup_vertex_environment(
-                    credentials=vertex_creds,
-                    project=vertex_project,
-                    location=vertex_location,
-                )
-            )
-            if "client_args" in provider_config:
-                kwargs["client_args"] = provider_config["client_args"]
-        else:
-            kwargs = {k: v for k, v in provider_config.items() if k != "client_args"}
-            if "client_args" in provider_config:
-                kwargs["client_args"] = provider_config["client_args"]
-
-    return kwargs
+    return dict(provider_config)
