@@ -68,6 +68,28 @@ def test_classifier_flagged_preserves_boolean_and_threshold_rules() -> None:
     assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=0.9, threshold=None)
 
 
+def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
+    assert routing_guardrail_external._explicit_classifier_violations(
+        {
+            "violations": [
+                {"category": " customer_pii "},
+                " prompt_injection ",
+                {"rule": " "},
+            ]
+        },
+        name="dlp",
+    ) == [
+        {"type": "external_classifier", "rule": "customer_pii"},
+        {"type": "external_classifier", "rule": "prompt_injection"},
+        {"type": "external_classifier", "rule": "dlp"},
+    ]
+
+
+def test_explicit_classifier_violations_default_empty_for_unsupported_payloads() -> None:
+    assert routing_guardrail_external._explicit_classifier_violations({"violations": {"rule": "pii"}}, name="dlp") == []
+    assert routing_guardrail_external._explicit_classifier_violations({}, name="dlp") == []
+
+
 def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
     violations, score = routing_guardrail_external._classifier_violations(
         {

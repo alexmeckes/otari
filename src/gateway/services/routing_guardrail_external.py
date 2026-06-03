@@ -111,18 +111,23 @@ def _classifier_flagged(
     return threshold is not None and score is not None and score >= threshold
 
 
+def _explicit_classifier_violations(payload: Mapping[str, Any], *, name: str) -> list[dict[str, str]]:
+    raw_violations = payload.get("violations")
+    if not isinstance(raw_violations, list):
+        return []
+    return [
+        guardrail_violation("external_classifier", _classifier_rule(item, fallback=name))
+        for item in raw_violations
+    ]
+
+
 def _classifier_violations(
     payload: Mapping[str, Any],
     *,
     name: str,
     threshold: float | None,
 ) -> tuple[list[dict[str, str]], float | None]:
-    violations: list[dict[str, str]] = []
-    raw_violations = payload.get("violations")
-    if isinstance(raw_violations, list):
-        for item in raw_violations:
-            violations.append(guardrail_violation("external_classifier", _classifier_rule(item, fallback=name)))
-
+    violations = _explicit_classifier_violations(payload, name=name)
     score = non_negative_float_or_none(payload.get("score"))
     if _classifier_flagged(payload, score=score, threshold=threshold) and not violations:
         violation_label = _classifier_rule(payload.get("label"), fallback=name)
