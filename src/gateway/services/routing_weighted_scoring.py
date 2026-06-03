@@ -5,9 +5,6 @@ from typing import Any
 from gateway.services.routing_config_values import nested_dict_or_empty, non_negative_float_or_none, score_or_none
 
 _DEFAULT_SCORE_WEIGHTS = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
-_DEFAULT_QUALITY_SCORE = 0.5
-_DEFAULT_UNKNOWN_COST_SCORE = 0.0
-_DEFAULT_UNKNOWN_LATENCY_SCORE = 0.5
 
 
 def _normalized_lower_is_better(
@@ -61,9 +58,9 @@ def attach_weighted_scores(
     if weight_total <= 0:
         weights = dict(_DEFAULT_SCORE_WEIGHTS)
         weight_total = sum(weights.values())
-    default_quality_score = _score_setting(scoring, "default_quality_score", _DEFAULT_QUALITY_SCORE)
-    unknown_cost_score = _score_setting(scoring, "unknown_cost_score", _DEFAULT_UNKNOWN_COST_SCORE)
-    unknown_latency_score = _score_setting(scoring, "unknown_latency_score", _DEFAULT_UNKNOWN_LATENCY_SCORE)
+    default_quality_score = _score_setting(scoring, "default_quality_score", 0.5)
+    unknown_cost_score = _score_setting(scoring, "unknown_cost_score", 0.0)
+    unknown_latency_score = _score_setting(scoring, "unknown_latency_score", 0.5)
 
     known_costs = [
         candidate.estimated_cost
