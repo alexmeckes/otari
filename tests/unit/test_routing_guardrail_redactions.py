@@ -13,7 +13,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_rules,
     _redaction_trace,
     _RedactionContext,
-    _redactions_config,
     _typed_redaction_rules,
     apply_guardrail_redactions,
 )
@@ -45,15 +44,6 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
     assert rules[1][2].pattern == r"token-[0-9]+"
     assert _redaction_rules({"patterns": "not-a-list"}) == ([], 0)
     assert _redaction_rules({"pii": False, "pii_types": ["email"]}) == ([], 0)
-
-
-def test_redactions_config_extracts_nested_redactions_mapping() -> None:
-    redactions = {"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]}
-
-    assert _redactions_config({"guardrails": {"redactions": redactions}}) == redactions
-    assert _redactions_config({}) == {}
-    assert _redactions_config({"guardrails": ["redactions"]}) == {}
-    assert _redactions_config({"guardrails": {"redactions": ["enabled"]}}) == {}
 
 
 def test_redact_string_replaces_matches_and_updates_counts() -> None:
@@ -275,6 +265,8 @@ def test_apply_guardrail_redactions_respects_disabled_or_missing_redactions() ->
 
     for config in (
         {},
+        {"guardrails": ["redactions"]},
+        {"guardrails": {"redactions": ["enabled"]}},
         {
             "guardrails": {
                 "redactions": {
