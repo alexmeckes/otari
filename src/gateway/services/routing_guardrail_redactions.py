@@ -50,7 +50,8 @@ def apply_guardrail_redactions(
         fallback_types=redactions.get("pii_types"),
     ):
         rules.append(("pii", pii_type, pattern))
-    for name, pattern in named_patterns(redactions.get("patterns")):
+    pattern_rules = named_patterns(redactions.get("patterns"))
+    for name, pattern in pattern_rules:
         rules.append(("pattern", name, pattern))
 
     replacement = redactions.get("replacement")
@@ -97,5 +98,5 @@ def apply_guardrail_redactions(
         "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": count_items,
-        "pattern_count": len(named_patterns(redactions.get("patterns"))),
+        "pattern_count": len(pattern_rules),
     }
