@@ -1,5 +1,3 @@
-import re
-
 from gateway.services.routing_guardrail_redactions import (
     _redact_list,
     _redact_mapping,
@@ -7,7 +5,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_string,
     _redaction_rules,
     _RedactionContext,
-    _typed_redaction_rules,
     apply_guardrail_redactions,
 )
 
@@ -95,16 +92,6 @@ def test_redact_message_redacts_content_copy_and_passes_through_other_items() ->
     assert _redact_message(passthrough, context=context) is passthrough
     assert _redact_message("raw", context=context) == "raw"
     assert context.counts == {("pattern", "token"): 1}
-
-
-def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:
-    token = re.compile(r"token-[0-9]+", re.IGNORECASE)
-    email = re.compile(r"@example\.com", re.IGNORECASE)
-
-    assert _typed_redaction_rules("pattern", [("token", token), ("email", email)]) == [
-        ("pattern", "token", token),
-        ("pattern", "email", email),
-    ]
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
