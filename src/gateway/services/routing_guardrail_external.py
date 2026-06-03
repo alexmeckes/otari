@@ -14,10 +14,8 @@ from gateway.services.routing_config_values import (
 )
 from gateway.services.routing_guardrail_helpers import guardrail_violation
 
-ExternalClassifierPost = Callable[
-    ...,
-    Awaitable[tuple[int | None, dict[str, Any] | None, str | None]],
-]
+ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
+ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
 
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
@@ -42,7 +40,7 @@ async def post_external_guardrail_classifier(
     request_text: str,
     timeout_seconds: float,
     headers: dict[str, str] | None,
-) -> tuple[int | None, dict[str, Any] | None, str | None]:
+) -> ExternalClassifierPostResult:
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(url, json={"text": request_text}, headers=headers)

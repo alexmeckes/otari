@@ -405,7 +405,7 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
         request_text: str,
         timeout_seconds: float,
         headers: dict[str, str] | None,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         captured.append(
             {
                 "url": url,
@@ -452,7 +452,7 @@ async def test_external_classifier_headers_skip_blank_keys_without_trimming_kept
         request_text: str,
         timeout_seconds: float,
         headers: dict[str, str] | None,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         captured.append({"headers": headers})
         return 200, {"violations": []}, None
 
@@ -476,7 +476,7 @@ async def test_external_classifier_headers_skip_blank_keys_without_trimming_kept
 async def test_external_classifier_threshold_uses_shared_score_parsing() -> None:
     async def post_classifier(
         **_kwargs: Any,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         return 200, {"score": 0.82, "label": " prompt_injection "}, None
 
     violations, results = await routing_guardrail_external.evaluate_external_classifiers(
@@ -510,7 +510,7 @@ async def test_external_classifier_float_config_preserves_timeout_and_threshold_
         request_text: str,
         timeout_seconds: float,
         headers: dict[str, str] | None,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         captured.append(
             {
                 "url": url,
@@ -553,7 +553,7 @@ async def test_external_classifier_float_config_preserves_timeout_and_threshold_
 async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> None:
     async def post_classifier(
         **kwargs: Any,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         raise AssertionError(f"unexpected classifier post: {kwargs}")
 
     violations, results = await routing_guardrail_external.evaluate_external_classifiers(

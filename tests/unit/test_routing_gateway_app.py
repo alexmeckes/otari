@@ -15,6 +15,7 @@ from gateway.core.config import API_KEY_HEADER, GatewayConfig
 from gateway.main import create_app
 from gateway.metrics import REGISTRY
 from gateway.models.entities import Project, RouteTrace, UsageLog, User
+from gateway.services import routing_guardrail_external
 from gateway.services.budget_alert_webhook_service import (
     BudgetAlertWebhookRetryWorker,
     WebhookDeliveryResult,
@@ -2895,7 +2896,7 @@ def test_policy_external_guardrail_classifier_blocks_before_provider_call(
         request_text: str,
         timeout_seconds: float,
         headers: dict[str, str] | None,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         assert url == "https://classifier.example.test/check"
         assert timeout_seconds == 2.0
         assert headers is None
@@ -2957,7 +2958,7 @@ def test_policy_external_guardrail_classifier_observe_mode_is_traced(
         request_text: str,
         timeout_seconds: float,
         headers: dict[str, str] | None,
-    ) -> tuple[int | None, dict[str, Any] | None, str | None]:
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
         assert url == "https://classifier.example.test/prompt-shield"
         assert "Say hello" in request_text
         assert timeout_seconds == 2.0
