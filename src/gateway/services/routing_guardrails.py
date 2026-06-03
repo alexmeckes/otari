@@ -153,6 +153,18 @@ def guardrail_action(config: Mapping[str, Any]) -> str:
     return "block"
 
 
+def _guardrail_request_text(request_body: Mapping[str, Any]) -> str:
+    return "\n".join(
+        part
+        for part in (
+            jsonable_text(request_body.get("messages")),
+            jsonable_text(request_body.get("input")),
+            jsonable_text(request_body.get("instructions")),
+        )
+        if part
+    )
+
+
 async def evaluate_guardrails(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -166,15 +178,7 @@ async def evaluate_guardrails(
     preset_config, preset_metadata = _guardrail_preset_expansion(guardrails)
     if preset_config:
         guardrails = _combine_guardrail_config(preset_config, guardrails)
-    request_text = "\n".join(
-        part
-        for part in (
-            jsonable_text(request_body.get("messages")),
-            jsonable_text(request_body.get("input")),
-            jsonable_text(request_body.get("instructions")),
-        )
-        if part
-    )
+    request_text = _guardrail_request_text(request_body)
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
 

@@ -4,6 +4,7 @@ from gateway.services.routing_guardrails import (
     _combine_guardrail_list,
     _guardrail_list_items,
     _guardrail_preset_expansion,
+    _guardrail_request_text,
     evaluate_guardrails,
     guardrail_action,
 )
@@ -53,6 +54,18 @@ def test_guardrail_action_trims_known_actions_and_defaults_to_block() -> None:
     assert guardrail_action({"guardrails": {"action": " observe "}}) == "observe"
     assert guardrail_action({"guardrails": {"action": "audit"}}) == "block"
     assert guardrail_action({"guardrails": {"action": " "}}) == "block"
+
+
+def test_guardrail_request_text_joins_non_empty_request_sources() -> None:
+    request_text = _guardrail_request_text(
+        {
+            "messages": [{"role": "user", "content": "message marker"}],
+            "input": ["input", "marker"],
+            "instructions": " ",
+        }
+    )
+
+    assert request_text == "user message marker\ninput marker\n "
 
 
 @pytest.mark.asyncio
@@ -108,6 +121,14 @@ async def test_evaluate_guardrails_checks_messages_input_and_instructions_text()
     )
 
     assert result is not None
+    expected_request_text = "\n".join(
+        [
+            "user Message marker appears here.",
+            "Input marker appears here.",
+            "Instruction marker appears here.",
+        ]
+    )
+    assert result["checked_text_chars"] == len(expected_request_text)
     assert result["violations"] == [
         {"type": "blocked_term", "rule": "message marker"},
         {"type": "blocked_term", "rule": "input marker"},
