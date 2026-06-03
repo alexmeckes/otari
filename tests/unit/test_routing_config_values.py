@@ -69,6 +69,7 @@ def test_nested_dict_or_empty_uses_fallback_dict_when_primary_missing_or_not_dic
         (" ", []),
         ([" team ", 42, None, ""], ["team", "42", "None"]),
         (("team",), []),
+        (42, []),
         (None, []),
     ],
 )

@@ -40,12 +40,9 @@ def coerced_string_or_none(value: Any) -> str | None:
 
 
 def string_list(value: Any) -> list[str]:
-    parsed = string_or_none(value)
-    if parsed is not None:
-        return [parsed]
-    if not isinstance(value, list):
-        return []
-    return [item for value_item in value if (item := coerced_string_or_none(value_item)) is not None]
+    if isinstance(value, list):
+        return [item for value_item in value if (item := coerced_string_or_none(value_item)) is not None]
+    return [parsed] if (parsed := string_or_none(value)) is not None else []
 
 
 def comma_separated_string_list(value: Any) -> list[str]:
