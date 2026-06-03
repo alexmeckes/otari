@@ -183,6 +183,19 @@ def _classifier_error_violations(settings: _ClassifierSettings) -> list[dict[str
     return [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else []
 
 
+def _classifier_error_evaluation(
+    settings: _ClassifierSettings,
+    *,
+    status_code: int | None,
+    error: str,
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    return _classifier_error_violations(settings), _classifier_error_result(
+        settings,
+        status_code=status_code,
+        error=error,
+    )
+
+
 def _classifier_skipped_result(settings: _ClassifierSettings) -> dict[str, str]:
     return {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
 
@@ -233,14 +246,13 @@ async def evaluate_external_classifiers(
             post_classifier=post_classifier,
         )
         if error is not None:
-            classifier_results.append(
-                _classifier_error_result(
-                    settings,
-                    status_code=status_code,
-                    error=error,
-                )
+            classifier_violations, classifier_result = _classifier_error_evaluation(
+                settings,
+                status_code=status_code,
+                error=error,
             )
-            violations.extend(_classifier_error_violations(settings))
+            violations.extend(classifier_violations)
+            classifier_results.append(classifier_result)
             continue
         assert payload is not None
         classifier_violations, score = _classifier_violations(

@@ -350,6 +350,53 @@ def test_classifier_error_violations_preserve_fail_closed_behavior() -> None:
     assert routing_guardrail_external._classifier_error_violations(fail_open) == []
 
 
+def test_classifier_error_evaluation_preserves_result_and_fail_closed_violations() -> None:
+    fail_closed = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=True,
+    )
+    fail_open = routing_guardrail_external._ClassifierSettings(
+        name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+
+    violations, result = routing_guardrail_external._classifier_error_evaluation(
+        fail_closed,
+        status_code=503,
+        error="classifier down",
+    )
+    assert violations == [{"type": "external_classifier_error", "rule": "dlp"}]
+    assert result == {
+        "name": "dlp",
+        "status": "error",
+        "status_code": 503,
+        "error": "classifier down",
+        "fail_closed": True,
+    }
+
+    violations, result = routing_guardrail_external._classifier_error_evaluation(
+        fail_open,
+        status_code=None,
+        error="timeout",
+    )
+    assert violations == []
+    assert result == {
+        "name": "prompt-shield",
+        "status": "error",
+        "status_code": None,
+        "error": "timeout",
+        "fail_closed": False,
+    }
+
+
 def test_classifier_skipped_result_uses_missing_url_reason() -> None:
     settings = routing_guardrail_external._ClassifierSettings(
         name="classifier_1",
