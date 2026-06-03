@@ -95,7 +95,17 @@ def test_classifier_rule_uses_configured_field_precedence() -> None:
 
 
 def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
+    settings = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+
     assert routing_guardrail_external._explicit_classifier_violations(
+        settings,
         {
             "violations": [
                 {"category": " customer_pii "},
@@ -103,7 +113,6 @@ def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
                 {"rule": " "},
             ]
         },
-        name="dlp",
     ) == [
         {"type": "external_classifier", "rule": "customer_pii"},
         {"type": "external_classifier", "rule": "prompt_injection"},
@@ -112,20 +121,46 @@ def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
 
 
 def test_explicit_classifier_violations_default_empty_for_unsupported_payloads() -> None:
-    assert routing_guardrail_external._explicit_classifier_violations({"violations": {"rule": "pii"}}, name="dlp") == []
-    assert routing_guardrail_external._explicit_classifier_violations({}, name="dlp") == []
+    settings = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+
+    assert routing_guardrail_external._explicit_classifier_violations(settings, {"violations": {"rule": "pii"}}) == []
+    assert routing_guardrail_external._explicit_classifier_violations(settings, {}) == []
 
 
 def test_fallback_classifier_violation_preserves_label_fallback_rules() -> None:
-    assert routing_guardrail_external._fallback_classifier_violation(
-        {"label": " prompt_injection "},
+    prompt_shield = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+    dlp = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+
+    assert routing_guardrail_external._fallback_classifier_violation(
+        prompt_shield,
+        {"label": " prompt_injection "},
     ) == {"type": "external_classifier", "rule": "prompt_injection"}
     assert routing_guardrail_external._fallback_classifier_violation(
+        dlp,
         {"label": {"category": " customer_pii "}},
-        name="dlp",
     ) == {"type": "external_classifier", "rule": "customer_pii"}
-    assert routing_guardrail_external._fallback_classifier_violation({"label": " "}, name="dlp") == {
+    assert routing_guardrail_external._fallback_classifier_violation(dlp, {"label": " "}) == {
         "type": "external_classifier",
         "rule": "dlp",
     }
