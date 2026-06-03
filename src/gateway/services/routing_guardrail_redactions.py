@@ -3,6 +3,7 @@
 import copy
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from gateway.services.routing_config_values import bool_config, dict_or_empty
@@ -15,59 +16,55 @@ _RedactionCounts = dict[_RedactionCountKey, int]
 _REDACTABLE_REQUEST_FIELDS = ("input", "instructions")
 
 
+@dataclass(frozen=True)
+class _RedactionContext:
+    rules: Sequence[_RedactionRule]
+    replacement: str
+    counts: _RedactionCounts
+
+
 def _redact_string(
     value: str,
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> str:
     redacted = value
-    for kind, rule, pattern in rules:
-        redacted, count = pattern.subn(replacement, redacted)
+    for kind, rule, pattern in context.rules:
+        redacted, count = pattern.subn(context.replacement, redacted)
         if count:
             key = (kind, rule)
-            counts[key] = counts.get(key, 0) + count
+            context.counts[key] = context.counts.get(key, 0) + count
     return redacted
 
 
 def _redact_content(
     value: Any,
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> Any:
     if isinstance(value, str):
-        return _redact_string(value, rules=rules, replacement=replacement, counts=counts)
+        return _redact_string(value, context=context)
     if isinstance(value, list):
-        return _redact_list(value, rules=rules, replacement=replacement, counts=counts)
+        return _redact_list(value, context=context)
     if isinstance(value, dict):
-        return _redact_mapping(value, rules=rules, replacement=replacement, counts=counts)
+        return _redact_mapping(value, context=context)
     return value
 
 
 def _redact_list(
     value: list[Any],
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> list[Any]:
-    return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
+    return [_redact_content(item, context=context) for item in value]
 
 
 def _redact_mapping(
     value: Mapping[Any, Any],
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> dict[Any, Any]:
-    return {
-        key: _redact_content(item, rules=rules, replacement=replacement, counts=counts)
-        for key, item in value.items()
-    }
+    return {key: _redact_content(item, context=context) for key, item in value.items()}
 
 
 def _typed_redaction_rules(kind: str, patterns: list[_PatternRule]) -> list[_RedactionRule]:
@@ -111,17 +108,13 @@ def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
 def _redact_message(
     message: Any,
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> Any:
     if isinstance(message, dict) and "content" in message:
         redacted_message = dict(message)
         redacted_message["content"] = _redact_content(
             message.get("content"),
-            rules=rules,
-            replacement=replacement,
-            counts=counts,
+            context=context,
         )
         return redacted_message
     return message
@@ -130,26 +123,22 @@ def _redact_message(
 def _redact_messages(
     messages: Any,
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> list[Any] | None:
     if not isinstance(messages, list):
         return None
 
-    return [_redact_message(message, rules=rules, replacement=replacement, counts=counts) for message in messages]
+    return [_redact_message(message, context=context) for message in messages]
 
 
 def _redact_request_fields(
     body: dict[str, Any],
     *,
-    rules: Sequence[_RedactionRule],
-    replacement: str,
-    counts: _RedactionCounts,
+    context: _RedactionContext,
 ) -> None:
     for key in _REDACTABLE_REQUEST_FIELDS:
         if key in body:
-            body[key] = _redact_content(body[key], rules=rules, replacement=replacement, counts=counts)
+            body[key] = _redact_content(body[key], context=context)
 
 
 def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
@@ -200,25 +189,21 @@ def apply_guardrail_redactions(
     if not rules:
         return body, _missing_redaction_rules_trace(replacement)
 
-    counts: _RedactionCounts = {}
+    context = _RedactionContext(rules=rules, replacement=replacement, counts={})
     redacted_messages = _redact_messages(
         body.get("messages"),
-        rules=rules,
-        replacement=replacement,
-        counts=counts,
+        context=context,
     )
     if redacted_messages is not None:
         body["messages"] = redacted_messages
 
     _redact_request_fields(
         body,
-        rules=rules,
-        replacement=replacement,
-        counts=counts,
+        context=context,
     )
 
     return body, _redaction_trace(
-        replacement=replacement,
-        counts=counts,
+        replacement=context.replacement,
+        counts=context.counts,
         pattern_count=pattern_count,
     )

@@ -15,11 +15,17 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
+    _RedactionContext,
     _redactions_config,
     _redactions_enabled,
     _typed_redaction_rules,
     apply_guardrail_redactions,
 )
+
+
+def _redaction_context(replacement: str = "[MASKED]") -> _RedactionContext:
+    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
+    return _RedactionContext(rules=rules, replacement=replacement, counts={})
 
 
 def test_redaction_rules_collects_pii_and_named_patterns() -> None:
@@ -48,26 +54,24 @@ def test_redactions_config_extracts_nested_redactions_mapping() -> None:
 
 
 def test_redact_string_replaces_matches_and_updates_counts() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
 
-    redacted = _redact_string("token-123 and token-456", rules=rules, replacement="[MASKED]", counts=counts)
+    redacted = _redact_string("token-123 and token-456", context=context)
 
     assert redacted == "[MASKED] and [MASKED]"
-    assert counts == {("pattern", "token"): 2}
-    assert _redact_string("nothing to mask", rules=rules, replacement="[MASKED]", counts=counts) == "nothing to mask"
-    assert counts == {("pattern", "token"): 2}
+    assert context.counts == {("pattern", "token"): 2}
+    assert _redact_string("nothing to mask", context=context) == "nothing to mask"
+    assert context.counts == {("pattern", "token"): 2}
 
 
 def test_redact_mapping_recurses_nested_values_without_mutating_input() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
     value = {
         "items": ["token-123", {"nested": "token-456"}],
         "unchanged": 3,
     }
 
-    redacted = _redact_mapping(value, rules=rules, replacement="[MASKED]", counts=counts)
+    redacted = _redact_mapping(value, context=context)
 
     assert redacted == {
         "items": ["[MASKED]", {"nested": "[MASKED]"}],
@@ -77,19 +81,18 @@ def test_redact_mapping_recurses_nested_values_without_mutating_input() -> None:
         "items": ["token-123", {"nested": "token-456"}],
         "unchanged": 3,
     }
-    assert counts == {("pattern", "token"): 2}
+    assert context.counts == {("pattern", "token"): 2}
 
 
 def test_redact_list_recurses_nested_values_without_mutating_input() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
     value = ["token-123", {"nested": "token-456"}, 3]
 
-    redacted = _redact_list(value, rules=rules, replacement="[MASKED]", counts=counts)
+    redacted = _redact_list(value, context=context)
 
     assert redacted == ["[MASKED]", {"nested": "[MASKED]"}, 3]
     assert value == ["token-123", {"nested": "token-456"}, 3]
-    assert counts == {("pattern", "token"): 2}
+    assert context.counts == {("pattern", "token"): 2}
 
 
 def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> None:
@@ -112,31 +115,29 @@ def test_redactions_enabled_uses_explicit_flag_and_config_presence() -> None:
 
 
 def test_redact_message_redacts_content_copy_and_passes_through_other_items() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
     message = {"role": "user", "content": "token-123", "metadata": {"keep": True}}
 
-    redacted = _redact_message(message, rules=rules, replacement="[MASKED]", counts=counts)
+    redacted = _redact_message(message, context=context)
 
     assert redacted == {"role": "user", "content": "[MASKED]", "metadata": {"keep": True}}
     assert redacted is not message
     assert message["content"] == "token-123"
     passthrough = {"role": "assistant", "tool_calls": []}
-    assert _redact_message(passthrough, rules=rules, replacement="[MASKED]", counts=counts) is passthrough
-    assert _redact_message("raw", rules=rules, replacement="[MASKED]", counts=counts) == "raw"
-    assert counts == {("pattern", "token"): 1}
+    assert _redact_message(passthrough, context=context) is passthrough
+    assert _redact_message("raw", context=context) == "raw"
+    assert context.counts == {("pattern", "token"): 1}
 
 
 def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
     messages = [
         {"role": "user", "content": "token-123"},
         {"role": "assistant", "tool_calls": []},
         "raw",
     ]
 
-    redacted = _redact_messages(messages, rules=rules, replacement="[MASKED]", counts=counts)
+    redacted = _redact_messages(messages, context=context)
 
     assert redacted == [
         {"role": "user", "content": "[MASKED]"},
@@ -144,8 +145,8 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
         "raw",
     ]
     assert messages[0]["content"] == "token-123"
-    assert counts == {("pattern", "token"): 1}
-    assert _redact_messages("not-a-list", rules=rules, replacement="[MASKED]", counts=counts) is None
+    assert context.counts == {("pattern", "token"): 1}
+    assert _redact_messages("not-a-list", context=context) is None
 
 
 def test_redactable_request_fields_names_supported_provider_fields() -> None:
@@ -187,22 +188,21 @@ def test_pii_redaction_rules_preserves_configured_types() -> None:
 
 
 def test_redact_request_fields_redacts_supported_fields_only() -> None:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    counts: dict[tuple[str, str], int] = {}
+    context = _redaction_context()
     body = {
         "input": {"note": "token-123"},
         "instructions": "token-456",
         "other": "token-789",
     }
 
-    _redact_request_fields(body, rules=rules, replacement="[MASKED]", counts=counts)
+    _redact_request_fields(body, context=context)
 
     assert body == {
         "input": {"note": "[MASKED]"},
         "instructions": "[MASKED]",
         "other": "token-789",
     }
-    assert counts == {("pattern", "token"): 2}
+    assert context.counts == {("pattern", "token"): 2}
 
 
 def test_missing_redaction_rules_trace_marks_skipped() -> None:
