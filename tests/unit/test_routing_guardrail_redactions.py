@@ -1,30 +1,6 @@
 from gateway.services.routing_guardrail_redactions import (
-    _redaction_rules,
     apply_guardrail_redactions,
 )
-
-
-def test_redaction_rules_collects_pii_and_named_patterns() -> None:
-    rules, pattern_count = _redaction_rules(
-        {
-            "pii": True,
-            "pii_types": ["email"],
-            "patterns": [
-                {"name": "token", "pattern": r"token-[0-9]+"},
-                {"name": "secret", "pattern": r"secret-[a-z]+"},
-            ],
-        }
-    )
-
-    assert [(kind, rule) for kind, rule, _pattern in rules] == [
-        ("pii", "email"),
-        ("pattern", "token"),
-        ("pattern", "secret"),
-    ]
-    assert pattern_count == 2
-    assert rules[1][2].pattern == r"token-[0-9]+"
-    assert _redaction_rules({"patterns": "not-a-list"}) == ([], 0)
-    assert _redaction_rules({"pii": False, "pii_types": ["email"]}) == ([], 0)
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
@@ -32,12 +8,12 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
         "messages": [
             {
                 "role": "user",
-                "content": "Email ada@example.com about token-123.",
+                "content": "Email ada@example.com about token-123 and secret-alpha.",
             },
             {"role": "assistant", "tool_calls": []},
             "raw",
         ],
-        "input": {"items": ["token-456", {"nested": "token-654"}]},
+        "input": {"items": ["token-456", {"nested": "token-654 and secret-beta"}]},
         "instructions": "Contact bob@example.com",
         "other": "token-789",
     }
@@ -49,7 +25,10 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
                     "replacement": "[MASKED]",
                     "pii": True,
                     "pii_types": ["email"],
-                    "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+                    "patterns": [
+                        {"name": "token", "pattern": r"token-[0-9]+"},
+                        {"name": "secret", "pattern": r"secret-[a-z]+"},
+                    ],
                 }
             }
         },
@@ -57,25 +36,26 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
     )
 
     assert body["messages"] == [
-        {"role": "user", "content": "Email [MASKED] about [MASKED]."},
+        {"role": "user", "content": "Email [MASKED] about [MASKED] and [MASKED]."},
         {"role": "assistant", "tool_calls": []},
         "raw",
     ]
-    assert body["input"] == {"items": ["[MASKED]", {"nested": "[MASKED]"}]}
+    assert body["input"] == {"items": ["[MASKED]", {"nested": "[MASKED] and [MASKED]"}]}
     assert body["instructions"] == "Contact [MASKED]"
     assert body["other"] == "token-789"
-    assert request_body["messages"][0]["content"] == "Email ada@example.com about token-123."
-    assert request_body["input"] == {"items": ["token-456", {"nested": "token-654"}]}
+    assert request_body["messages"][0]["content"] == "Email ada@example.com about token-123 and secret-alpha."
+    assert request_body["input"] == {"items": ["token-456", {"nested": "token-654 and secret-beta"}]}
     assert trace == {
         "enabled": True,
         "status": "redacted",
         "replacement": "[MASKED]",
-        "total_replacements": 5,
+        "total_replacements": 7,
         "counts": [
+            {"type": "pattern", "rule": "secret", "count": 2},
             {"type": "pattern", "rule": "token", "count": 3},
             {"type": "pii", "rule": "email", "count": 2},
         ],
-        "pattern_count": 1,
+        "pattern_count": 2,
     }
 
 
@@ -129,7 +109,17 @@ def test_apply_guardrail_redactions_reports_unchanged_when_rules_do_not_match() 
 
 def test_apply_guardrail_redactions_reports_missing_rules_with_default_replacement() -> None:
     body, trace = apply_guardrail_redactions(
-        {"guardrails": {"redactions": {"enabled": True, "replacement": 123}}},
+        {
+            "guardrails": {
+                "redactions": {
+                    "enabled": True,
+                    "replacement": 123,
+                    "patterns": "not-a-list",
+                    "pii": False,
+                    "pii_types": ["email"],
+                }
+            }
+        },
         {"messages": [{"role": "user", "content": "hello"}]},
     )
 

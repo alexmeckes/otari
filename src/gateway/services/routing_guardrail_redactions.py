@@ -41,24 +41,6 @@ def _redact_content(
     return value
 
 
-def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
-    pattern_rules = [
-        ("pattern", name, pattern)
-        for name, pattern in named_patterns(redactions.get("patterns"))
-    ]
-    return (
-        [
-            ("pii", name, pattern)
-            for name, pattern in pii_patterns_from_config(
-                redactions.get("pii"),
-                fallback_types=redactions.get("pii_types"),
-            )
-        ]
-        + pattern_rules,
-        len(pattern_rules),
-    )
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -69,7 +51,17 @@ def apply_guardrail_redactions(
     if not bool_config(redactions.get("enabled"), bool(redactions)):
         return body, None
 
-    rules, pattern_count = _redaction_rules(redactions)
+    pattern_rules = [
+        ("pattern", name, pattern)
+        for name, pattern in named_patterns(redactions.get("patterns"))
+    ]
+    rules: list[_RedactionRule] = [
+        ("pii", name, pattern)
+        for name, pattern in pii_patterns_from_config(
+            redactions.get("pii"),
+            fallback_types=redactions.get("pii_types"),
+        )
+    ] + pattern_rules
     replacement = redactions.get("replacement")
     if not isinstance(replacement, str):
         replacement = "[REDACTED]"
@@ -114,5 +106,5 @@ def apply_guardrail_redactions(
             {"type": kind, "rule": rule, "count": count}
             for (kind, rule), count in sorted(context.counts.items())
         ],
-        "pattern_count": pattern_count,
+        "pattern_count": len(pattern_rules),
     }
