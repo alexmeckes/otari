@@ -65,17 +65,6 @@ _GUARDRAIL_PRESET_ALIASES = {
 }
 
 
-def _normalize_guardrail_preset_name(value: Any) -> str | None:
-    name: Any = value
-    if isinstance(value, dict):
-        name = value.get("name") or value.get("preset")
-    name_value = string_or_none(name)
-    if name_value is None:
-        return None
-    normalized = name_value.lower().replace("-", "_")
-    return _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
-
-
 def _guardrail_list_items(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
@@ -134,9 +123,14 @@ def _guardrail_preset_expansion(
         preset = string_or_none(presets)
         preset_values = [preset] if preset is not None else []
     for value in preset_values:
-        normalized = _normalize_guardrail_preset_name(value)
-        if normalized is None:
+        name: Any = value
+        if isinstance(value, dict):
+            name = value.get("name") or value.get("preset")
+        name_value = string_or_none(name)
+        if name_value is None:
             continue
+        normalized = name_value.lower().replace("-", "_")
+        normalized = _GUARDRAIL_PRESET_ALIASES.get(normalized, normalized)
         if normalized not in _GUARDRAIL_PRESETS:
             ignored.append(normalized)
             continue

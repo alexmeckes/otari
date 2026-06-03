@@ -4,16 +4,17 @@ from gateway.services.routing_guardrails import (
     _combine_guardrail_list,
     _guardrail_list_items,
     _guardrail_preset_expansion,
-    _normalize_guardrail_preset_name,
     evaluate_guardrails,
     guardrail_action,
 )
 
 
-def test_normalize_guardrail_preset_name_trims_and_applies_aliases() -> None:
-    assert _normalize_guardrail_preset_name(" prompt-shield ") == "prompt_injection"
-    assert _normalize_guardrail_preset_name({"preset": " credential "}) == "credential_leak"
-    assert _normalize_guardrail_preset_name({"name": " "}) is None
+def test_guardrail_preset_expansion_trims_dict_entries_and_applies_aliases() -> None:
+    _config, metadata = _guardrail_preset_expansion(
+        {"presets": [" prompt-shield ", {"preset": " credential "}, {"name": " "}]}
+    )
+
+    assert metadata == {"applied": ["prompt_injection", "credential_leak"], "ignored": []}
 
 
 def test_guardrail_preset_expansion_accepts_trimmed_string_sources() -> None:
