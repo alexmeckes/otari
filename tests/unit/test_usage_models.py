@@ -77,3 +77,26 @@ def test_summarize_usage_logs_groups_totals_tags_unknowns_and_sorts_buckets() ->
     assert [bucket.key for bucket in summary.by_user] == ["user-1", "user-2", "unknown"]
     assert [bucket.key for bucket in summary.by_tag] == ["team=platform", "surface=responses", "team=research"]
     assert summary.by_tag[0].count == 2
+
+
+def test_summarize_usage_logs_groups_mixed_blank_values() -> None:
+    summary = summarize_usage_logs(
+        [
+            UsageLog(
+                id="usage-blank",
+                user_id="user-1",
+                project_id="",
+                model="gpt-4o",
+                provider="",
+                endpoint="/v1/responses",
+                status="success",
+            ),
+        ]
+    )
+
+    assert [bucket.key for bucket in summary.by_project] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_user] == ["user-1"]
+    assert [bucket.key for bucket in summary.by_model] == ["gpt-4o"]
+    assert [bucket.key for bucket in summary.by_provider] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_endpoint] == ["/v1/responses"]
+    assert [bucket.key for bucket in summary.by_status] == ["success"]
