@@ -143,6 +143,30 @@ def test_attach_weighted_scores_prefers_nested_weight_alias_over_top_level_alias
     assert scored[0].score_components["cost_weight"] == 0.75
 
 
+def test_attach_weighted_scores_falls_back_when_nested_weight_is_invalid() -> None:
+    scored = attach_weighted_scores(
+        [_candidate(quality_score=1.0)],
+        config={
+            "scoring": {
+                "weights": {
+                    "quality_weight": -1,
+                    "cost_weight": True,
+                    "latency_weight": "bad",
+                },
+                "quality_weight": 1.0,
+                "cost_weight": 0.0,
+                "latency_weight": 0.0,
+            }
+        },
+    )
+
+    assert scored[0].routing_score == pytest.approx(1.0)
+    assert scored[0].score_components is not None
+    assert scored[0].score_components["quality_weight"] == 1.0
+    assert scored[0].score_components["cost_weight"] == 0.0
+    assert scored[0].score_components["latency_weight"] == 0.0
+
+
 def test_attach_weighted_scores_supports_top_level_metric_name_aliases() -> None:
     scored = attach_weighted_scores(
         [_candidate(quality_score=1.0, estimated_cost=1.0, average_latency_ms=20.0)],
