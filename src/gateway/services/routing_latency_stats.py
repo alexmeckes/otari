@@ -10,16 +10,6 @@ from gateway.services.routing_config_values import int_config
 from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_model_key
 
 
-def _successful_attempt_duration(attempt: Any) -> tuple[str, float] | None:
-    if not isinstance(attempt, dict) or attempt.get("status") != "success":
-        return None
-    model_key = attempt_model_key(attempt)
-    duration_ms = attempt_duration_ms(attempt)
-    if model_key is None or duration_ms is None:
-        return None
-    return model_key, duration_ms
-
-
 async def attach_latency_stats(
     db: AsyncSession,
     candidates: Sequence[Any],
@@ -42,11 +32,11 @@ async def attach_latency_stats(
     durations_by_model: dict[str, list[float]] = {model: [] for model in candidate_models}
     for trace in result.scalars().all():
         for attempt in trace.attempt_list():
-            success_duration = _successful_attempt_duration(attempt)
-            if success_duration is None:
+            if not isinstance(attempt, dict) or attempt.get("status") != "success":
                 continue
-            model_key, duration_ms = success_duration
-            if model_key in durations_by_model:
+            model_key = attempt_model_key(attempt)
+            duration_ms = attempt_duration_ms(attempt)
+            if model_key is not None and duration_ms is not None and model_key in durations_by_model:
                 durations_by_model[model_key].append(duration_ms)
 
     enriched: list[Any] = []
