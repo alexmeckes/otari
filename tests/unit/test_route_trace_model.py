@@ -110,6 +110,27 @@ def test_summarize_route_trace_logs_groups_counts_cost_and_latency() -> None:
     assert [bucket.key for bucket in summary.by_strategy] == ["priority", "weighted_score"]
 
 
+def test_summarize_route_trace_logs_uses_first_valid_success_latency() -> None:
+    summary = summarize_route_trace_logs(
+        [
+            RouteTrace(
+                requested_model="gpt-4o",
+                selected_model="openai:gpt-4o",
+                status="success",
+                attempts=[
+                    {"status": "error", "duration_ms": 5},
+                    {"status": "success", "duration_ms": True},
+                    {"status": "success", "duration_ms": 30},
+                    {"status": "success", "duration_ms": 60},
+                ],
+            ),
+        ],
+    )
+
+    assert summary.average_latency_ms == 30.0
+    assert summary.by_model[0].average_latency_ms == 30.0
+
+
 def test_summarize_route_trace_logs_groups_unknown_values() -> None:
     summary = summarize_route_trace_logs(
         [

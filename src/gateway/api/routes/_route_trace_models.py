@@ -128,6 +128,16 @@ def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[RouteTraceSumm
     return [_bucket_response(bucket) for bucket in buckets.values()]
 
 
+def _first_success_latency_ms(trace: RouteTrace) -> float | None:
+    for attempt in trace.attempt_list():
+        if not isinstance(attempt, dict) or attempt.get("status") != "success":
+            continue
+        duration = attempt_duration_ms(attempt)
+        if duration is not None:
+            return duration
+    return None
+
+
 def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryResponse:
     model_buckets: dict[str, dict[str, Any]] = {}
     policy_buckets: dict[str, dict[str, Any]] = {}
@@ -138,14 +148,7 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
     total_bucket = _new_bucket("__total__")
 
     for trace in traces:
-        latency_ms = None
-        for attempt in trace.attempt_list():
-            if not isinstance(attempt, dict) or attempt.get("status") != "success":
-                continue
-            duration = attempt_duration_ms(attempt)
-            if duration is not None:
-                latency_ms = duration
-                break
+        latency_ms = _first_success_latency_ms(trace)
         _add_trace_to_bucket(total_bucket, trace, latency_ms)
 
         for buckets, key in zip(
