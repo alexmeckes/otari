@@ -11,10 +11,6 @@ from gateway.services.routing_config_values import (
 )
 
 
-def _string_set(value: Any) -> set[str]:
-    return set(string_list(value))
-
-
 def _normalize_model_key_for_constraint(value: str) -> str:
     try:
         _provider, _model_name, normalized = split_model_selector(value)
@@ -24,7 +20,7 @@ def _normalize_model_key_for_constraint(value: str) -> str:
 
 
 def _region_set(value: Any) -> set[str]:
-    return {item.lower() for item in _string_set(value)}
+    return {item.lower() for item in string_list(value)}
 
 
 def apply_constraints(
@@ -37,13 +33,13 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
-    allowed_providers = _string_set(constraints.get("allowed_providers"))
-    blocked_providers = _string_set(constraints.get("blocked_providers"))
+    allowed_providers = set(string_list(constraints.get("allowed_providers")))
+    blocked_providers = set(string_list(constraints.get("blocked_providers")))
     allowed_models = {
-        _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("allowed_models"))
+        _normalize_model_key_for_constraint(item) for item in string_list(constraints.get("allowed_models"))
     }
     blocked_models = {
-        _normalize_model_key_for_constraint(item) for item in _string_set(constraints.get("blocked_models"))
+        _normalize_model_key_for_constraint(item) for item in string_list(constraints.get("blocked_models"))
     }
     allowed_regions = _region_set(constraints.get("allowed_regions"))
     blocked_regions = _region_set(constraints.get("blocked_regions"))
