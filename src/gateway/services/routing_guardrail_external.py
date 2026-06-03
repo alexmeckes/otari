@@ -84,16 +84,6 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _classifier_headers(value: Any) -> dict[str, str] | None:
-    if not isinstance(value, dict):
-        return None
-    return {
-        str(key): str(header_value)
-        for key, header_value in value.items()
-        if coerced_string_or_none(key) is not None
-    } or None
-
-
 def _explicit_classifier_violations(settings: _ClassifierSettings, payload: Mapping[str, Any]) -> list[dict[str, str]]:
     raw_violations = payload.get("violations")
     return [
@@ -120,13 +110,22 @@ def _classifier_violations(
 
 
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
+    raw_headers = classifier.get("headers")
+    headers = None
+    if isinstance(raw_headers, dict):
+        headers = {
+            str(key): str(header_value)
+            for key, header_value in raw_headers.items()
+            if coerced_string_or_none(key) is not None
+        } or None
+
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
         url=string_or_none(classifier.get("url")),
         timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds"))
         or _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS,
         threshold=non_negative_float_or_none(classifier.get("threshold")),
-        headers=_classifier_headers(classifier.get("headers")),
+        headers=headers,
         fail_closed=bool_config(classifier.get("fail_closed"), False),
     )
 

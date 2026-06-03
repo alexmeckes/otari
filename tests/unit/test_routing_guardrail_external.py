@@ -37,17 +37,6 @@ def test_classifier_http_error_text_uses_payload_error_then_body() -> None:
     assert routing_guardrail_external._classifier_http_error_text(response, None) == "HTTP 503: body fallback"
 
 
-def test_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None:
-    assert routing_guardrail_external._classifier_headers(
-        {" Authorization ": "Bearer test", " ": "skip", 0: 42}
-    ) == {
-        " Authorization ": "Bearer test",
-        "0": "42",
-    }
-    assert routing_guardrail_external._classifier_headers({" ": "skip"}) is None
-    assert routing_guardrail_external._classifier_headers(["Authorization"]) is None
-
-
 def test_classifier_rule_uses_configured_field_precedence() -> None:
     assert (
         routing_guardrail_external._classifier_rule(
@@ -261,6 +250,8 @@ def test_classifier_settings_normalizes_request_fields() -> None:
         headers={" Authorization ": "Bearer test"},
         fail_closed=True,
     )
+    assert routing_guardrail_external._classifier_settings({"headers": {" ": "skip"}}, index=1).headers is None
+    assert routing_guardrail_external._classifier_settings({"headers": ["Authorization"]}, index=1).headers is None
 
 
 def test_classifier_settings_uses_index_name_fallback() -> None:
