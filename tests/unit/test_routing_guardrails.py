@@ -4,6 +4,7 @@ from gateway.services.routing_guardrails import (
     _blocked_pattern_violations,
     _blocked_term_violations,
     _combine_guardrail_list,
+    _effective_guardrails,
     _guardrail_list_items,
     _guardrail_preset_expansion,
     _guardrail_request_text,
@@ -54,6 +55,31 @@ def test_guardrail_preset_expansion_reports_applied_and_ignored_presets() -> Non
     _config, metadata = _guardrail_preset_expansion({"presets": [" pii ", "unknown-preset", "pii"]})
 
     assert metadata == {"applied": ["pii"], "ignored": ["unknown_preset"]}
+
+
+def test_effective_guardrails_applies_presets_before_explicit_overrides() -> None:
+    effective, metadata = _effective_guardrails(
+        {
+            "presets": ["strict"],
+            "pii": {"enabled": False},
+            "blocked_terms": "manual-secret",
+        }
+    )
+
+    assert metadata == {"applied": ["strict"], "ignored": []}
+    assert effective["pii"] == {"enabled": False}
+    assert effective["prompt_injection"] == {"enabled": True}
+    assert effective["blocked_terms"] == ["manual-secret"]
+    assert len(effective["blocked_patterns"]) > 0
+
+
+def test_effective_guardrails_preserves_no_preset_config_without_metadata() -> None:
+    guardrails = {"blocked_terms": ["manual-secret"]}
+
+    effective, metadata = _effective_guardrails(guardrails)
+
+    assert effective == guardrails
+    assert metadata is None
 
 
 def test_guardrail_action_trims_known_actions_and_defaults_to_block() -> None:
