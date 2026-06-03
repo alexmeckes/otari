@@ -12,14 +12,7 @@ AXIS_TIER_THRESHOLDS = {
     "intelligence": {"medium": 300, "complex": 1400, "reasoning": 5000},
 }
 
-_DEFAULT_STRATEGY_PROVIDER_KEYS = {
-    "provider",
-    "model",
-    "priority",
-    "tier",
-    "input_price_per_million",
-    "output_price_per_million",
-}
+
 class RoutingPolicyShapeError(ValueError):
     """Raised when a public routing policy shape cannot be normalized."""
 
@@ -63,7 +56,18 @@ def _candidate_from_default_strategy_provider(item: Mapping[str, Any]) -> dict[s
         if key in item:
             candidate[key] = item[key]
 
-    metadata = {key: value for key, value in item.items() if key not in _DEFAULT_STRATEGY_PROVIDER_KEYS}
+    metadata = {
+        key: value
+        for key, value in item.items()
+        if key not in {
+            "provider",
+            "model",
+            "priority",
+            "tier",
+            "input_price_per_million",
+            "output_price_per_million",
+        }
+    }
     if "priority" in item:
         metadata["priority"] = item["priority"]
     if metadata:
