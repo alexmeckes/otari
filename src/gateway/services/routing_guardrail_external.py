@@ -146,20 +146,19 @@ def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
 
 
 def _classifier_success_result(
+    settings: _ClassifierSettings,
     *,
-    name: str,
     status_code: int | None,
     payload: Mapping[str, Any],
     score: float | None,
-    threshold: float | None,
     violations: list[dict[str, str]],
 ) -> dict[str, Any]:
     return {
-        "name": name,
+        "name": settings.name,
         "status": "flagged" if violations else "passed",
         "status_code": status_code,
         "score": score,
-        "threshold": threshold,
+        "threshold": settings.threshold,
         "label": _classifier_result_label(payload),
         "violations": violations,
     }
@@ -242,11 +241,10 @@ async def evaluate_external_classifiers(
         violations.extend(classifier_violations)
         classifier_results.append(
             _classifier_success_result(
-                name=settings.name,
+                settings,
                 status_code=status_code,
                 payload=payload,
                 score=score,
-                threshold=settings.threshold,
                 violations=classifier_violations,
             )
         )
