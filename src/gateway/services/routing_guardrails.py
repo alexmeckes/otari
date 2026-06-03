@@ -215,14 +215,17 @@ def _prompt_injection_enabled(injection_config: Any) -> bool:
     )
 
 
+def _prompt_injection_phrases(injection_config: Any) -> list[str]:
+    return [*string_list(guardrail_config_value(injection_config, "phrases")), *_PROMPT_INJECTION_PHRASES]
+
+
 def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
     injection_config = guardrails.get("prompt_injection")
     if not _prompt_injection_enabled(injection_config):
         return []
-    phrases = [*string_list(guardrail_config_value(injection_config, "phrases")), *_PROMPT_INJECTION_PHRASES]
     return [
         guardrail_violation("prompt_injection", phrase)
-        for phrase in phrases
+        for phrase in _prompt_injection_phrases(injection_config)
         if phrase.lower() in normalized_text
     ]
 
