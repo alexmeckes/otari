@@ -140,9 +140,7 @@ def _classifier_violations(
 
 def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
     label = payload.get("label")
-    if isinstance(label, str):
-        return label
-    return None
+    return label if isinstance(label, str) else None
 
 
 def _classifier_success_result(
