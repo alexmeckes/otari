@@ -19,10 +19,6 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
-def _region_set(value: Any) -> set[str]:
-    return {item.lower() for item in string_list(value)}
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -41,8 +37,8 @@ def apply_constraints(
     blocked_models = {
         _normalize_model_key_for_constraint(item) for item in string_list(constraints.get("blocked_models"))
     }
-    allowed_regions = _region_set(constraints.get("allowed_regions"))
-    blocked_regions = _region_set(constraints.get("blocked_regions"))
+    allowed_regions = {item.lower() for item in string_list(constraints.get("allowed_regions"))}
+    blocked_regions = {item.lower() for item in string_list(constraints.get("blocked_regions"))}
     requested_region = None
     if bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
         region_tag = string_or_none(constraints.get("region_tag", "region"))
@@ -59,7 +55,7 @@ def apply_constraints(
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
         metadata = dict_or_empty(candidate.metadata)
-        candidate_regions = _region_set(metadata.get("regions"))
+        candidate_regions = {item.lower() for item in string_list(metadata.get("regions"))}
         region = string_or_none(metadata.get("region"))
         if region is not None:
             candidate_regions.add(region.lower())
