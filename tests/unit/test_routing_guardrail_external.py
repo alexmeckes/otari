@@ -132,7 +132,17 @@ def test_fallback_classifier_violation_preserves_label_fallback_rules() -> None:
 
 
 def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
+    settings = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=0.8,
+        headers=None,
+        fail_closed=False,
+    )
+
     violations, score = routing_guardrail_external._classifier_violations(
+        settings,
         {
             "violations": [
                 {"category": " customer_pii "},
@@ -142,8 +152,6 @@ def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
             "label": "fallback",
             "score": 0.91,
         },
-        name="dlp",
-        threshold=0.8,
     )
 
     assert violations == [
@@ -154,10 +162,18 @@ def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
 
 
 def test_classifier_violations_use_threshold_label_fallback() -> None:
-    violations, score = routing_guardrail_external._classifier_violations(
-        {"score": 0.82, "label": " prompt_injection "},
+    settings = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
         threshold=0.8,
+        headers=None,
+        fail_closed=False,
+    )
+
+    violations, score = routing_guardrail_external._classifier_violations(
+        settings,
+        {"score": 0.82, "label": " prompt_injection "},
     )
 
     assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
@@ -165,10 +181,18 @@ def test_classifier_violations_use_threshold_label_fallback() -> None:
 
 
 def test_classifier_violations_default_empty_when_not_flagged() -> None:
-    violations, score = routing_guardrail_external._classifier_violations(
-        {"score": 0.7, "label": " prompt_injection "},
+    settings = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
         threshold=0.8,
+        headers=None,
+        fail_closed=False,
+    )
+
+    violations, score = routing_guardrail_external._classifier_violations(
+        settings,
+        {"score": 0.7, "label": " prompt_injection "},
     )
 
     assert violations == []

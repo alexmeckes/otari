@@ -128,16 +128,14 @@ def _fallback_classifier_violation(payload: Mapping[str, Any], *, name: str) -> 
 
 
 def _classifier_violations(
+    settings: _ClassifierSettings,
     payload: Mapping[str, Any],
-    *,
-    name: str,
-    threshold: float | None,
 ) -> tuple[list[dict[str, str]], float | None]:
-    violations = _explicit_classifier_violations(payload, name=name)
+    violations = _explicit_classifier_violations(payload, name=settings.name)
     score = non_negative_float_or_none(payload.get("score"))
-    if violations or not _classifier_flagged(payload, score=score, threshold=threshold):
+    if violations or not _classifier_flagged(payload, score=score, threshold=settings.threshold):
         return violations, score
-    return [_fallback_classifier_violation(payload, name=name)], score
+    return [_fallback_classifier_violation(payload, name=settings.name)], score
 
 
 def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
@@ -234,9 +232,8 @@ async def evaluate_external_classifiers(
             continue
         assert payload is not None
         classifier_violations, score = _classifier_violations(
+            settings,
             payload,
-            name=settings.name,
-            threshold=settings.threshold,
         )
         violations.extend(classifier_violations)
         classifier_results.append(
