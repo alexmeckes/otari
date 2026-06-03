@@ -16,6 +16,7 @@ from gateway.services.routing_guardrail_helpers import guardrail_violation
 
 ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
 ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
+_ClassifierEvaluationResult = tuple[list[dict[str, str]], dict[str, Any]]
 
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
@@ -165,7 +166,7 @@ def _classifier_success_evaluation(
     *,
     status_code: int | None,
     payload: Mapping[str, Any],
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+) -> _ClassifierEvaluationResult:
     violations, score = _classifier_violations(settings, payload)
     return violations, _classifier_success_result(
         settings,
@@ -204,7 +205,7 @@ def _classifier_error_evaluation(
     *,
     status_code: int | None,
     error: str,
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+) -> _ClassifierEvaluationResult:
     return _classifier_error_violations(settings), _classifier_error_result(
         settings,
         status_code=status_code,
