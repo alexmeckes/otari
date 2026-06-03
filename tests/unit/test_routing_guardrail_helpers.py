@@ -1,5 +1,6 @@
 from gateway.services.routing_guardrail_helpers import (
     _compiled_named_pattern,
+    _compiled_named_pattern_item,
     _named_pattern_item,
     guardrail_config_value,
     guardrail_violation,
@@ -93,6 +94,17 @@ def test_compiled_named_pattern_preserves_name_and_ignores_case() -> None:
     assert name == "secret"
     assert pattern.search("SECRET")
     assert _compiled_named_pattern("bad", "[") is None
+
+
+def test_compiled_named_pattern_item_compiles_or_skips_items() -> None:
+    compiled = _compiled_named_pattern_item({"name": " token ", "pattern": "token"}, 1)
+
+    assert compiled is not None
+    name, pattern = compiled
+    assert name == "token"
+    assert pattern.search("TOKEN")
+    assert _compiled_named_pattern_item({"name": "blank", "pattern": "   "}, 2) is None
+    assert _compiled_named_pattern_item({"name": "bad", "pattern": "["}, 3) is None
 
 
 def test_guardrail_violation_shape() -> None:
