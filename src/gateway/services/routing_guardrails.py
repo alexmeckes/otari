@@ -184,12 +184,24 @@ def _guardrail_request_text(request_body: Mapping[str, Any]) -> str:
     )
 
 
-def _blocked_term_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
+def _case_insensitive_text_violations(
+    violation_type: str,
+    rules: list[str],
+    normalized_text: str,
+) -> list[dict[str, str]]:
     return [
-        guardrail_violation("blocked_term", value)
-        for value in string_list(guardrails.get("blocked_terms"))
-        if value.lower() in normalized_text
+        guardrail_violation(violation_type, rule)
+        for rule in rules
+        if rule.lower() in normalized_text
     ]
+
+
+def _blocked_term_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
+    return _case_insensitive_text_violations(
+        "blocked_term",
+        string_list(guardrails.get("blocked_terms")),
+        normalized_text,
+    )
 
 
 def _blocked_pattern_violations(guardrails: Mapping[str, Any], request_text: str) -> list[dict[str, str]]:
@@ -223,11 +235,7 @@ def _prompt_injection_phrase_violations(
     phrases: list[str],
     normalized_text: str,
 ) -> list[dict[str, str]]:
-    return [
-        guardrail_violation("prompt_injection", phrase)
-        for phrase in phrases
-        if phrase.lower() in normalized_text
-    ]
+    return _case_insensitive_text_violations("prompt_injection", phrases, normalized_text)
 
 
 def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:

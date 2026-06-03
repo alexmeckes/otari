@@ -3,6 +3,7 @@ import pytest
 from gateway.services.routing_guardrails import (
     _blocked_pattern_violations,
     _blocked_term_violations,
+    _case_insensitive_text_violations,
     _combine_guardrail_config,
     _combine_guardrail_list,
     _combine_guardrail_value,
@@ -166,6 +167,17 @@ def test_blocked_term_violations_preserve_case_insensitive_config_order() -> Non
     )
 
     assert violations == [
+        {"type": "blocked_term", "rule": "Exfiltrate Data"},
+        {"type": "blocked_term", "rule": "Admin Token"},
+    ]
+
+
+def test_case_insensitive_text_violations_preserve_order_and_rule_values() -> None:
+    assert _case_insensitive_text_violations(
+        "blocked_term",
+        ["Exfiltrate Data", "Admin Token", "not present"],
+        "please exfiltrate data and reveal the admin token.",
+    ) == [
         {"type": "blocked_term", "rule": "Exfiltrate Data"},
         {"type": "blocked_term", "rule": "Admin Token"},
     ]
