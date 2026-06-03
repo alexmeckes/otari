@@ -159,3 +159,27 @@ def test_summarize_route_trace_logs_groups_unknown_values() -> None:
     assert [bucket.key for bucket in summary.by_endpoint] == ["unknown"]
     assert [bucket.key for bucket in summary.by_provider] == ["unknown"]
     assert [bucket.key for bucket in summary.by_strategy] == ["unknown"]
+
+
+def test_summarize_route_trace_logs_groups_mixed_blank_values() -> None:
+    summary = summarize_route_trace_logs(
+        [
+            RouteTrace(
+                requested_model="gpt-4o",
+                selected_model="openai:gpt-4o",
+                selected_provider="",
+                policy_id="policy-a",
+                policy_source="",
+                endpoint="/v1/responses",
+                strategy="priority",
+                status="success",
+            ),
+        ],
+    )
+
+    assert [bucket.key for bucket in summary.by_model] == ["openai:gpt-4o"]
+    assert [bucket.key for bucket in summary.by_policy] == ["policy-a"]
+    assert [bucket.key for bucket in summary.by_policy_source] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_endpoint] == ["/v1/responses"]
+    assert [bucket.key for bucket in summary.by_provider] == ["unknown"]
+    assert [bucket.key for bucket in summary.by_strategy] == ["priority"]

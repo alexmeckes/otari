@@ -138,6 +138,17 @@ def _first_success_latency_ms(trace: RouteTrace) -> float | None:
     return None
 
 
+def _summary_group_keys(trace: RouteTrace) -> tuple[str, str, str, str, str, str]:
+    return (
+        trace.selected_model or "unknown",
+        trace.policy_id or "unknown",
+        trace.policy_source or "unknown",
+        trace.endpoint or "unknown",
+        trace.selected_provider or "unknown",
+        trace.strategy or "unknown",
+    )
+
+
 def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryResponse:
     model_buckets: dict[str, dict[str, Any]] = {}
     policy_buckets: dict[str, dict[str, Any]] = {}
@@ -160,14 +171,7 @@ def summarize_route_trace_logs(traces: list[RouteTrace]) -> RouteTraceSummaryRes
                 provider_buckets,
                 strategy_buckets,
             ),
-            (
-                trace.selected_model or "unknown",
-                trace.policy_id or "unknown",
-                trace.policy_source or "unknown",
-                trace.endpoint or "unknown",
-                trace.selected_provider or "unknown",
-                trace.strategy or "unknown",
-            ),
+            _summary_group_keys(trace),
             strict=True,
         ):
             bucket = summary_bucket(buckets, key, _new_bucket)
