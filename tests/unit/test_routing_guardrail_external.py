@@ -364,30 +364,6 @@ def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> 
     }
 
 
-def test_classifier_error_violations_preserve_fail_closed_behavior() -> None:
-    fail_closed = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=True,
-    )
-    fail_open = routing_guardrail_external._ClassifierSettings(
-        name="prompt-shield",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=False,
-    )
-
-    assert routing_guardrail_external._classifier_error_violations(fail_closed) == [
-        {"type": "external_classifier_error", "rule": "dlp"}
-    ]
-    assert routing_guardrail_external._classifier_error_violations(fail_open) == []
-
-
 def test_classifier_error_evaluation_preserves_result_and_fail_closed_violations() -> None:
     fail_closed = routing_guardrail_external._ClassifierSettings(
         name="dlp",

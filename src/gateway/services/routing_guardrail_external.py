@@ -187,20 +187,19 @@ def _classifier_error_result(
     }
 
 
-def _classifier_error_violations(settings: _ClassifierSettings) -> list[dict[str, str]]:
-    return [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else []
-
-
 def _classifier_error_evaluation(
     settings: _ClassifierSettings,
     *,
     status_code: int | None,
     error: str,
 ) -> _ClassifierEvaluationResult:
-    return _classifier_error_violations(settings), _classifier_error_result(
-        settings,
-        status_code=status_code,
-        error=error,
+    return (
+        [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
+        _classifier_error_result(
+            settings,
+            status_code=status_code,
+            error=error,
+        ),
     )
 
 
