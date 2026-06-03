@@ -165,6 +165,22 @@ def _guardrail_request_text(request_body: Mapping[str, Any]) -> str:
     )
 
 
+def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
+    injection_config = guardrails.get("prompt_injection")
+    injection_enabled = bool_config(
+        guardrail_config_value(injection_config, "enabled", scalar_value=injection_config),
+        False,
+    )
+    if not injection_enabled:
+        return []
+    phrases = [*string_list(guardrail_config_value(injection_config, "phrases")), *_PROMPT_INJECTION_PHRASES]
+    return [
+        guardrail_violation("prompt_injection", phrase)
+        for phrase in phrases
+        if phrase.lower() in normalized_text
+    ]
+
+
 def _guardrail_result(
     *,
     action: str,
@@ -220,18 +236,7 @@ async def evaluate_guardrails(
         if pii_pattern.search(request_text):
             violations.append(guardrail_violation("pii", pii_type))
 
-    injection_config = guardrails.get("prompt_injection")
-    injection_enabled = bool_config(
-        guardrail_config_value(injection_config, "enabled", scalar_value=injection_config),
-        False,
-    )
-    if injection_enabled:
-        phrases = string_list(guardrail_config_value(injection_config, "phrases"))
-        violations.extend(
-            guardrail_violation("prompt_injection", phrase)
-            for phrase in [*phrases, *_PROMPT_INJECTION_PHRASES]
-            if phrase.lower() in normalized_text
-        )
+    violations.extend(_prompt_injection_violations(guardrails, normalized_text))
 
     classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier
     external_violations, classifier_results = await routing_guardrail_external.evaluate_external_classifiers(
