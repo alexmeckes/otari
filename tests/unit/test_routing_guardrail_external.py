@@ -230,12 +230,19 @@ def test_classifier_error_text_truncates_long_errors_only() -> None:
 
 def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> None:
     limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
+    settings = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=True,
+    )
 
     assert routing_guardrail_external._classifier_error_result(
-        name="dlp",
+        settings,
         status_code=503,
         error="x" * (limit + 5),
-        fail_closed=True,
     ) == {
         "name": "dlp",
         "status": "error",

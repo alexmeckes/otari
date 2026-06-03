@@ -170,18 +170,17 @@ def _classifier_error_text(error: str) -> str:
 
 
 def _classifier_error_result(
+    settings: _ClassifierSettings,
     *,
-    name: str,
     status_code: int | None,
     error: str,
-    fail_closed: bool,
 ) -> dict[str, Any]:
     return {
-        "name": name,
+        "name": settings.name,
         "status": "error",
         "status_code": status_code,
         "error": _classifier_error_text(error),
-        "fail_closed": fail_closed,
+        "fail_closed": settings.fail_closed,
     }
 
 
@@ -227,10 +226,9 @@ async def evaluate_external_classifiers(
         if error is not None:
             classifier_results.append(
                 _classifier_error_result(
-                    name=settings.name,
+                    settings,
                     status_code=status_code,
                     error=error,
-                    fail_closed=settings.fail_closed,
                 )
             )
             violations.extend(_classifier_error_violations(settings))
