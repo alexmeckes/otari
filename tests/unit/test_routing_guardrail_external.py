@@ -116,6 +116,14 @@ def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> 
     }
 
 
+def test_classifier_skipped_result_uses_missing_url_reason() -> None:
+    assert routing_guardrail_external._classifier_skipped_result("classifier_1") == {
+        "name": "classifier_1",
+        "status": "skipped",
+        "reason": "missing_url",
+    }
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []

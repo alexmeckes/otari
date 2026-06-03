@@ -141,6 +141,10 @@ def _classifier_error_result(
     }
 
 
+def _classifier_skipped_result(name: str) -> dict[str, str]:
+    return {"name": name, "status": "skipped", "reason": "missing_url"}
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -153,7 +157,7 @@ async def evaluate_external_classifiers(
         name = string_or_none(classifier.get("name")) or f"classifier_{index}"
         url = string_or_none(classifier.get("url"))
         if url is None:
-            classifier_results.append({"name": name, "status": "skipped", "reason": "missing_url"})
+            classifier_results.append(_classifier_skipped_result(name))
             continue
         timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
         threshold = non_negative_float_or_none(classifier.get("threshold"))
