@@ -1,6 +1,4 @@
 from gateway.services.routing_guardrail_redactions import (
-    _redact_list,
-    _redact_mapping,
     _redact_string,
     _redaction_rules,
     _RedactionContext,
@@ -47,37 +45,6 @@ def test_redact_string_replaces_matches_and_updates_counts() -> None:
     assert context.counts == {("pattern", "token"): 2}
 
 
-def test_redact_mapping_recurses_nested_values_without_mutating_input() -> None:
-    context = _redaction_context()
-    value = {
-        "items": ["token-123", {"nested": "token-456"}],
-        "unchanged": 3,
-    }
-
-    redacted = _redact_mapping(value, context=context)
-
-    assert redacted == {
-        "items": ["[MASKED]", {"nested": "[MASKED]"}],
-        "unchanged": 3,
-    }
-    assert value == {
-        "items": ["token-123", {"nested": "token-456"}],
-        "unchanged": 3,
-    }
-    assert context.counts == {("pattern", "token"): 2}
-
-
-def test_redact_list_recurses_nested_values_without_mutating_input() -> None:
-    context = _redaction_context()
-    value = ["token-123", {"nested": "token-456"}, 3]
-
-    redacted = _redact_list(value, context=context)
-
-    assert redacted == ["[MASKED]", {"nested": "[MASKED]"}, 3]
-    assert value == ["token-123", {"nested": "token-456"}, 3]
-    assert context.counts == {("pattern", "token"): 2}
-
-
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
     request_body = {
         "messages": [
@@ -88,7 +55,7 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
             {"role": "assistant", "tool_calls": []},
             "raw",
         ],
-        "input": {"note": "token-456"},
+        "input": {"items": ["token-456", {"nested": "token-654"}]},
         "instructions": "Contact bob@example.com",
         "other": "token-789",
     }
@@ -112,18 +79,18 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
         {"role": "assistant", "tool_calls": []},
         "raw",
     ]
-    assert body["input"] == {"note": "[MASKED]"}
+    assert body["input"] == {"items": ["[MASKED]", {"nested": "[MASKED]"}]}
     assert body["instructions"] == "Contact [MASKED]"
     assert body["other"] == "token-789"
     assert request_body["messages"][0]["content"] == "Email ada@example.com about token-123."
-    assert request_body["input"] == {"note": "token-456"}
+    assert request_body["input"] == {"items": ["token-456", {"nested": "token-654"}]}
     assert trace == {
         "enabled": True,
         "status": "redacted",
         "replacement": "[MASKED]",
-        "total_replacements": 4,
+        "total_replacements": 5,
         "counts": [
-            {"type": "pattern", "rule": "token", "count": 2},
+            {"type": "pattern", "rule": "token", "count": 3},
             {"type": "pii", "rule": "email", "count": 2},
         ],
         "pattern_count": 1,

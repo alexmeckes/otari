@@ -43,26 +43,10 @@ def _redact_content(
     if isinstance(value, str):
         return _redact_string(value, context=context)
     if isinstance(value, list):
-        return _redact_list(value, context=context)
+        return [_redact_content(item, context=context) for item in value]
     if isinstance(value, dict):
-        return _redact_mapping(value, context=context)
+        return {key: _redact_content(item, context=context) for key, item in value.items()}
     return value
-
-
-def _redact_list(
-    value: list[Any],
-    *,
-    context: _RedactionContext,
-) -> list[Any]:
-    return [_redact_content(item, context=context) for item in value]
-
-
-def _redact_mapping(
-    value: Mapping[Any, Any],
-    *,
-    context: _RedactionContext,
-) -> dict[Any, Any]:
-    return {key: _redact_content(item, context=context) for key, item in value.items()}
 
 
 def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
