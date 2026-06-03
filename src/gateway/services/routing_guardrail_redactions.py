@@ -21,27 +21,19 @@ class _RedactionContext:
     counts: _RedactionCounts
 
 
-def _redact_string(
-    value: str,
-    *,
-    context: _RedactionContext,
-) -> str:
-    redacted = value
-    for kind, rule, pattern in context.rules:
-        redacted, count = pattern.subn(context.replacement, redacted)
-        if count:
-            key = (kind, rule)
-            context.counts[key] = context.counts.get(key, 0) + count
-    return redacted
-
-
 def _redact_content(
     value: Any,
     *,
     context: _RedactionContext,
 ) -> Any:
     if isinstance(value, str):
-        return _redact_string(value, context=context)
+        redacted = value
+        for kind, rule, pattern in context.rules:
+            redacted, count = pattern.subn(context.replacement, redacted)
+            if count:
+                key = (kind, rule)
+                context.counts[key] = context.counts.get(key, 0) + count
+        return redacted
     if isinstance(value, list):
         return [_redact_content(item, context=context) for item in value]
     if isinstance(value, dict):

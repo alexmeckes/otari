@@ -1,14 +1,7 @@
 from gateway.services.routing_guardrail_redactions import (
-    _redact_string,
     _redaction_rules,
-    _RedactionContext,
     apply_guardrail_redactions,
 )
-
-
-def _redaction_context(replacement: str = "[MASKED]") -> _RedactionContext:
-    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
-    return _RedactionContext(rules=rules, replacement=replacement, counts={})
 
 
 def test_redaction_rules_collects_pii_and_named_patterns() -> None:
@@ -32,17 +25,6 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
     assert rules[1][2].pattern == r"token-[0-9]+"
     assert _redaction_rules({"patterns": "not-a-list"}) == ([], 0)
     assert _redaction_rules({"pii": False, "pii_types": ["email"]}) == ([], 0)
-
-
-def test_redact_string_replaces_matches_and_updates_counts() -> None:
-    context = _redaction_context()
-
-    redacted = _redact_string("token-123 and token-456", context=context)
-
-    assert redacted == "[MASKED] and [MASKED]"
-    assert context.counts == {("pattern", "token"): 2}
-    assert _redact_string("nothing to mask", context=context) == "nothing to mask"
-    assert context.counts == {("pattern", "token"): 2}
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
