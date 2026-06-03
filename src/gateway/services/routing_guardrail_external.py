@@ -172,10 +172,6 @@ def _classifier_success_evaluation(
     )
 
 
-def _classifier_error_text(error: str) -> str:
-    return error[:_CLASSIFIER_ERROR_TEXT_LIMIT]
-
-
 def _classifier_error_result(
     settings: _ClassifierSettings,
     *,
@@ -186,7 +182,7 @@ def _classifier_error_result(
         "name": settings.name,
         "status": "error",
         "status_code": status_code,
-        "error": _classifier_error_text(error),
+        "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
         "fail_closed": settings.fail_closed,
     }
 

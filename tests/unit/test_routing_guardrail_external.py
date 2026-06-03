@@ -340,13 +340,6 @@ def test_classifier_success_evaluation_preserves_flagged_and_passed_results() ->
     }
 
 
-def test_classifier_error_text_truncates_long_errors_only() -> None:
-    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
-
-    assert routing_guardrail_external._classifier_error_text("x" * (limit + 5)) == "x" * limit
-    assert routing_guardrail_external._classifier_error_text("short error") == "short error"
-
-
 def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> None:
     limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
     settings = routing_guardrail_external._ClassifierSettings(
