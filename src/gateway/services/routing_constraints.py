@@ -65,22 +65,6 @@ def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) ->
     return None
 
 
-def _estimated_cost_failure(
-    candidate: Any,
-    *,
-    max_estimated_cost: float | None,
-    allow_unknown_cost: bool,
-) -> str | None:
-    if max_estimated_cost is None:
-        return None
-
-    if candidate.estimated_cost is None:
-        return None if allow_unknown_cost else "estimated_cost_unknown"
-    if candidate.estimated_cost > max_estimated_cost:
-        return "estimated_cost_exceeds_max"
-    return None
-
-
 def _region_failure(
     candidate_regions: set[str],
     constraint_sets: _ConstraintSets,
@@ -142,11 +126,11 @@ def apply_constraints(
                 requested_region,
             )
         if reason is None:
-            reason = _estimated_cost_failure(
-                candidate,
-                max_estimated_cost=max_estimated_cost,
-                allow_unknown_cost=allow_unknown_cost,
-            )
+            if max_estimated_cost is not None:
+                if candidate.estimated_cost is None:
+                    reason = None if allow_unknown_cost else "estimated_cost_unknown"
+                elif candidate.estimated_cost > max_estimated_cost:
+                    reason = "estimated_cost_exceeds_max"
         if reason is None:
             allowed.append(candidate)
             continue

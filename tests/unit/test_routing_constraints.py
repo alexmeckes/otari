@@ -4,7 +4,6 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _constraint_sets,
-    _estimated_cost_failure,
     _normalize_model_key_for_constraint,
     _provider_model_failure,
     _region_failure,
@@ -98,49 +97,6 @@ def test_provider_model_failure_preserves_provider_before_model_order() -> None:
         _provider_model_failure(
             candidate,
             _constraint_sets({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}),
-        )
-        is None
-    )
-
-
-def test_estimated_cost_failure_preserves_absent_unknown_and_exceeded_behavior() -> None:
-    unknown_cost = SimpleNamespace(estimated_cost=None)
-    expensive = SimpleNamespace(estimated_cost=0.02)
-    cheap = SimpleNamespace(estimated_cost=0.001)
-
-    assert (
-        _estimated_cost_failure(expensive, max_estimated_cost=None, allow_unknown_cost=False)
-        is None
-    )
-    assert (
-        _estimated_cost_failure(
-            unknown_cost,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=False,
-        )
-        == "estimated_cost_unknown"
-    )
-    assert (
-        _estimated_cost_failure(
-            unknown_cost,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=True,
-        )
-        is None
-    )
-    assert (
-        _estimated_cost_failure(
-            expensive,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=False,
-        )
-        == "estimated_cost_exceeds_max"
-    )
-    assert (
-        _estimated_cost_failure(
-            cheap,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=False,
         )
         is None
     )
@@ -250,6 +206,53 @@ def test_apply_constraints_ignores_blank_request_region_inputs() -> None:
 
         assert allowed == [candidate]
         assert rejected == []
+
+
+def test_apply_constraints_preserves_estimated_cost_behavior() -> None:
+    candidates = [
+        SimpleNamespace(model="openai:unknown-cost", provider="openai", estimated_cost=None, metadata={}),
+        SimpleNamespace(model="openai:cheap", provider="openai", estimated_cost=0.001, metadata={}),
+        SimpleNamespace(model="openai:expensive", provider="openai", estimated_cost=0.02, metadata={}),
+    ]
+
+    allowed, rejected = apply_constraints(
+        candidates,
+        config={"constraints": {"max_estimated_cost": 0.01}},
+        tags={},
+    )
+    assert [candidate.model for candidate in allowed] == ["openai:cheap"]
+    assert rejected == [
+        {
+            "model": "openai:unknown-cost",
+            "provider": "openai",
+            "reason": "estimated_cost_unknown",
+            "estimated_cost": None,
+            "regions": [],
+        },
+        {
+            "model": "openai:expensive",
+            "provider": "openai",
+            "reason": "estimated_cost_exceeds_max",
+            "estimated_cost": 0.02,
+            "regions": [],
+        },
+    ]
+
+    allowed, rejected = apply_constraints(
+        candidates,
+        config={"constraints": {"max_estimated_cost": 0.01, "allow_unknown_cost": True}},
+        tags={},
+    )
+    assert [candidate.model for candidate in allowed] == ["openai:unknown-cost", "openai:cheap"]
+    assert [item["reason"] for item in rejected] == ["estimated_cost_exceeds_max"]
+
+    allowed, rejected = apply_constraints(
+        candidates,
+        config={"constraints": {"allow_unknown_cost": False}},
+        tags={},
+    )
+    assert allowed == candidates
+    assert rejected == []
 
 
 def test_apply_constraints_uses_configured_constraint_values() -> None:
