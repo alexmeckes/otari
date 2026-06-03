@@ -152,6 +152,37 @@ def test_default_strategy_from_internal_trims_candidate_models_and_skips_blanks(
     ]
 
 
+def test_default_strategy_from_internal_preserves_tier_candidates() -> None:
+    default_strategy = routing_policy_shape.default_strategy_from_internal(
+        "priority",
+        {
+            "candidates": ["openai:gpt-4o"],
+            "tiers": {
+                "complex": [
+                    {
+                        "model": " anthropic:claude-3-5-sonnet-latest ",
+                        "metadata": {"priority": 7, "region": "us"},
+                    }
+                ],
+                1: ["openai:gpt-4o-mini"],
+                "simple": "openai:gpt-4o-mini",
+            },
+        },
+    )
+
+    assert default_strategy is not None
+    assert default_strategy["providers"] == [
+        {"provider": "openai", "model": "gpt-4o", "priority": 1},
+        {
+            "provider": "anthropic",
+            "model": "claude-3-5-sonnet-latest",
+            "priority": 7,
+            "tier": "complex",
+            "region": "us",
+        },
+    ]
+
+
 def test_default_strategy_from_internal_forces_single_fallback_disabled() -> None:
     default_strategy = routing_policy_shape.default_strategy_from_internal(
         "single",

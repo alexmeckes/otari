@@ -193,7 +193,7 @@ def _candidate_item_to_provider(item: Any, *, position: int, tier: str | None = 
     return provider_item
 
 
-def _providers_from_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
+def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> dict[str, Any] | None:
     providers: list[dict[str, Any]] = []
     candidates = config.get("candidates")
     if isinstance(candidates, list):
@@ -211,11 +211,6 @@ def _providers_from_config(config: Mapping[str, Any]) -> list[dict[str, Any]]:
                 provider_item = _candidate_item_to_provider(item, position=len(providers) + 1, tier=tier_name)
                 if provider_item is not None:
                     providers.append(provider_item)
-    return providers
-
-
-def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> dict[str, Any] | None:
-    providers = _providers_from_config(config)
     if not providers:
         return None
     fallback_enabled = False if strategy == "single" else bool(config.get("fallback_enabled", True))
