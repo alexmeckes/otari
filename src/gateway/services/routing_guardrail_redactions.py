@@ -2,8 +2,7 @@
 
 import copy
 import re
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 from gateway.services.routing_config_values import bool_config, dict_or_empty
@@ -12,33 +11,6 @@ from gateway.services.routing_guardrail_helpers import guardrails_config, named_
 _RedactionRule = tuple[str, str, re.Pattern[str]]
 _RedactionCountKey = tuple[str, str]
 _RedactionCounts = dict[_RedactionCountKey, int]
-
-
-@dataclass(frozen=True)
-class _RedactionContext:
-    rules: Sequence[_RedactionRule]
-    replacement: str
-    counts: _RedactionCounts
-
-
-def _redact_content(
-    value: Any,
-    *,
-    context: _RedactionContext,
-) -> Any:
-    if isinstance(value, str):
-        redacted = value
-        for kind, rule, pattern in context.rules:
-            redacted, count = pattern.subn(context.replacement, redacted)
-            if count:
-                key = (kind, rule)
-                context.counts[key] = context.counts.get(key, 0) + count
-        return redacted
-    if isinstance(value, list):
-        return [_redact_content(item, context=context) for item in value]
-    if isinstance(value, dict):
-        return {key: _redact_content(item, context=context) for key, item in value.items()}
-    return value
 
 
 def apply_guardrail_redactions(
@@ -73,7 +45,23 @@ def apply_guardrail_redactions(
             "replacement": replacement,
         }
 
-    context = _RedactionContext(rules=rules, replacement=replacement, counts={})
+    counts: _RedactionCounts = {}
+
+    def redact_content(value: Any) -> Any:
+        if isinstance(value, str):
+            redacted = value
+            for kind, rule, pattern in rules:
+                redacted, count = pattern.subn(replacement, redacted)
+                if count:
+                    key = (kind, rule)
+                    counts[key] = counts.get(key, 0) + count
+            return redacted
+        if isinstance(value, list):
+            return [redact_content(item) for item in value]
+        if isinstance(value, dict):
+            return {key: redact_content(item) for key, item in value.items()}
+        return value
+
     messages = body.get("messages")
     if isinstance(messages, list):
         redacted_messages: list[Any] = []
@@ -82,10 +70,7 @@ def apply_guardrail_redactions(
                 redacted_messages.append(
                     {
                         **message,
-                        "content": _redact_content(
-                            message.get("content"),
-                            context=context,
-                        ),
+                        "content": redact_content(message.get("content")),
                     }
                 )
             else:
@@ -94,17 +79,17 @@ def apply_guardrail_redactions(
 
     for key in ("input", "instructions"):
         if key in body:
-            body[key] = _redact_content(body[key], context=context)
+            body[key] = redact_content(body[key])
 
-    total_replacements = sum(context.counts.values())
+    total_replacements = sum(counts.values())
     return body, {
         "enabled": True,
         "status": "redacted" if total_replacements else "unchanged",
-        "replacement": context.replacement,
+        "replacement": replacement,
         "total_replacements": total_replacements,
         "counts": [
             {"type": kind, "rule": rule, "count": count}
-            for (kind, rule), count in sorted(context.counts.items())
+            for (kind, rule), count in sorted(counts.items())
         ],
         "pattern_count": len(pattern_rules),
     }
