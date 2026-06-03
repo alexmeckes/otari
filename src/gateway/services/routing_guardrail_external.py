@@ -84,19 +84,15 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _explicit_classifier_violations(settings: _ClassifierSettings, payload: Mapping[str, Any]) -> list[dict[str, str]]:
-    raw_violations = payload.get("violations")
-    return [
-        guardrail_violation("external_classifier", _classifier_rule(item, fallback=settings.name))
-        for item in raw_violations
-    ] if isinstance(raw_violations, list) else []
-
-
 def _classifier_violations(
     settings: _ClassifierSettings,
     payload: Mapping[str, Any],
 ) -> tuple[list[dict[str, str]], float | None]:
-    violations = _explicit_classifier_violations(settings, payload)
+    raw_violations = payload.get("violations")
+    violations = [
+        guardrail_violation("external_classifier", _classifier_rule(item, fallback=settings.name))
+        for item in raw_violations
+    ] if isinstance(raw_violations, list) else []
     score = non_negative_float_or_none(payload.get("score"))
     if violations or not (
         payload.get("blocked") is True

@@ -63,46 +63,6 @@ def test_classifier_rule_uses_configured_field_precedence() -> None:
     )
 
 
-def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=False,
-    )
-
-    assert routing_guardrail_external._explicit_classifier_violations(
-        settings,
-        {
-            "violations": [
-                {"category": " customer_pii "},
-                " prompt_injection ",
-                {"rule": " "},
-            ]
-        },
-    ) == [
-        {"type": "external_classifier", "rule": "customer_pii"},
-        {"type": "external_classifier", "rule": "prompt_injection"},
-        {"type": "external_classifier", "rule": "dlp"},
-    ]
-
-
-def test_explicit_classifier_violations_default_empty_for_unsupported_payloads() -> None:
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
-        threshold=None,
-        headers=None,
-        fail_closed=False,
-    )
-
-    assert routing_guardrail_external._explicit_classifier_violations(settings, {"violations": {"rule": "pii"}}) == []
-    assert routing_guardrail_external._explicit_classifier_violations(settings, {}) == []
-
-
 def test_classifier_violations_preserve_label_fallback_rules() -> None:
     prompt_shield = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
@@ -156,6 +116,7 @@ def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
             "violations": [
                 {"category": " customer_pii "},
                 " prompt_injection ",
+                {"rule": " "},
             ],
             "flagged": True,
             "label": "fallback",
@@ -166,6 +127,7 @@ def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
     assert violations == [
         {"type": "external_classifier", "rule": "customer_pii"},
         {"type": "external_classifier", "rule": "prompt_injection"},
+        {"type": "external_classifier", "rule": "dlp"},
     ]
     assert score == 0.91
 
@@ -227,6 +189,13 @@ def test_classifier_violations_preserve_unflagged_score_rules() -> None:
     )
     assert violations == []
     assert score == 0.9
+
+    violations, score = routing_guardrail_external._classifier_violations(
+        no_threshold_settings,
+        {"violations": {"rule": "prompt_injection"}},
+    )
+    assert violations == []
+    assert score is None
 
 
 def test_classifier_settings_normalizes_request_fields() -> None:
