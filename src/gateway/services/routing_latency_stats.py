@@ -41,7 +41,7 @@ async def attach_latency_stats(
 
     enriched: list[Any] = []
     for candidate in candidates:
-        durations = durations_by_model.get(candidate.model, [])
+        durations = durations_by_model[candidate.model]
         if len(durations) < min_samples:
             enriched.append(candidate)
             continue
