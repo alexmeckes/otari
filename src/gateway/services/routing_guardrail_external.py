@@ -16,7 +16,6 @@ from gateway.services.routing_guardrail_helpers import guardrail_violation
 
 ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
 ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
-_ClassifierEvaluationResult = tuple[list[dict[str, str]], dict[str, Any]]
 
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
@@ -152,7 +151,7 @@ async def _evaluate_classifier_from_settings(
     *,
     request_text: str,
     post_classifier: ExternalClassifierPost,
-) -> _ClassifierEvaluationResult:
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
     if settings.url is None:
         return [], {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
 
