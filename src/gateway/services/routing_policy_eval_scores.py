@@ -134,6 +134,26 @@ def _apply_eval_score_to_candidate(
     return updated_candidate
 
 
+def _apply_eval_scores_to_candidate_list(
+    candidates: list[Any],
+    *,
+    scores_by_model: Mapping[str, EvalScoreAggregate],
+    applied_scores: list[AppliedEvalScore],
+    applied_model_keys: set[str],
+    updated_at: str,
+) -> list[Any]:
+    return [
+        _apply_eval_score_to_candidate(
+            candidate,
+            scores_by_model=scores_by_model,
+            applied_scores=applied_scores,
+            applied_model_keys=applied_model_keys,
+            updated_at=updated_at,
+        )
+        for candidate in candidates
+    ]
+
+
 def apply_eval_scores_to_policy_config(
     config: Mapping[str, Any],
     scores: Iterable[EvalScoreInput],
@@ -148,16 +168,13 @@ def apply_eval_scores_to_policy_config(
 
     candidates = updated_config.get("candidates")
     if isinstance(candidates, list):
-        updated_config["candidates"] = [
-            _apply_eval_score_to_candidate(
-                candidate,
-                scores_by_model=scores_by_model,
-                applied_scores=applied_scores,
-                applied_model_keys=applied_model_keys,
-                updated_at=updated_at_value,
-            )
-            for candidate in candidates
-        ]
+        updated_config["candidates"] = _apply_eval_scores_to_candidate_list(
+            candidates,
+            scores_by_model=scores_by_model,
+            applied_scores=applied_scores,
+            applied_model_keys=applied_model_keys,
+            updated_at=updated_at_value,
+        )
 
     tiers = updated_config.get("tiers")
     if isinstance(tiers, dict):
@@ -166,16 +183,13 @@ def apply_eval_scores_to_policy_config(
             if not isinstance(tier_candidates, list):
                 updated_tiers[str(tier_name)] = tier_candidates
                 continue
-            updated_tiers[str(tier_name)] = [
-                _apply_eval_score_to_candidate(
-                    candidate,
-                    scores_by_model=scores_by_model,
-                    applied_scores=applied_scores,
-                    applied_model_keys=applied_model_keys,
-                    updated_at=updated_at_value,
-                )
-                for candidate in tier_candidates
-            ]
+            updated_tiers[str(tier_name)] = _apply_eval_scores_to_candidate_list(
+                tier_candidates,
+                scores_by_model=scores_by_model,
+                applied_scores=applied_scores,
+                applied_model_keys=applied_model_keys,
+                updated_at=updated_at_value,
+            )
         updated_config["tiers"] = updated_tiers
 
     unmatched_models = sorted(set(scores_by_model) - applied_model_keys)

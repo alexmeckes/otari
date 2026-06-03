@@ -89,3 +89,27 @@ def test_apply_eval_scores_ignores_unsupported_candidate_items() -> None:
     assert result.config["candidates"] == [123]
     assert result.applied_scores == []
     assert result.unmatched_models == ["openai:gpt-4o-mini"]
+
+
+def test_apply_eval_scores_updates_tier_candidates_and_preserves_other_tiers() -> None:
+    result = apply_eval_scores_to_policy_config(
+        {
+            "tiers": {
+                "simple": ["openai:gpt-4o-mini"],
+                "complex": "openai:gpt-4o",
+            }
+        },
+        [
+            EvalScoreInput(model="openai:gpt-4o-mini", quality_score=0.7, sample_count=3),
+            EvalScoreInput(model="anthropic:claude-3-haiku", quality_score=0.8),
+        ],
+        updated_at="2026-06-01T00:00:00Z",
+    )
+
+    simple_candidate = result.config["tiers"]["simple"][0]
+    assert simple_candidate["model"] == "openai:gpt-4o-mini"
+    assert simple_candidate["quality_score"] == pytest.approx(0.7)
+    assert simple_candidate["metadata"]["eval_score"]["sample_count"] == 3
+    assert result.config["tiers"]["complex"] == "openai:gpt-4o"
+    assert [score.model for score in result.applied_scores] == ["openai:gpt-4o-mini"]
+    assert result.unmatched_models == ["anthropic:claude-3-haiku"]
