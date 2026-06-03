@@ -165,6 +165,14 @@ def _guardrail_request_text(request_body: Mapping[str, Any]) -> str:
     )
 
 
+def _blocked_term_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
+    return [
+        guardrail_violation("blocked_term", value)
+        for value in string_list(guardrails.get("blocked_terms"))
+        if value.lower() in normalized_text
+    ]
+
+
 def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
     injection_config = guardrails.get("prompt_injection")
     injection_enabled = bool_config(
@@ -222,11 +230,7 @@ async def evaluate_guardrails(
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
 
-    violations.extend(
-        guardrail_violation("blocked_term", value)
-        for value in string_list(guardrails.get("blocked_terms"))
-        if value.lower() in normalized_text
-    )
+    violations.extend(_blocked_term_violations(guardrails, normalized_text))
 
     for name, pattern in named_patterns(guardrails.get("blocked_patterns")):
         if pattern.search(request_text):

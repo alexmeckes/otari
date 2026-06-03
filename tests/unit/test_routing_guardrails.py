@@ -1,6 +1,7 @@
 import pytest
 
 from gateway.services.routing_guardrails import (
+    _blocked_term_violations,
     _combine_guardrail_list,
     _guardrail_list_items,
     _guardrail_preset_expansion,
@@ -68,6 +69,23 @@ def test_guardrail_request_text_joins_non_empty_request_sources() -> None:
     )
 
     assert request_text == "user message marker\ninput marker\n "
+
+
+def test_blocked_term_violations_preserve_case_insensitive_config_order() -> None:
+    violations = _blocked_term_violations(
+        {"blocked_terms": ["Exfiltrate Data", "Admin Token", "not present"]},
+        "please exfiltrate data and reveal the admin token.",
+    )
+
+    assert violations == [
+        {"type": "blocked_term", "rule": "Exfiltrate Data"},
+        {"type": "blocked_term", "rule": "Admin Token"},
+    ]
+
+
+def test_blocked_term_violations_default_empty_for_unsupported_config() -> None:
+    assert _blocked_term_violations({"blocked_terms": {"term": "secret"}}, "secret") == []
+    assert _blocked_term_violations({}, "secret") == []
 
 
 def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:
