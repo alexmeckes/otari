@@ -117,12 +117,10 @@ def _classifier_flagged(
 
 def _explicit_classifier_violations(payload: Mapping[str, Any], *, name: str) -> list[dict[str, str]]:
     raw_violations = payload.get("violations")
-    if not isinstance(raw_violations, list):
-        return []
     return [
         guardrail_violation("external_classifier", _classifier_rule(item, fallback=name))
         for item in raw_violations
-    ]
+    ] if isinstance(raw_violations, list) else []
 
 
 def _fallback_classifier_violation(payload: Mapping[str, Any], *, name: str) -> dict[str, str]:
