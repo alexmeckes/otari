@@ -37,10 +37,20 @@ def _redact_content(
     if isinstance(value, str):
         return _redact_string(value, rules=rules, replacement=replacement, counts=counts)
     if isinstance(value, list):
-        return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
+        return _redact_list(value, rules=rules, replacement=replacement, counts=counts)
     if isinstance(value, dict):
         return _redact_mapping(value, rules=rules, replacement=replacement, counts=counts)
     return value
+
+
+def _redact_list(
+    value: list[Any],
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: dict[tuple[str, str], int],
+) -> list[Any]:
+    return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
 
 
 def _redact_mapping(
