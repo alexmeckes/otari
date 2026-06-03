@@ -5,7 +5,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_list,
     _redact_mapping,
     _redact_message,
-    _redact_messages,
     _redact_string,
     _redaction_rules,
     _RedactionContext,
@@ -99,26 +98,6 @@ def test_redact_message_redacts_content_copy_and_passes_through_other_items() ->
     assert context.counts == {("pattern", "token"): 1}
 
 
-def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
-    context = _redaction_context()
-    messages = [
-        {"role": "user", "content": "token-123"},
-        {"role": "assistant", "tool_calls": []},
-        "raw",
-    ]
-
-    redacted = _redact_messages(messages, context=context)
-
-    assert redacted == [
-        {"role": "user", "content": "[MASKED]"},
-        {"role": "assistant", "tool_calls": []},
-        "raw",
-    ]
-    assert messages[0]["content"] == "token-123"
-    assert context.counts == {("pattern", "token"): 1}
-    assert _redact_messages("not-a-list", context=context) is None
-
-
 def test_redactable_request_fields_names_supported_provider_fields() -> None:
     assert _REDACTABLE_REQUEST_FIELDS == ("input", "instructions")
 
@@ -150,7 +129,9 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
                 {
                     "role": "user",
                     "content": "Email ada@example.com about token-123.",
-                }
+                },
+                {"role": "assistant", "tool_calls": []},
+                "raw",
             ],
             "input": {"note": "token-456"},
             "instructions": "Contact bob@example.com",
@@ -158,7 +139,11 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
         },
     )
 
-    assert body["messages"][0]["content"] == "Email [MASKED] about [MASKED]."
+    assert body["messages"] == [
+        {"role": "user", "content": "Email [MASKED] about [MASKED]."},
+        {"role": "assistant", "tool_calls": []},
+        "raw",
+    ]
     assert body["input"] == {"note": "[MASKED]"}
     assert body["instructions"] == "Contact [MASKED]"
     assert body["other"] == "token-789"
@@ -171,6 +156,30 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
             {"type": "pattern", "rule": "token", "count": 2},
             {"type": "pii", "rule": "email", "count": 2},
         ],
+        "pattern_count": 1,
+    }
+
+
+def test_apply_guardrail_redactions_preserves_non_list_messages() -> None:
+    body, trace = apply_guardrail_redactions(
+        {
+            "guardrails": {
+                "redactions": {
+                    "replacement": "[MASKED]",
+                    "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+                }
+            }
+        },
+        {"messages": "token-123", "input": "token-456"},
+    )
+
+    assert body == {"messages": "token-123", "input": "[MASKED]"}
+    assert trace == {
+        "enabled": True,
+        "status": "redacted",
+        "replacement": "[MASKED]",
+        "total_replacements": 1,
+        "counts": [{"type": "pattern", "rule": "token", "count": 1}],
         "pattern_count": 1,
     }
 

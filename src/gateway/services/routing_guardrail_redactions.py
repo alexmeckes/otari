@@ -102,17 +102,6 @@ def _redact_message(
     return message
 
 
-def _redact_messages(
-    messages: Any,
-    *,
-    context: _RedactionContext,
-) -> list[Any] | None:
-    if not isinstance(messages, list):
-        return None
-
-    return [_redact_message(message, context=context) for message in messages]
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -136,12 +125,9 @@ def apply_guardrail_redactions(
         }
 
     context = _RedactionContext(rules=rules, replacement=replacement, counts={})
-    redacted_messages = _redact_messages(
-        body.get("messages"),
-        context=context,
-    )
-    if redacted_messages is not None:
-        body["messages"] = redacted_messages
+    messages = body.get("messages")
+    if isinstance(messages, list):
+        body["messages"] = [_redact_message(message, context=context) for message in messages]
 
     for key in _REDACTABLE_REQUEST_FIELDS:
         if key in body:
