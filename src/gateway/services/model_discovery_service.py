@@ -145,11 +145,11 @@ async def discover_all_models(
         cached = cache.get(provider_name, ttl)
         if cached is not None:
             result_models.extend((provider_name, m) for m in cached)
-        else:
-            if _supports_list_models(provider_name):
-                providers_needing_fetch.append(provider_name)
-            else:
-                logger.debug("Provider '%s' does not support model listing, skipping", provider_name)
+            continue
+        if _supports_list_models(provider_name):
+            providers_needing_fetch.append(provider_name)
+            continue
+        logger.debug("Provider '%s' does not support model listing, skipping", provider_name)
 
     if not providers_needing_fetch:
         return result_models
@@ -162,8 +162,8 @@ async def discover_all_models(
             cached = cache.get(provider_name, ttl)
             if cached is not None:
                 result_models.extend((provider_name, m) for m in cached)
-            else:
-                still_needed.append(provider_name)
+                continue
+            still_needed.append(provider_name)
 
         if still_needed:
             tasks = [_discover_for_provider(name, config) for name in still_needed]
