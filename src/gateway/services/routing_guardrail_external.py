@@ -201,10 +201,6 @@ def _classifier_error_evaluation(
     )
 
 
-def _classifier_skipped_result(settings: _ClassifierSettings) -> dict[str, str]:
-    return {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
-
-
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
@@ -239,7 +235,7 @@ async def _evaluate_classifier_from_settings(
     post_classifier: ExternalClassifierPost,
 ) -> _ClassifierEvaluationResult:
     if settings.url is None:
-        return [], _classifier_skipped_result(settings)
+        return [], {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
 
     status_code, payload, error = await _post_classifier_from_settings(
         settings,
