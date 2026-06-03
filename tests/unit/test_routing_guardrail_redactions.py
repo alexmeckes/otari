@@ -1,7 +1,6 @@
 import re
 
 from gateway.services.routing_guardrail_redactions import (
-    _REDACTABLE_REQUEST_FIELDS,
     _redact_list,
     _redact_mapping,
     _redact_message,
@@ -96,10 +95,6 @@ def test_redact_message_redacts_content_copy_and_passes_through_other_items() ->
     assert _redact_message(passthrough, context=context) is passthrough
     assert _redact_message("raw", context=context) == "raw"
     assert context.counts == {("pattern", "token"): 1}
-
-
-def test_redactable_request_fields_names_supported_provider_fields() -> None:
-    assert _REDACTABLE_REQUEST_FIELDS == ("input", "instructions")
 
 
 def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:

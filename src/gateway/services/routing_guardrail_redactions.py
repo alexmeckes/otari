@@ -13,7 +13,6 @@ _RedactionRule = tuple[str, str, re.Pattern[str]]
 _PatternRule = tuple[str, re.Pattern[str]]
 _RedactionCountKey = tuple[str, str]
 _RedactionCounts = dict[_RedactionCountKey, int]
-_REDACTABLE_REQUEST_FIELDS = ("input", "instructions")
 
 
 @dataclass(frozen=True)
@@ -129,7 +128,7 @@ def apply_guardrail_redactions(
     if isinstance(messages, list):
         body["messages"] = [_redact_message(message, context=context) for message in messages]
 
-    for key in _REDACTABLE_REQUEST_FIELDS:
+    for key in ("input", "instructions"):
         if key in body:
             body[key] = _redact_content(body[key], context=context)
 
