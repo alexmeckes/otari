@@ -304,11 +304,10 @@ async def evaluate_guardrails(
     request_text = _guardrail_request_text(request_body)
     local_violations = _local_guardrail_violations(guardrails, request_text)
 
-    classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier
     external_violations, classifier_results = await routing_guardrail_external.evaluate_external_classifiers(
         guardrails=guardrails,
         request_text=request_text,
-        post_classifier=classifier_post,
+        post_classifier=post_classifier or routing_guardrail_external.post_external_guardrail_classifier,
     )
 
     return _guardrail_result(
