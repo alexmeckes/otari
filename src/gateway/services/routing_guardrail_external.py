@@ -97,11 +97,9 @@ def _classifier_headers(value: Any) -> dict[str, str] | None:
 
 
 def _classifier_configs(value: Any) -> list[Mapping[str, Any]]:
-    if isinstance(value, dict):
-        return [value]
     if isinstance(value, list):
         return [classifier for classifier in value if isinstance(classifier, dict)]
-    return []
+    return [value] if isinstance(value, dict) else []
 
 
 def _classifier_flagged(
