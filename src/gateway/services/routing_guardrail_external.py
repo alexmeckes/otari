@@ -135,9 +135,9 @@ def _classifier_violations(
 ) -> tuple[list[dict[str, str]], float | None]:
     violations = _explicit_classifier_violations(payload, name=name)
     score = non_negative_float_or_none(payload.get("score"))
-    if _classifier_flagged(payload, score=score, threshold=threshold) and not violations:
-        violations.append(_fallback_classifier_violation(payload, name=name))
-    return violations, score
+    if violations or not _classifier_flagged(payload, score=score, threshold=threshold):
+        return violations, score
+    return [_fallback_classifier_violation(payload, name=name)], score
 
 
 def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
