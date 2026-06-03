@@ -20,17 +20,6 @@ _DEFAULT_STRATEGY_PROVIDER_KEYS = {
     "input_price_per_million",
     "output_price_per_million",
 }
-_WEIGHTED_SCORE_KEYS = {
-    "weights",
-    "quality_weight",
-    "cost_weight",
-    "latency_weight",
-    "default_quality_score",
-    "unknown_cost_score",
-    "unknown_latency_score",
-}
-
-
 class RoutingPolicyShapeError(ValueError):
     """Raised when a public routing policy shape cannot be normalized."""
 
@@ -137,7 +126,15 @@ def config_from_default_strategy(
     if strategy_type == "weighted_score":
         config["candidates"] = _candidates_from_default_strategy_providers(provider_items)
         scoring_config = dict_or_empty(default_strategy.get("scoring"), copy_value=True)
-        for key in _WEIGHTED_SCORE_KEYS:
+        for key in (
+            "weights",
+            "quality_weight",
+            "cost_weight",
+            "latency_weight",
+            "default_quality_score",
+            "unknown_cost_score",
+            "unknown_latency_score",
+        ):
             if key in default_strategy:
                 scoring_config[key] = default_strategy[key]
         if scoring_config:
