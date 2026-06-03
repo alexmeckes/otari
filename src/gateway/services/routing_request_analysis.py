@@ -99,6 +99,10 @@ def estimate_output_tokens(request_body: Mapping[str, Any]) -> int:
     return _DEFAULT_OUTPUT_TOKENS
 
 
+def _matches_tier(prompt_tokens: int, threshold: int, request_text: str, hints: tuple[str, ...]) -> bool:
+    return prompt_tokens >= threshold or any(hint in request_text for hint in hints)
+
+
 def classify_request_tier(
     request_body: Mapping[str, Any],
     *,
@@ -112,10 +116,10 @@ def classify_request_tier(
     reasoning_threshold = int_config(threshold_map.get("reasoning"), 9000)
 
     request_text = jsonable_text(request_body.get("messages")).lower()
-    if prompt_tokens >= reasoning_threshold or any(hint in request_text for hint in _REASONING_HINTS):
+    if _matches_tier(prompt_tokens, reasoning_threshold, request_text, _REASONING_HINTS):
         return "reasoning"
-    if prompt_tokens >= complex_threshold or any(hint in request_text for hint in _COMPLEX_HINTS):
+    if _matches_tier(prompt_tokens, complex_threshold, request_text, _COMPLEX_HINTS):
         return "complex"
-    if prompt_tokens >= medium_threshold or any(hint in request_text for hint in _MEDIUM_HINTS):
+    if _matches_tier(prompt_tokens, medium_threshold, request_text, _MEDIUM_HINTS):
         return "medium"
     return "simple"
