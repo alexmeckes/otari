@@ -291,7 +291,7 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
         {
             "name": "classifier_1",
             "status": "skipped",
-            "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,
+            "reason": "missing_url",
         },
     )
 
@@ -655,7 +655,7 @@ async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> 
         {
             "name": "classifier_1",
             "status": "skipped",
-            "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,
+            "reason": "missing_url",
         }
     ]
 

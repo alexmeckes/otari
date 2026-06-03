@@ -17,11 +17,9 @@ from gateway.services.routing_guardrail_helpers import guardrail_violation
 ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
 ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
 
-_CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
 _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS = 2.0
 _CLASSIFIER_NON_OBJECT_JSON_ERROR = "classifier returned non-object JSON"
-_CLASSIFIER_MISSING_URL_REASON = "missing_url"
 
 
 @dataclass(frozen=True)
@@ -70,7 +68,7 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     if rule is not None:
         return rule
     if isinstance(value, dict):
-        for key in _CLASSIFIER_RULE_KEYS:
+        for key in ("rule", "type", "label", "category", "name"):
             item = string_or_none(value.get(key))
             if item is not None:
                 return item
@@ -126,7 +124,7 @@ async def _evaluate_classifier_from_settings(
     post_classifier: ExternalClassifierPost,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
     if settings.url is None:
-        return [], {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
+        return [], {"name": settings.name, "status": "skipped", "reason": "missing_url"}
 
     status_code, payload, error = await post_classifier(
         url=settings.url,
