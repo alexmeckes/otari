@@ -138,6 +138,13 @@ def _classifier_violations(
     return violations, score
 
 
+def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
+    label = payload.get("label")
+    if isinstance(label, str):
+        return label
+    return None
+
+
 def _classifier_success_result(
     *,
     name: str,
@@ -147,14 +154,13 @@ def _classifier_success_result(
     threshold: float | None,
     violations: list[dict[str, str]],
 ) -> dict[str, Any]:
-    label = payload.get("label") if isinstance(payload.get("label"), str) else None
     return {
         "name": name,
         "status": "flagged" if violations else "passed",
         "status_code": status_code,
         "score": score,
         "threshold": threshold,
-        "label": label,
+        "label": _classifier_result_label(payload),
         "violations": violations,
     }
 

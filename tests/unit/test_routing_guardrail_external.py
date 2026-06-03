@@ -138,6 +138,12 @@ def test_classifier_violations_use_threshold_label_fallback() -> None:
     assert score == 0.82
 
 
+def test_classifier_result_label_preserves_string_values_only() -> None:
+    assert routing_guardrail_external._classifier_result_label({"label": " prompt_injection "}) == " prompt_injection "
+    assert routing_guardrail_external._classifier_result_label({"label": {"rule": "ignored"}}) is None
+    assert routing_guardrail_external._classifier_result_label({}) is None
+
+
 def test_classifier_success_result_preserves_flagged_shape_and_string_label() -> None:
     violations = [{"type": "external_classifier", "rule": "prompt_injection"}]
 
