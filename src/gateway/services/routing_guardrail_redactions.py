@@ -9,6 +9,7 @@ from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
 
 _RedactionRule = tuple[str, str, re.Pattern[str]]
+_PatternRule = tuple[str, re.Pattern[str]]
 _RedactionCountKey = tuple[str, str]
 _RedactionCounts = dict[_RedactionCountKey, int]
 _REDACTABLE_REQUEST_FIELDS = ("input", "instructions")
@@ -69,18 +70,22 @@ def _redact_mapping(
     }
 
 
+def _typed_redaction_rules(kind: str, patterns: list[_PatternRule]) -> list[_RedactionRule]:
+    return [(kind, name, pattern) for name, pattern in patterns]
+
+
 def _pattern_redaction_rules(patterns: Any) -> list[_RedactionRule]:
-    return [("pattern", name, pattern) for name, pattern in named_patterns(patterns)]
+    return _typed_redaction_rules("pattern", named_patterns(patterns))
 
 
 def _pii_redaction_rules(redactions: Mapping[str, Any]) -> list[_RedactionRule]:
-    return [
-        ("pii", pii_type, pattern)
-        for pii_type, pattern in pii_patterns_from_config(
+    return _typed_redaction_rules(
+        "pii",
+        pii_patterns_from_config(
             redactions.get("pii"),
             fallback_types=redactions.get("pii_types"),
-        )
-    ]
+        ),
+    )
 
 
 def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:

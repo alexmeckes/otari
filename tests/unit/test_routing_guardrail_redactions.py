@@ -1,3 +1,5 @@
+import re
+
 from gateway.services.routing_guardrail_redactions import (
     _REDACTABLE_REQUEST_FIELDS,
     _missing_redaction_rules_trace,
@@ -15,6 +17,7 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_trace,
     _redactions_config,
     _redactions_enabled,
+    _typed_redaction_rules,
     apply_guardrail_redactions,
 )
 
@@ -147,6 +150,16 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
 
 def test_redactable_request_fields_names_supported_provider_fields() -> None:
     assert _REDACTABLE_REQUEST_FIELDS == ("input", "instructions")
+
+
+def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:
+    token = re.compile(r"token-[0-9]+", re.IGNORECASE)
+    email = re.compile(r"@example\.com", re.IGNORECASE)
+
+    assert _typed_redaction_rules("pattern", [("token", token), ("email", email)]) == [
+        ("pattern", "token", token),
+        ("pattern", "email", email),
+    ]
 
 
 def test_pattern_redaction_rules_preserves_named_patterns() -> None:
