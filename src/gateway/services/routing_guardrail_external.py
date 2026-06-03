@@ -279,15 +279,17 @@ async def evaluate_external_classifiers(
     request_text: str,
     post_classifier: ExternalClassifierPost,
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
-    violations: list[dict[str, str]] = []
-    classifier_results: list[dict[str, Any]] = []
+    evaluations: list[_ClassifierEvaluationResult] = []
     for index, classifier in enumerate(_classifier_configs(guardrails.get("external_classifiers")), start=1):
         settings = _classifier_settings(classifier, index=index)
-        classifier_violations, classifier_result = await _evaluate_classifier_from_settings(
-            settings,
-            request_text=request_text,
-            post_classifier=post_classifier,
+        evaluations.append(
+            await _evaluate_classifier_from_settings(
+                settings,
+                request_text=request_text,
+                post_classifier=post_classifier,
+            )
         )
-        violations.extend(classifier_violations)
-        classifier_results.append(classifier_result)
-    return violations, classifier_results
+    return (
+        [violation for classifier_violations, _ in evaluations for violation in classifier_violations],
+        [classifier_result for _, classifier_result in evaluations],
+    )

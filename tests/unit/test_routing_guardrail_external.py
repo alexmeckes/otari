@@ -659,6 +659,58 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
 
 
 @pytest.mark.asyncio
+async def test_external_classifiers_preserve_call_result_and_violation_order() -> None:
+    captured_urls: list[str] = []
+    payloads: dict[str, dict[str, Any]] = {
+        "https://classifier.example.test/first": {
+            "violations": [{"rule": "first_rule"}, {"rule": "first_extra"}],
+        },
+        "https://classifier.example.test/second": {
+            "score": 0.9,
+            "label": "second_label",
+        },
+        "https://classifier.example.test/third": {
+            "violations": [],
+        },
+    }
+
+    async def post_classifier(
+        *,
+        url: str,
+        request_text: str,
+        timeout_seconds: float,
+        headers: dict[str, str] | None,
+    ) -> routing_guardrail_external.ExternalClassifierPostResult:
+        captured_urls.append(url)
+        return 200, payloads[url], None
+
+    violations, results = await routing_guardrail_external.evaluate_external_classifiers(
+        guardrails={
+            "external_classifiers": [
+                {"name": "first", "url": "https://classifier.example.test/first"},
+                {"name": "second", "url": "https://classifier.example.test/second", "threshold": 0.8},
+                {"name": "third", "url": "https://classifier.example.test/third"},
+            ]
+        },
+        request_text="hello",
+        post_classifier=post_classifier,
+    )
+
+    assert captured_urls == [
+        "https://classifier.example.test/first",
+        "https://classifier.example.test/second",
+        "https://classifier.example.test/third",
+    ]
+    assert violations == [
+        {"type": "external_classifier", "rule": "first_rule"},
+        {"type": "external_classifier", "rule": "first_extra"},
+        {"type": "external_classifier", "rule": "second_label"},
+    ]
+    assert [result["name"] for result in results] == ["first", "second", "third"]
+    assert [result["status"] for result in results] == ["flagged", "flagged", "passed"]
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None:
     captured: list[dict[str, Any]] = []
 
