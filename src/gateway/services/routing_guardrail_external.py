@@ -19,6 +19,8 @@ ExternalClassifierPost = Callable[
     Awaitable[tuple[int | None, dict[str, Any] | None, str | None]],
 ]
 
+_CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
+
 
 @dataclass(frozen=True)
 class _ClassifierSettings:
@@ -73,7 +75,7 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     if rule is not None:
         return rule
     if isinstance(value, dict):
-        for key in ("rule", "type", "label", "category", "name"):
+        for key in _CLASSIFIER_RULE_KEYS:
             item = string_or_none(value.get(key))
             if item is not None:
                 return item

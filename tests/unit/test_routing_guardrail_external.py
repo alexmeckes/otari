@@ -68,6 +68,32 @@ def test_classifier_flagged_preserves_boolean_and_threshold_rules() -> None:
     assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=0.9, threshold=None)
 
 
+def test_classifier_rule_uses_configured_field_precedence() -> None:
+    assert (
+        routing_guardrail_external._classifier_rule(
+            {
+                "name": "classifier_name",
+                "category": "category_name",
+                "label": "label_name",
+                "type": "type_name",
+                "rule": " rule_name ",
+            },
+            fallback="fallback",
+        )
+        == "rule_name"
+    )
+    assert (
+        routing_guardrail_external._classifier_rule(
+            {
+                "name": " classifier_name ",
+                "category": " category_name ",
+            },
+            fallback="fallback",
+        )
+        == "category_name"
+    )
+
+
 def test_explicit_classifier_violations_preserve_order_and_fallbacks() -> None:
     assert routing_guardrail_external._explicit_classifier_violations(
         {
