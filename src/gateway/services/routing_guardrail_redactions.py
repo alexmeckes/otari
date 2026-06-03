@@ -83,22 +83,6 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule
     )
 
 
-def _redact_message(
-    message: Any,
-    *,
-    context: _RedactionContext,
-) -> Any:
-    if isinstance(message, dict) and "content" in message:
-        return {
-            **message,
-            "content": _redact_content(
-                message.get("content"),
-                context=context,
-            ),
-        }
-    return message
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -124,7 +108,21 @@ def apply_guardrail_redactions(
     context = _RedactionContext(rules=rules, replacement=replacement, counts={})
     messages = body.get("messages")
     if isinstance(messages, list):
-        body["messages"] = [_redact_message(message, context=context) for message in messages]
+        redacted_messages: list[Any] = []
+        for message in messages:
+            if isinstance(message, dict) and "content" in message:
+                redacted_messages.append(
+                    {
+                        **message,
+                        "content": _redact_content(
+                            message.get("content"),
+                            context=context,
+                        ),
+                    }
+                )
+            else:
+                redacted_messages.append(message)
+        body["messages"] = redacted_messages
 
     for key in ("input", "instructions"):
         if key in body:
