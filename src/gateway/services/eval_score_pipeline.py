@@ -2,13 +2,11 @@
 
 import csv
 import json
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 from gateway.services.routing_config_values import coerced_string_or_none, float_or_none, string_or_none
-
-_ParsedValue = TypeVar("_ParsedValue")
 
 _ROW_LIST_KEYS = ("scores", "results", "items", "rows", "evals")
 _MODEL_KEYS = ("model", "model_key", "candidate_model")
@@ -35,37 +33,27 @@ class EvalScorePipelineError(ValueError):
     """Raised when an eval artifact cannot be converted into score rows."""
 
 
-def _coerce_string(value: Any) -> str | None:
-    parsed = string_or_none(value)
-    if parsed is not None:
-        return parsed
-    if isinstance(value, int | float) and not isinstance(value, bool):
-        return str(value)
-    return None
-
-
 def _coerce_float(value: Any) -> float | None:
     return float_or_none(value, coerce_strings=True, allow_percent=True)
 
 
-def _first_parsed(
-    row: Mapping[str, Any],
-    keys: Iterable[str],
-    parser: Callable[[Any], _ParsedValue | None],
-) -> _ParsedValue | None:
+def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
     for key in keys:
-        parsed = parser(row.get(key))
+        parsed = _coerce_float(row.get(key))
         if parsed is not None:
             return parsed
     return None
 
 
-def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
-    return _first_parsed(row, keys, _coerce_float)
-
-
 def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
-    return _first_parsed(row, keys, _coerce_string)
+    for key in keys:
+        value = row.get(key)
+        parsed = string_or_none(value)
+        if parsed is not None:
+            return parsed
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return str(value)
+    return None
 
 
 def _row_metadata(row: Mapping[str, Any], *, source: str | None, row_number: int) -> dict[str, Any]:
