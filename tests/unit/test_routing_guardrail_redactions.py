@@ -1,4 +1,5 @@
 from gateway.services.routing_guardrail_redactions import (
+    _missing_redaction_rules_trace,
     _redact_messages,
     _redaction_rules,
     _redaction_trace,
@@ -41,6 +42,15 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
     assert messages[0]["content"] == "token-123"
     assert counts == {("pattern", "token"): 1}
     assert _redact_messages("not-a-list", rules=rules, replacement="[MASKED]", counts=counts) is None
+
+
+def test_missing_redaction_rules_trace_marks_skipped() -> None:
+    assert _missing_redaction_rules_trace("[MASKED]") == {
+        "enabled": True,
+        "status": "skipped",
+        "reason": "missing_rules",
+        "replacement": "[MASKED]",
+    }
 
 
 def test_redaction_trace_sorts_counts_and_marks_status() -> None:

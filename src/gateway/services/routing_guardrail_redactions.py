@@ -75,6 +75,15 @@ def _redact_messages(
     return redacted_messages
 
 
+def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
+    return {
+        "enabled": True,
+        "status": "skipped",
+        "reason": "missing_rules",
+        "replacement": replacement,
+    }
+
+
 def _redaction_trace(
     *,
     replacement: str,
@@ -111,12 +120,7 @@ def apply_guardrail_redactions(
     if not isinstance(replacement, str):
         replacement = "[REDACTED]"
     if not rules:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "missing_rules",
-            "replacement": replacement,
-        }
+        return body, _missing_redaction_rules_trace(replacement)
 
     counts: dict[tuple[str, str], int] = {}
     redacted_messages = _redact_messages(
