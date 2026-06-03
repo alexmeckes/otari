@@ -74,6 +74,14 @@ def _classifier_headers(value: Any) -> dict[str, str] | None:
     } or None
 
 
+def _classifier_configs(value: Any) -> list[Mapping[str, Any]]:
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        return [classifier for classifier in value if isinstance(classifier, dict)]
+    return []
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -82,14 +90,7 @@ async def evaluate_external_classifiers(
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
-    classifiers = guardrails.get("external_classifiers")
-    if isinstance(classifiers, dict):
-        classifier_configs = [classifiers]
-    elif isinstance(classifiers, list):
-        classifier_configs = [classifier for classifier in classifiers if isinstance(classifier, dict)]
-    else:
-        classifier_configs = []
-    for index, classifier in enumerate(classifier_configs, start=1):
+    for index, classifier in enumerate(_classifier_configs(guardrails.get("external_classifiers")), start=1):
         name = string_or_none(classifier.get("name")) or f"classifier_{index}"
         url = string_or_none(classifier.get("url"))
         if url is None:

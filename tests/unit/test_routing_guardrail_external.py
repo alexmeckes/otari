@@ -17,6 +17,17 @@ def test_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None
     assert routing_guardrail_external._classifier_headers(["Authorization"]) is None
 
 
+def test_classifier_configs_accept_single_dict_and_list_dicts() -> None:
+    single = {"url": "https://classifier.example.test/check"}
+    first = {"name": "first"}
+    second = {"url": "https://classifier.example.test/other"}
+
+    assert routing_guardrail_external._classifier_configs(single) == [single]
+    assert routing_guardrail_external._classifier_configs([first, "skip", None, second]) == [first, second]
+    assert routing_guardrail_external._classifier_configs("disabled") == []
+    assert routing_guardrail_external._classifier_configs(None) == []
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []
