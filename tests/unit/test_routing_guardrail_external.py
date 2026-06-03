@@ -444,50 +444,6 @@ def test_classifier_settings_uses_index_name_fallback() -> None:
 
 
 @pytest.mark.asyncio
-async def test_post_classifier_from_settings_forwards_request_fields() -> None:
-    captured: list[dict[str, Any]] = []
-    settings = routing_guardrail_external._ClassifierSettings(
-        name="dlp",
-        url="https://classifier.example.test/check",
-        timeout_seconds=3.0,
-        threshold=None,
-        headers={"Authorization": "Bearer test"},
-        fail_closed=False,
-    )
-
-    async def post_classifier(
-        *,
-        url: str,
-        request_text: str,
-        timeout_seconds: float,
-        headers: dict[str, str] | None,
-    ) -> routing_guardrail_external.ExternalClassifierPostResult:
-        captured.append(
-            {
-                "url": url,
-                "request_text": request_text,
-                "timeout_seconds": timeout_seconds,
-                "headers": headers,
-            }
-        )
-        return 202, {"accepted": True}, None
-
-    assert await routing_guardrail_external._post_classifier_from_settings(
-        settings,
-        request_text="hello",
-        post_classifier=post_classifier,
-    ) == (202, {"accepted": True}, None)
-    assert captured == [
-        {
-            "url": "https://classifier.example.test/check",
-            "request_text": "hello",
-            "timeout_seconds": 3.0,
-            "headers": {"Authorization": "Bearer test"},
-        }
-    ]
-
-
-@pytest.mark.asyncio
 async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_success_paths() -> None:
     skipped_settings = routing_guardrail_external._ClassifierSettings(
         name="classifier_1",
