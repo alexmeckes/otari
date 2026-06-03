@@ -39,8 +39,7 @@ def attach_weighted_scores(
         parsed_weight = None
         if isinstance(configured_weights, dict):
             weight_value = configured_weights.get(key, configured_weights.get(f"{key}_weight"))
-            if weight_value is not None:
-                parsed_weight = non_negative_float_or_none(weight_value)
+            parsed_weight = non_negative_float_or_none(weight_value)
         if parsed_weight is None:
             parsed_weight = non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))
         weights[key] = default if parsed_weight is None else parsed_weight
