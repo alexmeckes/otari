@@ -14,7 +14,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_trace,
     _RedactionContext,
     _redactions_config,
-    _redactions_enabled,
     _typed_redaction_rules,
     apply_guardrail_redactions,
 )
@@ -97,18 +96,6 @@ def test_redact_list_recurses_nested_values_without_mutating_input() -> None:
     assert redacted == ["[MASKED]", {"nested": "[MASKED]"}, 3]
     assert value == ["token-123", {"nested": "token-456"}, 3]
     assert context.counts == {("pattern", "token"): 2}
-
-
-def test_redactions_enabled_uses_explicit_flag_and_config_presence() -> None:
-    assert _redactions_enabled({}) is False
-    assert _redactions_enabled({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]}) is True
-    assert _redactions_enabled({"enabled": True}) is True
-    assert _redactions_enabled(
-        {
-            "enabled": False,
-            "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
-        }
-    ) is False
 
 
 def test_redact_message_redacts_content_copy_and_passes_through_other_items() -> None:
@@ -281,3 +268,24 @@ def test_apply_guardrail_redactions_reports_missing_rules_with_default_replaceme
         "reason": "missing_rules",
         "replacement": "[REDACTED]",
     }
+
+
+def test_apply_guardrail_redactions_respects_disabled_or_missing_redactions() -> None:
+    request_body = {"messages": [{"role": "user", "content": "token-123"}]}
+
+    for config in (
+        {},
+        {
+            "guardrails": {
+                "redactions": {
+                    "enabled": False,
+                    "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+                }
+            }
+        },
+    ):
+        body, trace = apply_guardrail_redactions(config, request_body)
+
+        assert body == request_body
+        assert body is not request_body
+        assert trace is None
