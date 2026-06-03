@@ -5,6 +5,7 @@ from gateway.services.routing_guardrail_redactions import (
     _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
+    _redactions_enabled,
     apply_guardrail_redactions,
 )
 
@@ -30,6 +31,18 @@ def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> 
     assert _redaction_replacement({}) == "[REDACTED]"
     assert _redaction_replacement({"replacement": None}) == "[REDACTED]"
     assert _redaction_replacement({"replacement": 123}) == "[REDACTED]"
+
+
+def test_redactions_enabled_uses_explicit_flag_and_config_presence() -> None:
+    assert _redactions_enabled({}) is False
+    assert _redactions_enabled({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]}) is True
+    assert _redactions_enabled({"enabled": True}) is True
+    assert _redactions_enabled(
+        {
+            "enabled": False,
+            "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+        }
+    ) is False
 
 
 def test_redact_messages_redacts_content_and_preserves_other_items() -> None:

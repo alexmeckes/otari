@@ -56,6 +56,10 @@ def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
     return "[REDACTED]"
 
 
+def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
+    return bool_config(redactions.get("enabled"), bool(redactions))
+
+
 def _redact_messages(
     messages: Any,
     *,
@@ -131,7 +135,7 @@ def apply_guardrail_redactions(
     """Apply policy redactions to provider-bound request content."""
     body = copy.deepcopy(dict(request_body))
     redactions = dict_or_empty(guardrails_config(config).get("redactions"))
-    if not bool_config(redactions.get("enabled"), bool(redactions)):
+    if not _redactions_enabled(redactions):
         return body, None
 
     rules, pattern_count = _redaction_rules(redactions)
