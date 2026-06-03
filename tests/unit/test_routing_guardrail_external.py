@@ -351,7 +351,16 @@ def test_classifier_error_violations_preserve_fail_closed_behavior() -> None:
 
 
 def test_classifier_skipped_result_uses_missing_url_reason() -> None:
-    assert routing_guardrail_external._classifier_skipped_result("classifier_1") == {
+    settings = routing_guardrail_external._ClassifierSettings(
+        name="classifier_1",
+        url=None,
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+
+    assert routing_guardrail_external._classifier_skipped_result(settings) == {
         "name": "classifier_1",
         "status": "skipped",
         "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,

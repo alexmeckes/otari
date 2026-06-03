@@ -185,8 +185,8 @@ def _classifier_error_violations(settings: _ClassifierSettings) -> list[dict[str
     return [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else []
 
 
-def _classifier_skipped_result(name: str) -> dict[str, str]:
-    return {"name": name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
+def _classifier_skipped_result(settings: _ClassifierSettings) -> dict[str, str]:
+    return {"name": settings.name, "status": "skipped", "reason": _CLASSIFIER_MISSING_URL_REASON}
 
 
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
@@ -212,7 +212,7 @@ async def evaluate_external_classifiers(
     for index, classifier in enumerate(_classifier_configs(guardrails.get("external_classifiers")), start=1):
         settings = _classifier_settings(classifier, index=index)
         if settings.url is None:
-            classifier_results.append(_classifier_skipped_result(settings.name))
+            classifier_results.append(_classifier_skipped_result(settings))
             continue
         status_code, payload, error = await post_classifier(
             url=settings.url,
