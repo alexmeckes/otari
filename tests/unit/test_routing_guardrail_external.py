@@ -243,6 +243,8 @@ def test_classifier_skipped_result_uses_missing_url_reason() -> None:
 
 
 def test_classifier_settings_normalizes_request_fields() -> None:
+    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
+
     assert routing_guardrail_external._classifier_settings(
         {
             "name": " dlp ",
@@ -256,7 +258,7 @@ def test_classifier_settings_normalizes_request_fields() -> None:
     ) == routing_guardrail_external._ClassifierSettings(
         name="dlp",
         url="https://classifier.example.test/check",
-        timeout_seconds=2.0,
+        timeout_seconds=default_timeout,
         threshold=None,
         headers={" Authorization ": "Bearer test"},
         fail_closed=True,
@@ -269,6 +271,7 @@ def test_classifier_settings_uses_index_name_fallback() -> None:
 
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
+    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
     captured: list[dict[str, Any]] = []
 
     async def post_classifier(
@@ -305,7 +308,7 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
         {
             "url": "https://classifier.example.test/check",
             "request_text": "hello",
-            "timeout_seconds": 2.0,
+            "timeout_seconds": default_timeout,
             "headers": None,
         }
     ]
@@ -373,6 +376,7 @@ async def test_external_classifier_threshold_uses_shared_score_parsing() -> None
 
 @pytest.mark.asyncio
 async def test_external_classifier_float_config_preserves_timeout_and_threshold_fallbacks() -> None:
+    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
     captured: list[dict[str, Any]] = []
 
     async def post_classifier(
@@ -410,7 +414,7 @@ async def test_external_classifier_float_config_preserves_timeout_and_threshold_
         {
             "url": "https://classifier.example.test/check",
             "request_text": "hello",
-            "timeout_seconds": 2.0,
+            "timeout_seconds": default_timeout,
             "headers": None,
         }
     ]

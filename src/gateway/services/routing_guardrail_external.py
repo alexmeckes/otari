@@ -21,6 +21,7 @@ ExternalClassifierPost = Callable[
 
 _CLASSIFIER_RULE_KEYS = ("rule", "type", "label", "category", "name")
 _CLASSIFIER_ERROR_TEXT_LIMIT = 200
+_CLASSIFIER_DEFAULT_TIMEOUT_SECONDS = 2.0
 
 
 @dataclass(frozen=True)
@@ -192,7 +193,8 @@ def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _Class
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
         url=string_or_none(classifier.get("url")),
-        timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0,
+        timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds"))
+        or _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS,
         threshold=non_negative_float_or_none(classifier.get("threshold")),
         headers=_classifier_headers(classifier.get("headers")),
         fail_closed=bool_config(classifier.get("fail_closed"), False),
