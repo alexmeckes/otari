@@ -9,7 +9,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_request_fields,
     _redact_string,
     _redaction_rules,
-    _redaction_trace,
     _RedactionContext,
     _typed_redaction_rules,
     apply_guardrail_redactions,
@@ -153,40 +152,6 @@ def test_redact_request_fields_redacts_supported_fields_only() -> None:
     assert context.counts == {("pattern", "token"): 2}
 
 
-def test_redaction_trace_sorts_counts_and_marks_status() -> None:
-    context = _RedactionContext(
-        rules=[],
-        replacement="[MASKED]",
-        counts={("pii", "email"): 2, ("pattern", "token"): 1},
-    )
-
-    trace = _redaction_trace(
-        context=context,
-        pattern_count=1,
-    )
-
-    assert trace == {
-        "enabled": True,
-        "status": "redacted",
-        "replacement": "[MASKED]",
-        "total_replacements": 3,
-        "counts": [
-            {"type": "pattern", "rule": "token", "count": 1},
-            {"type": "pii", "rule": "email", "count": 2},
-        ],
-        "pattern_count": 1,
-    }
-    unchanged_context = _RedactionContext(rules=[], replacement="[MASKED]", counts={})
-    assert _redaction_trace(context=unchanged_context, pattern_count=0) == {
-        "enabled": True,
-        "status": "unchanged",
-        "replacement": "[MASKED]",
-        "total_replacements": 0,
-        "counts": [],
-        "pattern_count": 0,
-    }
-
-
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
     body, trace = apply_guardrail_redactions(
         {
@@ -223,6 +188,30 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
             {"type": "pattern", "rule": "token", "count": 2},
             {"type": "pii", "rule": "email", "count": 2},
         ],
+        "pattern_count": 1,
+    }
+
+
+def test_apply_guardrail_redactions_reports_unchanged_when_rules_do_not_match() -> None:
+    body, trace = apply_guardrail_redactions(
+        {
+            "guardrails": {
+                "redactions": {
+                    "replacement": "[MASKED]",
+                    "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+                }
+            }
+        },
+        {"messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert body == {"messages": [{"role": "user", "content": "hello"}]}
+    assert trace == {
+        "enabled": True,
+        "status": "unchanged",
+        "replacement": "[MASKED]",
+        "total_replacements": 0,
+        "counts": [],
         "pattern_count": 1,
     }
 

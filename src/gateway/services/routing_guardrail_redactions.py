@@ -123,25 +123,6 @@ def _redact_request_fields(
             body[key] = _redact_content(body[key], context=context)
 
 
-def _redaction_trace(
-    *,
-    context: _RedactionContext,
-    pattern_count: int,
-) -> dict[str, Any]:
-    total_replacements = sum(context.counts.values())
-    return {
-        "enabled": True,
-        "status": "redacted" if total_replacements else "unchanged",
-        "replacement": context.replacement,
-        "total_replacements": total_replacements,
-        "counts": [
-            {"type": kind, "rule": rule, "count": count}
-            for (kind, rule), count in sorted(context.counts.items())
-        ],
-        "pattern_count": pattern_count,
-    }
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -177,7 +158,15 @@ def apply_guardrail_redactions(
         context=context,
     )
 
-    return body, _redaction_trace(
-        context=context,
-        pattern_count=pattern_count,
-    )
+    total_replacements = sum(context.counts.values())
+    return body, {
+        "enabled": True,
+        "status": "redacted" if total_replacements else "unchanged",
+        "replacement": context.replacement,
+        "total_replacements": total_replacements,
+        "counts": [
+            {"type": kind, "rule": rule, "count": count}
+            for (kind, rule), count in sorted(context.counts.items())
+        ],
+        "pattern_count": pattern_count,
+    }
