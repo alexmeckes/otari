@@ -181,6 +181,14 @@ def _blocked_pattern_violations(guardrails: Mapping[str, Any], request_text: str
     ]
 
 
+def _pii_violations(guardrails: Mapping[str, Any], request_text: str) -> list[dict[str, str]]:
+    return [
+        guardrail_violation("pii", pii_type)
+        for pii_type, pii_pattern in pii_patterns_from_config(guardrails.get("pii"))
+        if pii_pattern.search(request_text)
+    ]
+
+
 def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
     injection_config = guardrails.get("prompt_injection")
     injection_enabled = bool_config(
@@ -240,11 +248,7 @@ async def evaluate_guardrails(
 
     violations.extend(_blocked_term_violations(guardrails, normalized_text))
     violations.extend(_blocked_pattern_violations(guardrails, request_text))
-
-    for pii_type, pii_pattern in pii_patterns_from_config(guardrails.get("pii")):
-        if pii_pattern.search(request_text):
-            violations.append(guardrail_violation("pii", pii_type))
-
+    violations.extend(_pii_violations(guardrails, request_text))
     violations.extend(_prompt_injection_violations(guardrails, normalized_text))
 
     classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier

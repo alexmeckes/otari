@@ -8,6 +8,7 @@ from gateway.services.routing_guardrails import (
     _guardrail_preset_expansion,
     _guardrail_request_text,
     _guardrail_result,
+    _pii_violations,
     _prompt_injection_violations,
     evaluate_guardrails,
     guardrail_action,
@@ -110,6 +111,26 @@ def test_blocked_pattern_violations_preserve_order_and_fallback_names() -> None:
 def test_blocked_pattern_violations_default_empty_for_unsupported_config() -> None:
     assert _blocked_pattern_violations({"blocked_patterns": {"pattern": "secret"}}, "secret") == []
     assert _blocked_pattern_violations({}, "secret") == []
+
+
+def test_pii_violations_preserve_configured_type_order() -> None:
+    violations = _pii_violations(
+        {"pii": {"enabled": True, "types": ["ssn", "email"]}},
+        "Email ada@example.com and SSN 123-45-6789.",
+    )
+
+    assert violations == [
+        {"type": "pii", "rule": "ssn"},
+        {"type": "pii", "rule": "email"},
+    ]
+
+
+def test_pii_violations_default_types_and_disabled_config() -> None:
+    assert _pii_violations({"pii": True}, "Email ada@example.com.") == [
+        {"type": "pii", "rule": "email"},
+    ]
+    assert _pii_violations({"pii": {"enabled": False, "types": ["email"]}}, "Email ada@example.com.") == []
+    assert _pii_violations({}, "Email ada@example.com.") == []
 
 
 def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:
