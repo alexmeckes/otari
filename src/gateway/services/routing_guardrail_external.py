@@ -122,10 +122,6 @@ def _explicit_classifier_violations(settings: _ClassifierSettings, payload: Mapp
     ] if isinstance(raw_violations, list) else []
 
 
-def _fallback_classifier_violation(settings: _ClassifierSettings, payload: Mapping[str, Any]) -> dict[str, str]:
-    return guardrail_violation("external_classifier", _classifier_rule(payload.get("label"), fallback=settings.name))
-
-
 def _classifier_violations(
     settings: _ClassifierSettings,
     payload: Mapping[str, Any],
@@ -134,7 +130,9 @@ def _classifier_violations(
     score = non_negative_float_or_none(payload.get("score"))
     if violations or not _classifier_flagged(payload, score=score, threshold=settings.threshold):
         return violations, score
-    return [_fallback_classifier_violation(settings, payload)], score
+    return [
+        guardrail_violation("external_classifier", _classifier_rule(payload.get("label"), fallback=settings.name))
+    ], score
 
 
 def _classifier_success_result(

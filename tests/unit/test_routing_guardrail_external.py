@@ -134,7 +134,7 @@ def test_explicit_classifier_violations_default_empty_for_unsupported_payloads()
     assert routing_guardrail_external._explicit_classifier_violations(settings, {}) == []
 
 
-def test_fallback_classifier_violation_preserves_label_fallback_rules() -> None:
+def test_classifier_violations_preserve_label_fallback_rules() -> None:
     prompt_shield = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
         url="https://classifier.example.test/check",
@@ -152,18 +152,23 @@ def test_fallback_classifier_violation_preserves_label_fallback_rules() -> None:
         fail_closed=False,
     )
 
-    assert routing_guardrail_external._fallback_classifier_violation(
+    violations, score = routing_guardrail_external._classifier_violations(
         prompt_shield,
-        {"label": " prompt_injection "},
-    ) == {"type": "external_classifier", "rule": "prompt_injection"}
-    assert routing_guardrail_external._fallback_classifier_violation(
+        {"flagged": True, "label": " prompt_injection "},
+    )
+    assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
+    assert score is None
+
+    violations, score = routing_guardrail_external._classifier_violations(
         dlp,
-        {"label": {"category": " customer_pii "}},
-    ) == {"type": "external_classifier", "rule": "customer_pii"}
-    assert routing_guardrail_external._fallback_classifier_violation(dlp, {"label": " "}) == {
-        "type": "external_classifier",
-        "rule": "dlp",
-    }
+        {"flagged": True, "label": {"category": " customer_pii "}},
+    )
+    assert violations == [{"type": "external_classifier", "rule": "customer_pii"}]
+    assert score is None
+
+    violations, score = routing_guardrail_external._classifier_violations(dlp, {"flagged": True, "label": " "})
+    assert violations == [{"type": "external_classifier", "rule": "dlp"}]
+    assert score is None
 
 
 def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
