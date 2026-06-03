@@ -177,7 +177,6 @@ async def evaluate_guardrails(
     )
     normalized_text = request_text.lower()
     violations: list[dict[str, str]] = []
-    classifier_results: list[dict[str, Any]] = []
 
     violations.extend(
         guardrail_violation("blocked_term", value)
