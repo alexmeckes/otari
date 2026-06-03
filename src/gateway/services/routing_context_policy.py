@@ -17,7 +17,6 @@ from gateway.services.routing_request_analysis import (
     stable_json_text,
 )
 
-_CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
 _SYSTEM_MESSAGE_ROLES = {"system", "developer"}
 _SUMMARY_MESSAGE_ROLES = {*_SYSTEM_MESSAGE_ROLES, "user"}
 
@@ -133,7 +132,7 @@ def apply_context_policy(
     strategy_raw = context_config.get("strategy", "trim_messages")
     strategy_value = string_or_none(strategy_raw)
     strategy = strategy_value.lower() if strategy_value is not None else None
-    if strategy not in _CONTEXT_STRATEGIES:
+    if strategy not in {"trim_messages", "summarize_messages"}:
         return body, _context_trace("skipped", str(strategy_raw), reason="unsupported_strategy")
 
     max_prompt_tokens = int_config(context_config.get("max_prompt_tokens"), 0)
