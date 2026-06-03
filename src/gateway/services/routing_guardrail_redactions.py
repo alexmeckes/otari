@@ -149,23 +149,26 @@ def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
     }
 
 
+def _redaction_count_items(counts: Mapping[_RedactionCountKey, int]) -> list[dict[str, Any]]:
+    return [
+        {"type": kind, "rule": rule, "count": count}
+        for (kind, rule), count in sorted(counts.items())
+    ]
+
+
 def _redaction_trace(
     *,
     replacement: str,
     counts: Mapping[_RedactionCountKey, int],
     pattern_count: int,
 ) -> dict[str, Any]:
-    count_items = [
-        {"type": kind, "rule": rule, "count": count}
-        for (kind, rule), count in sorted(counts.items())
-    ]
     total_replacements = sum(counts.values())
     return {
         "enabled": True,
         "status": "redacted" if total_replacements else "unchanged",
         "replacement": replacement,
         "total_replacements": total_replacements,
-        "counts": count_items,
+        "counts": _redaction_count_items(counts),
         "pattern_count": pattern_count,
     }
 
