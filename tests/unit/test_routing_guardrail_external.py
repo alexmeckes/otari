@@ -6,27 +6,43 @@ import pytest
 from gateway.services import routing_guardrail_external
 
 
-def test_classifier_http_error_text_prefers_payload_detail() -> None:
-    response = httpx.Response(429, text="body fallback")
+async def _post_classifier_response(
+    monkeypatch: pytest.MonkeyPatch,
+    response: httpx.Response,
+    *,
+    request_headers: dict[str, str] | None = None,
+) -> routing_guardrail_external.ExternalClassifierPostResult:
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: float) -> None:
+            self.timeout = timeout
 
-    assert (
-        routing_guardrail_external._classifier_http_error_text(response, {"detail": " blocked by classifier "})
-        == "HTTP 429: blocked by classifier"
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def post(
+            self,
+            url: str,
+            *,
+            json: dict[str, str],
+            headers: dict[str, str] | None,
+        ) -> httpx.Response:
+            assert self.timeout == 3.0
+            assert url == "https://classifier.example.test/check"
+            assert json == {"text": "hello"}
+            assert headers == request_headers
+            return response
+
+    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
+
+    return await routing_guardrail_external.post_external_guardrail_classifier(
+        url="https://classifier.example.test/check",
+        request_text="hello",
+        timeout_seconds=3.0,
+        headers=request_headers,
     )
-
-
-def test_classifier_http_error_text_uses_payload_error_then_body() -> None:
-    response = httpx.Response(503, text="body fallback")
-
-    assert (
-        routing_guardrail_external._classifier_http_error_text(response, {"detail": " ", "error": " upstream down "})
-        == "HTTP 503: upstream down"
-    )
-    assert (
-        routing_guardrail_external._classifier_http_error_text(response, {"detail": " "})
-        == "HTTP 503: body fallback"
-    )
-    assert routing_guardrail_external._classifier_http_error_text(response, None) == "HTTP 503: body fallback"
 
 
 def test_classifier_rule_uses_configured_field_precedence() -> None:
@@ -646,36 +662,9 @@ async def test_external_classifier_blank_name_and_url_fall_back_to_skipped() -> 
 
 @pytest.mark.asyncio
 async def test_external_classifier_object_json_returns_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeAsyncClient:
-        def __init__(self, *, timeout: float) -> None:
-            self.timeout = timeout
-
-        async def __aenter__(self) -> "FakeAsyncClient":
-            return self
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-        async def post(
-            self,
-            url: str,
-            *,
-            json: dict[str, str],
-            headers: dict[str, str] | None,
-        ) -> httpx.Response:
-            assert self.timeout == 3.0
-            assert url == "https://classifier.example.test/check"
-            assert json == {"text": "hello"}
-            assert headers is None
-            return httpx.Response(200, json={"score": 0.5})
-
-    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
-
-    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
-        url="https://classifier.example.test/check",
-        request_text="hello",
-        timeout_seconds=3.0,
-        headers=None,
+    status_code, payload, error = await _post_classifier_response(
+        monkeypatch,
+        httpx.Response(200, json={"score": 0.5}),
     )
 
     assert status_code == 200
@@ -684,82 +673,51 @@ async def test_external_classifier_object_json_returns_payload(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_external_classifier_http_error_uses_trimmed_detail(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeAsyncClient:
-        def __init__(self, *, timeout: float) -> None:
-            self.timeout = timeout
-
-        async def __aenter__(self) -> "FakeAsyncClient":
-            return self
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-        async def post(
-            self,
-            url: str,
-            *,
-            json: dict[str, str],
-            headers: dict[str, str] | None,
-        ) -> httpx.Response:
-            assert self.timeout == 3.0
-            assert url == "https://classifier.example.test/check"
-            assert json == {"text": "hello"}
-            assert headers == {"Authorization": "Bearer test"}
-            return httpx.Response(400, json={"detail": " blocked by classifier "})
-
-    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
-
-    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
-        url="https://classifier.example.test/check",
-        request_text="hello",
-        timeout_seconds=3.0,
-        headers={"Authorization": "Bearer test"},
-    )
-
-    assert status_code == 400
-    assert payload == {"detail": " blocked by classifier "}
-    assert error == "HTTP 400: blocked by classifier"
-
-
-@pytest.mark.asyncio
-async def test_external_classifier_redirect_response_uses_http_error_path(
+@pytest.mark.parametrize(
+    ("response", "request_headers", "expected_payload", "expected_error"),
+    [
+        (
+            httpx.Response(400, json={"detail": " blocked by classifier "}),
+            {"Authorization": "Bearer test"},
+            {"detail": " blocked by classifier "},
+            "HTTP 400: blocked by classifier",
+        ),
+        (
+            httpx.Response(503, json={"detail": " ", "error": " upstream down "}),
+            None,
+            {"detail": " ", "error": " upstream down "},
+            "HTTP 503: upstream down",
+        ),
+        (
+            httpx.Response(503, text="body fallback"),
+            None,
+            None,
+            "HTTP 503: body fallback",
+        ),
+        (
+            httpx.Response(302, json={"detail": " classifier moved "}),
+            None,
+            {"detail": " classifier moved "},
+            "HTTP 302: classifier moved",
+        ),
+    ],
+)
+async def test_external_classifier_http_error_prefers_payload_detail_error_then_body(
     monkeypatch: pytest.MonkeyPatch,
+    response: httpx.Response,
+    request_headers: dict[str, str] | None,
+    expected_payload: dict[str, str] | None,
+    expected_error: str,
 ) -> None:
-    class FakeAsyncClient:
-        def __init__(self, *, timeout: float) -> None:
-            self.timeout = timeout
-
-        async def __aenter__(self) -> "FakeAsyncClient":
-            return self
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-        async def post(
-            self,
-            url: str,
-            *,
-            json: dict[str, str],
-            headers: dict[str, str] | None,
-        ) -> httpx.Response:
-            assert url == "https://classifier.example.test/check"
-            assert json == {"text": "hello"}
-            assert headers is None
-            return httpx.Response(302, json={"detail": " classifier moved "})
-
-    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
-
-    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
-        url="https://classifier.example.test/check",
-        request_text="hello",
-        timeout_seconds=3.0,
-        headers=None,
+    status_code, payload, error = await _post_classifier_response(
+        monkeypatch,
+        response,
+        request_headers=request_headers,
     )
 
-    assert status_code == 302
-    assert payload == {"detail": " classifier moved "}
-    assert error == "HTTP 302: classifier moved"
+    assert status_code == response.status_code
+    assert payload == expected_payload
+    assert error == expected_error
 
 
 @pytest.mark.asyncio
@@ -774,36 +732,9 @@ async def test_external_classifier_non_object_json_reports_error(
     monkeypatch: pytest.MonkeyPatch,
     response: httpx.Response,
 ) -> None:
-    class FakeAsyncClient:
-        def __init__(self, *, timeout: float) -> None:
-            self.timeout = timeout
-
-        async def __aenter__(self) -> "FakeAsyncClient":
-            return self
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-        async def post(
-            self,
-            url: str,
-            *,
-            json: dict[str, str],
-            headers: dict[str, str] | None,
-        ) -> httpx.Response:
-            assert self.timeout == 3.0
-            assert url == "https://classifier.example.test/check"
-            assert json == {"text": "hello"}
-            assert headers is None
-            return response
-
-    monkeypatch.setattr(routing_guardrail_external.httpx, "AsyncClient", FakeAsyncClient)
-
-    status_code, payload, error = await routing_guardrail_external.post_external_guardrail_classifier(
-        url="https://classifier.example.test/check",
-        request_text="hello",
-        timeout_seconds=3.0,
-        headers=None,
+    status_code, payload, error = await _post_classifier_response(
+        monkeypatch,
+        response,
     )
 
     assert status_code == 200
