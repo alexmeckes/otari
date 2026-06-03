@@ -160,6 +160,22 @@ def _classifier_success_result(
     }
 
 
+def _classifier_success_evaluation(
+    settings: _ClassifierSettings,
+    *,
+    status_code: int | None,
+    payload: Mapping[str, Any],
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    violations, score = _classifier_violations(settings, payload)
+    return violations, _classifier_success_result(
+        settings,
+        status_code=status_code,
+        payload=payload,
+        score=score,
+        violations=violations,
+    )
+
+
 def _classifier_error_text(error: str) -> str:
     return error[:_CLASSIFIER_ERROR_TEXT_LIMIT]
 
@@ -255,18 +271,11 @@ async def evaluate_external_classifiers(
             classifier_results.append(classifier_result)
             continue
         assert payload is not None
-        classifier_violations, score = _classifier_violations(
+        classifier_violations, classifier_result = _classifier_success_evaluation(
             settings,
-            payload,
+            status_code=status_code,
+            payload=payload,
         )
         violations.extend(classifier_violations)
-        classifier_results.append(
-            _classifier_success_result(
-                settings,
-                status_code=status_code,
-                payload=payload,
-                score=score,
-                violations=classifier_violations,
-            )
-        )
+        classifier_results.append(classifier_result)
     return violations, classifier_results
