@@ -33,13 +33,9 @@ class EvalScorePipelineError(ValueError):
     """Raised when an eval artifact cannot be converted into score rows."""
 
 
-def _coerce_float(value: Any) -> float | None:
-    return float_or_none(value, coerce_strings=True, allow_percent=True)
-
-
 def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
     for key in keys:
-        parsed = _coerce_float(row.get(key))
+        parsed = float_or_none(row.get(key), coerce_strings=True, allow_percent=True)
         if parsed is not None:
             return parsed
     return None
@@ -116,7 +112,7 @@ def normalize_eval_score_row(
         item["metric"] = metric
     sample_count = None
     for key in _SAMPLE_COUNT_KEYS:
-        parsed_sample_count = _coerce_float(row.get(key))
+        parsed_sample_count = float_or_none(row.get(key), coerce_strings=True, allow_percent=True)
         if parsed_sample_count is not None and parsed_sample_count >= 1:
             sample_count = int(parsed_sample_count)
             break
