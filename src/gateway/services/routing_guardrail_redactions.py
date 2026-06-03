@@ -75,6 +75,27 @@ def _redact_messages(
     return redacted_messages
 
 
+def _redaction_trace(
+    *,
+    replacement: str,
+    counts: Mapping[tuple[str, str], int],
+    pattern_count: int,
+) -> dict[str, Any]:
+    count_items = [
+        {"type": kind, "rule": rule, "count": count}
+        for (kind, rule), count in sorted(counts.items())
+    ]
+    total_replacements = sum(counts.values())
+    return {
+        "enabled": True,
+        "status": "redacted" if total_replacements else "unchanged",
+        "replacement": replacement,
+        "total_replacements": total_replacements,
+        "counts": count_items,
+        "pattern_count": pattern_count,
+    }
+
+
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -111,16 +132,8 @@ def apply_guardrail_redactions(
         if key in body:
             body[key] = _redact_content(body[key], rules=rules, replacement=replacement, counts=counts)
 
-    count_items = [
-        {"type": kind, "rule": rule, "count": count}
-        for (kind, rule), count in sorted(counts.items())
-    ]
-    total_replacements = sum(counts.values())
-    return body, {
-        "enabled": True,
-        "status": "redacted" if total_replacements else "unchanged",
-        "replacement": replacement,
-        "total_replacements": total_replacements,
-        "counts": count_items,
-        "pattern_count": pattern_count,
-    }
+    return body, _redaction_trace(
+        replacement=replacement,
+        counts=counts,
+        pattern_count=pattern_count,
+    )

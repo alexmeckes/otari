@@ -1,4 +1,9 @@
-from gateway.services.routing_guardrail_redactions import _redact_messages, _redaction_rules, apply_guardrail_redactions
+from gateway.services.routing_guardrail_redactions import (
+    _redact_messages,
+    _redaction_rules,
+    _redaction_trace,
+    apply_guardrail_redactions,
+)
 
 
 def test_redaction_rules_collects_pii_and_named_patterns() -> None:
@@ -36,6 +41,34 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
     assert messages[0]["content"] == "token-123"
     assert counts == {("pattern", "token"): 1}
     assert _redact_messages("not-a-list", rules=rules, replacement="[MASKED]", counts=counts) is None
+
+
+def test_redaction_trace_sorts_counts_and_marks_status() -> None:
+    trace = _redaction_trace(
+        replacement="[MASKED]",
+        counts={("pii", "email"): 2, ("pattern", "token"): 1},
+        pattern_count=1,
+    )
+
+    assert trace == {
+        "enabled": True,
+        "status": "redacted",
+        "replacement": "[MASKED]",
+        "total_replacements": 3,
+        "counts": [
+            {"type": "pattern", "rule": "token", "count": 1},
+            {"type": "pii", "rule": "email", "count": 2},
+        ],
+        "pattern_count": 1,
+    }
+    assert _redaction_trace(replacement="[MASKED]", counts={}, pattern_count=0) == {
+        "enabled": True,
+        "status": "unchanged",
+        "replacement": "[MASKED]",
+        "total_replacements": 0,
+        "counts": [],
+        "pattern_count": 0,
+    }
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
