@@ -5,7 +5,6 @@ import pytest
 from gateway.services.routing_constraints import (
     _constraint_sets,
     _normalize_model_key_for_constraint,
-    _region_failure,
     apply_constraints,
 )
 
@@ -91,29 +90,40 @@ def test_apply_constraints_preserves_provider_model_rejection_order() -> None:
     assert reason_for({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}) is None
 
 
-def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> None:
-    assert _region_failure(set(), _constraint_sets({"allowed_regions": ["eu"]}), None) == "region_unknown"
+def test_apply_constraints_preserves_region_rejection_order() -> None:
+    def reason_for(
+        metadata: dict[str, str],
+        constraints: dict[str, list[str] | bool | str],
+        tags: dict[str, str] | None = None,
+    ) -> str | None:
+        candidate = SimpleNamespace(
+            model="openai:gpt-4o",
+            provider="openai",
+            estimated_cost=None,
+            metadata=metadata,
+        )
+        allowed, rejected = apply_constraints([candidate], config={"constraints": constraints}, tags=tags or {})
+        if rejected:
+            return rejected[0]["reason"]
+        assert allowed == [candidate]
+        return None
+
+    assert reason_for({}, {"allowed_regions": ["eu"]}) == "region_unknown"
+    assert reason_for({"region": "us"}, {"allowed_regions": ["eu"], "blocked_regions": ["us"]}) == "region_not_allowed"
+    assert reason_for({"region": "us"}, {"blocked_regions": ["us"]}) == "region_blocked"
     assert (
-        _region_failure({"us"}, _constraint_sets({"allowed_regions": ["eu"]}), None)
-        == "region_not_allowed"
-    )
-    assert (
-        _region_failure({"us"}, _constraint_sets({"blocked_regions": ["us"]}), None)
-        == "region_blocked"
-    )
-    assert (
-        _region_failure(
-            {"us"},
-            _constraint_sets({}),
-            "eu",
+        reason_for(
+            {"region": "us"},
+            {"require_region_match": True, "region_tag": "request_region"},
+            {"request_region": "eu"},
         )
         == "region_not_supported"
     )
     assert (
-        _region_failure(
-            {"eu"},
-            _constraint_sets({"allowed_regions": ["eu"]}),
-            "eu",
+        reason_for(
+            {"region": "eu"},
+            {"allowed_regions": ["eu"], "require_region_match": True},
+            {"region": "eu"},
         )
         is None
     )

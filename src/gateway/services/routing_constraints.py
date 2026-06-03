@@ -53,28 +53,6 @@ def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     )
 
 
-def _region_failure(
-    candidate_regions: set[str],
-    constraint_sets: _ConstraintSets,
-    requested_region: str | None,
-) -> str | None:
-    if constraint_sets.allowed_regions:
-        if not candidate_regions:
-            return "region_unknown"
-        if not candidate_regions & constraint_sets.allowed_regions:
-            return "region_not_allowed"
-    if constraint_sets.blocked_regions and candidate_regions & constraint_sets.blocked_regions:
-        return "region_blocked"
-
-    if requested_region is not None:
-        if not candidate_regions:
-            return "region_unknown"
-        if requested_region not in candidate_regions:
-            return "region_not_supported"
-
-    return None
-
-
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -116,11 +94,22 @@ def apply_constraints(
         elif candidate.model in constraint_sets.blocked_models:
             reason = "model_blocked"
         if reason is None:
-            reason = _region_failure(
-                candidate_regions,
-                constraint_sets,
-                requested_region,
-            )
+            if constraint_sets.allowed_regions:
+                if not candidate_regions:
+                    reason = "region_unknown"
+                elif not candidate_regions & constraint_sets.allowed_regions:
+                    reason = "region_not_allowed"
+            if (
+                reason is None
+                and constraint_sets.blocked_regions
+                and candidate_regions & constraint_sets.blocked_regions
+            ):
+                reason = "region_blocked"
+            if reason is None and requested_region is not None:
+                if not candidate_regions:
+                    reason = "region_unknown"
+                elif requested_region not in candidate_regions:
+                    reason = "region_not_supported"
         if reason is None:
             if max_estimated_cost is not None:
                 if candidate.estimated_cost is None:
