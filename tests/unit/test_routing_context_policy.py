@@ -20,6 +20,27 @@ def test_context_policy_enabled_defaults_follow_config_presence() -> None:
     assert trace["status"] == "unchanged"
 
 
+def test_context_policy_unchanged_trace_preserves_field_shape() -> None:
+    request_body = {"messages": [{"role": "user", "content": "hello"}]}
+
+    body, trace = apply_context_policy({"context": {"enabled": True, "max_prompt_tokens": 50}}, request_body)
+
+    assert body == request_body
+    assert trace == {
+        "enabled": True,
+        "status": "unchanged",
+        "strategy": "trim_messages",
+        "max_prompt_tokens": 50,
+        "original_prompt_tokens": 1,
+        "final_prompt_tokens": 1,
+        "original_message_count": 1,
+        "final_message_count": 1,
+        "trimmed_message_count": 0,
+        "preserve_system_messages": True,
+        "preserve_last_messages": 4,
+    }
+
+
 def test_context_policy_summarizes_with_normalized_string_settings() -> None:
     messages = [
         {"role": " USER ", "content": "alpha " * 80},

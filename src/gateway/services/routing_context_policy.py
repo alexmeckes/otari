@@ -114,6 +114,12 @@ def _messages_with_summary(
     return result
 
 
+def _context_trace(status: str, strategy: str, **extra: Any) -> dict[str, Any]:
+    trace: dict[str, Any] = {"enabled": True, "status": status, "strategy": strategy}
+    trace.update(extra)
+    return trace
+
+
 def apply_context_policy(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -128,50 +134,38 @@ def apply_context_policy(
     strategy_value = string_or_none(strategy_raw)
     strategy = strategy_value.lower() if strategy_value is not None else None
     if strategy not in _CONTEXT_STRATEGIES:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "unsupported_strategy",
-            "strategy": str(strategy_raw),
-        }
+        return body, _context_trace("skipped", str(strategy_raw), reason="unsupported_strategy")
 
     max_prompt_tokens = int_config(context_config.get("max_prompt_tokens"), 0)
     if max_prompt_tokens <= 0:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "missing_max_prompt_tokens",
-            "strategy": strategy,
-        }
+        return body, _context_trace("skipped", strategy, reason="missing_max_prompt_tokens")
 
     messages = body.get("messages")
     if not isinstance(messages, list) or not messages:
-        return body, {
-            "enabled": True,
-            "status": "skipped",
-            "reason": "missing_messages",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-        }
+        return body, _context_trace(
+            "skipped",
+            strategy,
+            reason="missing_messages",
+            max_prompt_tokens=max_prompt_tokens,
+        )
 
     original_prompt_tokens = estimate_prompt_tokens(body)
     original_message_count = len(messages)
     preserve_system_messages = bool_config(context_config.get("preserve_system_messages"), True)
     preserve_last_messages = non_negative_int_config(context_config.get("preserve_last_messages"), 4)
     if original_prompt_tokens <= max_prompt_tokens:
-        return body, {
-            "enabled": True,
-            "status": "unchanged",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-            "original_prompt_tokens": original_prompt_tokens,
-            "final_prompt_tokens": original_prompt_tokens,
-            "original_message_count": original_message_count,
-            "final_message_count": original_message_count,
-            "trimmed_message_count": 0,
-            "preserve_system_messages": preserve_system_messages,
-            "preserve_last_messages": preserve_last_messages,
-        }
+        return body, _context_trace(
+            "unchanged",
+            strategy,
+            max_prompt_tokens=max_prompt_tokens,
+            original_prompt_tokens=original_prompt_tokens,
+            final_prompt_tokens=original_prompt_tokens,
+            original_message_count=original_message_count,
+            final_message_count=original_message_count,
+            trimmed_message_count=0,
+            preserve_system_messages=preserve_system_messages,
+            preserve_last_messages=preserve_last_messages,
+        )
 
     kept_indexes = _context_kept_message_indexes(
         messages,
@@ -184,19 +178,18 @@ def apply_context_policy(
         if not summarized_indexes:
             body["messages"] = [messages[index] for index in sorted(kept_indexes)]
             final_prompt_tokens = estimate_prompt_tokens(body)
-            return body, {
-                "enabled": True,
-                "status": "unchanged",
-                "strategy": strategy,
-                "max_prompt_tokens": max_prompt_tokens,
-                "original_prompt_tokens": original_prompt_tokens,
-                "final_prompt_tokens": final_prompt_tokens,
-                "original_message_count": original_message_count,
-                "final_message_count": len(body["messages"]),
-                "summarized_message_count": 0,
-                "preserve_system_messages": preserve_system_messages,
-                "preserve_last_messages": preserve_last_messages,
-            }
+            return body, _context_trace(
+                "unchanged",
+                strategy,
+                max_prompt_tokens=max_prompt_tokens,
+                original_prompt_tokens=original_prompt_tokens,
+                final_prompt_tokens=final_prompt_tokens,
+                original_message_count=original_message_count,
+                final_message_count=len(body["messages"]),
+                summarized_message_count=0,
+                preserve_system_messages=preserve_system_messages,
+                preserve_last_messages=preserve_last_messages,
+            )
 
         kept_tokens = _non_message_prompt_tokens(body) + sum(
             _message_token_estimate(messages[index]) for index in kept_indexes
@@ -231,23 +224,22 @@ def apply_context_policy(
             body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
             final_prompt_tokens = estimate_prompt_tokens(body)
 
-        return body, {
-            "enabled": True,
-            "status": "summarized" if summary_message is not None else "trimmed",
-            "strategy": strategy,
-            "max_prompt_tokens": max_prompt_tokens,
-            "original_prompt_tokens": original_prompt_tokens,
-            "final_prompt_tokens": final_prompt_tokens,
-            "original_message_count": original_message_count,
-            "final_message_count": len(body["messages"]),
-            "trimmed_message_count": original_message_count - len(body["messages"]),
-            "summarized_message_count": len(summarized_indexes),
-            "summary_message_role": summary_role,
-            "summary_chars": len(str(summary_message["content"])) if summary_message is not None else 0,
-            "preserve_system_messages": preserve_system_messages,
-            "preserve_last_messages": preserve_last_messages,
-            "over_budget_after_summarization": final_prompt_tokens > max_prompt_tokens,
-        }
+        return body, _context_trace(
+            "summarized" if summary_message is not None else "trimmed",
+            strategy,
+            max_prompt_tokens=max_prompt_tokens,
+            original_prompt_tokens=original_prompt_tokens,
+            final_prompt_tokens=final_prompt_tokens,
+            original_message_count=original_message_count,
+            final_message_count=len(body["messages"]),
+            trimmed_message_count=original_message_count - len(body["messages"]),
+            summarized_message_count=len(summarized_indexes),
+            summary_message_role=summary_role,
+            summary_chars=len(str(summary_message["content"])) if summary_message is not None else 0,
+            preserve_system_messages=preserve_system_messages,
+            preserve_last_messages=preserve_last_messages,
+            over_budget_after_summarization=final_prompt_tokens > max_prompt_tokens,
+        )
 
     message_budget = max(max_prompt_tokens - _non_message_prompt_tokens(body), 1)
     current_message_tokens = sum(_message_token_estimate(messages[index]) for index in kept_indexes)
@@ -262,17 +254,16 @@ def apply_context_policy(
     body["messages"] = [messages[index] for index in sorted(kept_indexes)]
     final_prompt_tokens = estimate_prompt_tokens(body)
     trimmed_message_count = original_message_count - len(body["messages"])
-    return body, {
-        "enabled": True,
-        "status": "trimmed" if trimmed_message_count else "unchanged",
-        "strategy": strategy,
-        "max_prompt_tokens": max_prompt_tokens,
-        "original_prompt_tokens": original_prompt_tokens,
-        "final_prompt_tokens": final_prompt_tokens,
-        "original_message_count": original_message_count,
-        "final_message_count": len(body["messages"]),
-        "trimmed_message_count": trimmed_message_count,
-        "preserve_system_messages": preserve_system_messages,
-        "preserve_last_messages": preserve_last_messages,
-        "over_budget_after_trimming": final_prompt_tokens > max_prompt_tokens,
-    }
+    return body, _context_trace(
+        "trimmed" if trimmed_message_count else "unchanged",
+        strategy,
+        max_prompt_tokens=max_prompt_tokens,
+        original_prompt_tokens=original_prompt_tokens,
+        final_prompt_tokens=final_prompt_tokens,
+        original_message_count=original_message_count,
+        final_message_count=len(body["messages"]),
+        trimmed_message_count=trimmed_message_count,
+        preserve_system_messages=preserve_system_messages,
+        preserve_last_messages=preserve_last_messages,
+        over_budget_after_trimming=final_prompt_tokens > max_prompt_tokens,
+    )
