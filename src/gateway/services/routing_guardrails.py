@@ -280,17 +280,15 @@ def _guardrail_result(
     checked_text_chars: int,
     preset_metadata: dict[str, list[str]] | None,
 ) -> dict[str, Any]:
-    result: dict[str, Any] = {
+    return {
         "enabled": True,
         "status": "passed" if not violations else "blocked" if action == "block" else "observed",
         "action": action,
         "violations": violations,
         "external_classifiers": classifier_results,
         "checked_text_chars": checked_text_chars,
+        **({"presets": preset_metadata} if preset_metadata is not None else {}),
     }
-    if preset_metadata is not None:
-        result["presets"] = preset_metadata
-    return result
 
 
 async def evaluate_guardrails(
