@@ -6,6 +6,17 @@ import pytest
 from gateway.services import routing_guardrail_external
 
 
+def test_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None:
+    assert routing_guardrail_external._classifier_headers(
+        {" Authorization ": "Bearer test", " ": "skip", 0: 42}
+    ) == {
+        " Authorization ": "Bearer test",
+        "0": "42",
+    }
+    assert routing_guardrail_external._classifier_headers({" ": "skip"}) is None
+    assert routing_guardrail_external._classifier_headers(["Authorization"]) is None
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []

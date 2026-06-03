@@ -64,6 +64,16 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
+def _classifier_headers(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        str(key): str(header_value)
+        for key, header_value in value.items()
+        if coerced_string_or_none(key) is not None
+    } or None
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -87,14 +97,7 @@ async def evaluate_external_classifiers(
             continue
         timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
         threshold = non_negative_float_or_none(classifier.get("threshold"))
-        headers = classifier.get("headers")
-        normalized_headers = None
-        if isinstance(headers, dict):
-            normalized_headers = {
-                str(key): str(value)
-                for key, value in headers.items()
-                if coerced_string_or_none(key) is not None
-            } or None
+        normalized_headers = _classifier_headers(classifier.get("headers"))
         status_code, payload, error = await post_classifier(
             url=url,
             request_text=request_text,
