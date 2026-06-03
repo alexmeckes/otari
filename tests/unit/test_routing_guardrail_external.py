@@ -61,6 +61,46 @@ def test_classifier_violations_use_threshold_label_fallback() -> None:
     assert score == 0.82
 
 
+def test_classifier_success_result_preserves_flagged_shape_and_string_label() -> None:
+    violations = [{"type": "external_classifier", "rule": "prompt_injection"}]
+
+    assert routing_guardrail_external._classifier_success_result(
+        name="prompt-shield",
+        status_code=200,
+        payload={"label": " prompt_injection "},
+        score=0.82,
+        threshold=0.8,
+        violations=violations,
+    ) == {
+        "name": "prompt-shield",
+        "status": "flagged",
+        "status_code": 200,
+        "score": 0.82,
+        "threshold": 0.8,
+        "label": " prompt_injection ",
+        "violations": violations,
+    }
+
+
+def test_classifier_success_result_passed_omits_non_string_label() -> None:
+    assert routing_guardrail_external._classifier_success_result(
+        name="classifier_1",
+        status_code=204,
+        payload={"label": {"rule": "ignored"}},
+        score=None,
+        threshold=None,
+        violations=[],
+    ) == {
+        "name": "classifier_1",
+        "status": "passed",
+        "status_code": 204,
+        "score": None,
+        "threshold": None,
+        "label": None,
+        "violations": [],
+    }
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []

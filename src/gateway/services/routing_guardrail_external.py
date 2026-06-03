@@ -104,6 +104,27 @@ def _classifier_violations(
     return violations, score
 
 
+def _classifier_success_result(
+    *,
+    name: str,
+    status_code: int | None,
+    payload: Mapping[str, Any],
+    score: float | None,
+    threshold: float | None,
+    violations: list[dict[str, str]],
+) -> dict[str, Any]:
+    label = payload.get("label") if isinstance(payload.get("label"), str) else None
+    return {
+        "name": name,
+        "status": "flagged" if violations else "passed",
+        "status_code": status_code,
+        "score": score,
+        "threshold": threshold,
+        "label": label,
+        "violations": violations,
+    }
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -144,16 +165,14 @@ async def evaluate_external_classifiers(
         assert payload is not None
         classifier_violations, score = _classifier_violations(payload, name=name, threshold=threshold)
         violations.extend(classifier_violations)
-        label = payload.get("label") if isinstance(payload.get("label"), str) else None
         classifier_results.append(
-            {
-                "name": name,
-                "status": "flagged" if classifier_violations else "passed",
-                "status_code": status_code,
-                "score": score,
-                "threshold": threshold,
-                "label": label,
-                "violations": classifier_violations,
-            }
+            _classifier_success_result(
+                name=name,
+                status_code=status_code,
+                payload=payload,
+                score=score,
+                threshold=threshold,
+                violations=classifier_violations,
+            )
         )
     return violations, classifier_results
