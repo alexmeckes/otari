@@ -9,7 +9,6 @@ from gateway.models.entities import RouteTrace
 from gateway.services.routing_config_values import bool_config, dict_or_empty, int_config, non_negative_float_or_none
 from gateway.services.routing_trace_attempts import attempt_outcome, attempt_provider
 
-_HEALTH_MODES = {"observe", "downrank", "skip_unhealthy"}
 _HEALTH_RANK = {"healthy": 0, "unknown": 1, "degraded": 2, "unhealthy": 3}
 
 
@@ -74,7 +73,7 @@ def _provider_health_from_counts(
 
 def _health_mode(health_config: Mapping[str, Any]) -> str:
     mode = health_config.get("mode")
-    return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
+    return mode if isinstance(mode, str) and mode in {"observe", "downrank", "skip_unhealthy"} else "downrank"
 
 
 async def attach_provider_health(
