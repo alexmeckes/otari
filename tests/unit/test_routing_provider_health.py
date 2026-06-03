@@ -2,7 +2,6 @@ from types import SimpleNamespace
 
 from gateway.services.routing_provider_health import (
     ProviderHealth,
-    _provider_health_enabled,
     _provider_health_from_counts,
     _record_provider_outcome,
     apply_provider_health_gate,
@@ -20,14 +19,6 @@ def _health(status: str, provider: str = "openai") -> ProviderHealth:
         failure_rate=0.75,
         reason="failure_rate_exceeds_unhealthy_threshold",
     )
-
-
-def test_provider_health_helpers_read_shared_health_config_values() -> None:
-    health_config = {
-        "enabled": True,
-    }
-
-    assert _provider_health_enabled(health_config) is True
 
 
 def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds() -> None:
