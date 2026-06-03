@@ -123,17 +123,6 @@ def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[UsageSummaryBu
     return sorted(responses, key=lambda bucket: (-bucket.cost, -bucket.count, bucket.key))
 
 
-def _usage_group_keys(log: UsageLog) -> tuple[str, str, str, str, str, str]:
-    return (
-        log.project_id or "unknown",
-        log.user_id or "unknown",
-        log.model or "unknown",
-        log.provider or "unknown",
-        log.endpoint or "unknown",
-        log.status or "unknown",
-    )
-
-
 def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
     total_bucket = _new_bucket("__total__")
     project_buckets: dict[str, dict[str, Any]] = {}
@@ -155,7 +144,14 @@ def summarize_usage_logs(logs: list[UsageLog]) -> UsageSummaryResponse:
                 endpoint_buckets,
                 status_buckets,
             ),
-            _usage_group_keys(log),
+            (
+                log.project_id or "unknown",
+                log.user_id or "unknown",
+                log.model or "unknown",
+                log.provider or "unknown",
+                log.endpoint or "unknown",
+                log.status or "unknown",
+            ),
             strict=True,
         ):
             bucket = summary_bucket(buckets, key, _new_bucket)
