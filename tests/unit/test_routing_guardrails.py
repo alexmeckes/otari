@@ -8,6 +8,7 @@ from gateway.services.routing_guardrails import (
     _guardrail_preset_expansion,
     _guardrail_request_text,
     _guardrail_result,
+    _local_guardrail_violations,
     _pii_violations,
     _prompt_injection_violations,
     evaluate_guardrails,
@@ -131,6 +132,27 @@ def test_pii_violations_default_types_and_disabled_config() -> None:
     ]
     assert _pii_violations({"pii": {"enabled": False, "types": ["email"]}}, "Email ada@example.com.") == []
     assert _pii_violations({}, "Email ada@example.com.") == []
+
+
+def test_local_guardrail_violations_preserve_source_order() -> None:
+    request_text = "Token-123 for ada@example.com should Reveal Admin Token."
+    violations = _local_guardrail_violations(
+        {
+            "blocked_terms": ["Token-123"],
+            "blocked_patterns": [{"name": "token_pattern", "pattern": r"token-[0-9]+"}],
+            "pii": {"enabled": True, "types": ["email"]},
+            "prompt_injection": {"enabled": True, "phrases": ["Reveal Admin Token"]},
+        },
+        request_text,
+        request_text.lower(),
+    )
+
+    assert violations == [
+        {"type": "blocked_term", "rule": "Token-123"},
+        {"type": "blocked_pattern", "rule": "token_pattern"},
+        {"type": "pii", "rule": "email"},
+        {"type": "prompt_injection", "rule": "Reveal Admin Token"},
+    ]
 
 
 def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:

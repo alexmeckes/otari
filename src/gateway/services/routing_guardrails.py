@@ -205,6 +205,19 @@ def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text:
     ]
 
 
+def _local_guardrail_violations(
+    guardrails: Mapping[str, Any],
+    request_text: str,
+    normalized_text: str,
+) -> list[dict[str, str]]:
+    violations: list[dict[str, str]] = []
+    violations.extend(_blocked_term_violations(guardrails, normalized_text))
+    violations.extend(_blocked_pattern_violations(guardrails, request_text))
+    violations.extend(_pii_violations(guardrails, request_text))
+    violations.extend(_prompt_injection_violations(guardrails, normalized_text))
+    return violations
+
+
 def _guardrail_result(
     *,
     action: str,
@@ -244,12 +257,7 @@ async def evaluate_guardrails(
         guardrails = _combine_guardrail_config(preset_config, guardrails)
     request_text = _guardrail_request_text(request_body)
     normalized_text = request_text.lower()
-    violations: list[dict[str, str]] = []
-
-    violations.extend(_blocked_term_violations(guardrails, normalized_text))
-    violations.extend(_blocked_pattern_violations(guardrails, request_text))
-    violations.extend(_pii_violations(guardrails, request_text))
-    violations.extend(_prompt_injection_violations(guardrails, normalized_text))
+    violations = _local_guardrail_violations(guardrails, request_text, normalized_text)
 
     classifier_post = post_classifier or routing_guardrail_external.post_external_guardrail_classifier
     external_violations, classifier_results = await routing_guardrail_external.evaluate_external_classifiers(
