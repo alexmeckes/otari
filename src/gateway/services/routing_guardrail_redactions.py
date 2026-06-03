@@ -90,13 +90,6 @@ def _redactions_config(config: Mapping[str, Any]) -> dict[str, Any]:
     return dict_or_empty(guardrails_config(config).get("redactions"))
 
 
-def _redaction_replacement(redactions: Mapping[str, Any]) -> str:
-    replacement = redactions.get("replacement")
-    if isinstance(replacement, str):
-        return replacement
-    return "[REDACTED]"
-
-
 def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
     return bool_config(redactions.get("enabled"), bool(redactions))
 
@@ -181,7 +174,9 @@ def apply_guardrail_redactions(
         return body, None
 
     rules, pattern_count = _redaction_rules(redactions)
-    replacement = _redaction_replacement(redactions)
+    replacement = redactions.get("replacement")
+    if not isinstance(replacement, str):
+        replacement = "[REDACTED]"
     if not rules:
         return body, _missing_redaction_rules_trace(replacement)
 

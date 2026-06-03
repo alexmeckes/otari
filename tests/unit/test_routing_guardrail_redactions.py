@@ -10,7 +10,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_request_fields,
     _redact_string,
     _redaction_count_items,
-    _redaction_replacement,
     _redaction_rules,
     _redaction_trace,
     _RedactionContext,
@@ -98,13 +97,6 @@ def test_redact_list_recurses_nested_values_without_mutating_input() -> None:
     assert redacted == ["[MASKED]", {"nested": "[MASKED]"}, 3]
     assert value == ["token-123", {"nested": "token-456"}, 3]
     assert context.counts == {("pattern", "token"): 2}
-
-
-def test_redaction_replacement_preserves_strings_and_defaults_other_values() -> None:
-    assert _redaction_replacement({"replacement": "[MASKED]"}) == "[MASKED]"
-    assert _redaction_replacement({}) == "[REDACTED]"
-    assert _redaction_replacement({"replacement": None}) == "[REDACTED]"
-    assert _redaction_replacement({"replacement": 123}) == "[REDACTED]"
 
 
 def test_redactions_enabled_uses_explicit_flag_and_config_presence() -> None:
@@ -278,7 +270,7 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
 
 def test_apply_guardrail_redactions_reports_missing_rules_with_default_replacement() -> None:
     body, trace = apply_guardrail_redactions(
-        {"guardrails": {"redactions": {"enabled": True}}},
+        {"guardrails": {"redactions": {"enabled": True, "replacement": 123}}},
         {"messages": [{"role": "user", "content": "hello"}]},
     )
 
