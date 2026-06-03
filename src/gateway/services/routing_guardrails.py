@@ -165,6 +165,30 @@ def _guardrail_request_text(request_body: Mapping[str, Any]) -> str:
     )
 
 
+def _guardrail_result(
+    *,
+    action: str,
+    violations: list[dict[str, str]],
+    classifier_results: list[dict[str, Any]],
+    checked_text_chars: int,
+    preset_metadata: dict[str, list[str]] | None,
+) -> dict[str, Any]:
+    status_value = "passed"
+    if violations:
+        status_value = "blocked" if action == "block" else "observed"
+    result: dict[str, Any] = {
+        "enabled": True,
+        "status": status_value,
+        "action": action,
+        "violations": violations,
+        "external_classifiers": classifier_results,
+        "checked_text_chars": checked_text_chars,
+    }
+    if preset_metadata is not None:
+        result["presets"] = preset_metadata
+    return result
+
+
 async def evaluate_guardrails(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -218,17 +242,10 @@ async def evaluate_guardrails(
     violations.extend(external_violations)
 
     action = guardrail_action(config)
-    status_value = "passed"
-    if violations:
-        status_value = "blocked" if action == "block" else "observed"
-    result: dict[str, Any] = {
-        "enabled": True,
-        "status": status_value,
-        "action": action,
-        "violations": violations,
-        "external_classifiers": classifier_results,
-        "checked_text_chars": len(request_text),
-    }
-    if preset_metadata is not None:
-        result["presets"] = preset_metadata
-    return result
+    return _guardrail_result(
+        action=action,
+        violations=violations,
+        classifier_results=classifier_results,
+        checked_text_chars=len(request_text),
+        preset_metadata=preset_metadata,
+    )

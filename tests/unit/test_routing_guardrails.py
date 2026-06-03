@@ -5,6 +5,7 @@ from gateway.services.routing_guardrails import (
     _guardrail_list_items,
     _guardrail_preset_expansion,
     _guardrail_request_text,
+    _guardrail_result,
     evaluate_guardrails,
     guardrail_action,
 )
@@ -66,6 +67,52 @@ def test_guardrail_request_text_joins_non_empty_request_sources() -> None:
     )
 
     assert request_text == "user message marker\ninput marker\n "
+
+
+def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:
+    violations = [{"type": "blocked_term", "rule": "secret"}]
+    classifier_results = [{"name": "dlp", "status": "passed"}]
+    presets = {"applied": ["baseline"], "ignored": []}
+
+    assert _guardrail_result(
+        action="block",
+        violations=violations,
+        classifier_results=classifier_results,
+        checked_text_chars=42,
+        preset_metadata=presets,
+    ) == {
+        "enabled": True,
+        "status": "blocked",
+        "action": "block",
+        "violations": violations,
+        "external_classifiers": classifier_results,
+        "checked_text_chars": 42,
+        "presets": presets,
+    }
+
+
+def test_guardrail_result_status_variants_without_presets() -> None:
+    violations = [{"type": "blocked_term", "rule": "secret"}]
+
+    observed = _guardrail_result(
+        action="observe",
+        violations=violations,
+        classifier_results=[],
+        checked_text_chars=7,
+        preset_metadata=None,
+    )
+    passed = _guardrail_result(
+        action="block",
+        violations=[],
+        classifier_results=[],
+        checked_text_chars=0,
+        preset_metadata=None,
+    )
+
+    assert observed["status"] == "observed"
+    assert "presets" not in observed
+    assert passed["status"] == "passed"
+    assert "presets" not in passed
 
 
 @pytest.mark.asyncio
