@@ -1,7 +1,6 @@
 """Deterministic context-window policy helpers for routing policies."""
 
 import copy
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -15,6 +14,7 @@ from gateway.services.routing_config_values import (
 from gateway.services.routing_request_analysis import (
     estimate_prompt_tokens,
     jsonable_text,
+    stable_json_text,
 )
 
 _CONTEXT_STRATEGIES = {"trim_messages", "summarize_messages"}
@@ -37,10 +37,7 @@ def _non_message_prompt_tokens(request_body: Mapping[str, Any]) -> int:
     tools = request_body.get("tools")
     if not tools:
         return 0
-    try:
-        text = json.dumps(tools, sort_keys=True)
-    except TypeError:
-        text = jsonable_text(tools)
+    text = stable_json_text(tools)
     return max(1, len(text) // 4)
 
 

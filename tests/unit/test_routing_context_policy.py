@@ -1,6 +1,11 @@
 from gateway.services.routing_context_policy import apply_context_policy
 
 
+class _UnserializableToolMarker:
+    def __str__(self) -> str:
+        return "custom context tool marker"
+
+
 def test_context_policy_enabled_defaults_follow_config_presence() -> None:
     request_body = {"messages": [{"role": "user", "content": "hello"}]}
 
@@ -99,6 +104,35 @@ def test_context_policy_uses_context_policy_fallback_when_context_is_not_dict() 
     assert trace is not None
     assert trace["status"] == "trimmed"
     assert body["messages"] == [messages[-1]]
+
+
+def test_context_policy_budgets_unserializable_tools_without_error() -> None:
+    messages = [
+        {"role": "user", "content": "alpha " * 80},
+        {"role": "user", "content": "final"},
+    ]
+
+    body, trace = apply_context_policy(
+        {
+            "context": {
+                "enabled": True,
+                "strategy": "trim_messages",
+                "max_prompt_tokens": 10,
+                "preserve_system_messages": False,
+                "preserve_last_messages": 1,
+            }
+        },
+        {
+            "messages": messages,
+            "tools": [{"metadata": _UnserializableToolMarker()}],
+        },
+    )
+
+    assert trace is not None
+    assert trace["status"] == "trimmed"
+    assert body["messages"] == [messages[-1]]
+    assert len(body["tools"]) == 1
+    assert str(body["tools"][0]["metadata"]) == "custom context tool marker"
 
 
 def test_context_policy_summary_reads_all_settings_from_context_policy_fallback() -> None:

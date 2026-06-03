@@ -8,7 +8,13 @@ from gateway.services.routing_request_analysis import (
     classify_request_tier,
     estimate_output_tokens,
     estimate_prompt_tokens,
+    stable_json_text,
 )
+
+
+class _UnserializableToolMarker:
+    def __str__(self) -> str:
+        return "custom-tool-marker"
 
 
 def test_classify_request_tier_uses_complexity_hints() -> None:
@@ -58,6 +64,14 @@ def test_estimates_prompt_and_output_tokens_from_request() -> None:
 
     assert estimate_prompt_tokens(request) >= 20
     assert estimate_output_tokens(request) == 123
+
+
+def test_stable_json_text_sorts_keys_for_json_payloads() -> None:
+    assert stable_json_text({"b": 2, "a": 1}) == '{"a": 1, "b": 2}'
+
+
+def test_stable_json_text_falls_back_to_jsonable_text_for_unserializable_values() -> None:
+    assert stable_json_text({"tool": _UnserializableToolMarker()}) == "custom-tool-marker"
 
 
 def test_supported_strategies_include_default_strategy_names() -> None:

@@ -19,6 +19,7 @@ __all__ = [
     "int_config",
     "jsonable_text",
     "non_negative_int_config",
+    "stable_json_text",
 ]
 
 _DEFAULT_OUTPUT_TOKENS = 700
@@ -65,6 +66,13 @@ def jsonable_text(value: Any) -> str:
     return str(value)
 
 
+def stable_json_text(value: Any) -> str:
+    try:
+        return json.dumps(value, sort_keys=True)
+    except TypeError:
+        return jsonable_text(value)
+
+
 def estimate_prompt_tokens(request_body: Mapping[str, Any]) -> int:
     """Estimate prompt tokens without pulling in a tokenizer dependency."""
     text_parts: list[str] = []
@@ -76,10 +84,7 @@ def estimate_prompt_tokens(request_body: Mapping[str, Any]) -> int:
 
     tools = request_body.get("tools")
     if tools:
-        try:
-            text_parts.append(json.dumps(tools, sort_keys=True))
-        except TypeError:
-            text_parts.append(jsonable_text(tools))
+        text_parts.append(stable_json_text(tools))
 
     joined = " ".join(part for part in text_parts if part)
     return max(1, len(joined) // 4)
