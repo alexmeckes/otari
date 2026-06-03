@@ -96,6 +96,25 @@ def _redactions_enabled(redactions: Mapping[str, Any]) -> bool:
     return bool_config(redactions.get("enabled"), bool(redactions))
 
 
+def _redact_message(
+    message: Any,
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: _RedactionCounts,
+) -> Any:
+    if isinstance(message, dict) and "content" in message:
+        redacted_message = dict(message)
+        redacted_message["content"] = _redact_content(
+            message.get("content"),
+            rules=rules,
+            replacement=replacement,
+            counts=counts,
+        )
+        return redacted_message
+    return message
+
+
 def _redact_messages(
     messages: Any,
     *,
@@ -106,20 +125,7 @@ def _redact_messages(
     if not isinstance(messages, list):
         return None
 
-    redacted_messages: list[Any] = []
-    for message in messages:
-        if isinstance(message, dict) and "content" in message:
-            redacted_message = dict(message)
-            redacted_message["content"] = _redact_content(
-                message.get("content"),
-                rules=rules,
-                replacement=replacement,
-                counts=counts,
-            )
-            redacted_messages.append(redacted_message)
-        else:
-            redacted_messages.append(message)
-    return redacted_messages
+    return [_redact_message(message, rules=rules, replacement=replacement, counts=counts) for message in messages]
 
 
 def _redact_request_fields(

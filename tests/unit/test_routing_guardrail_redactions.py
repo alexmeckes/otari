@@ -2,6 +2,7 @@ from gateway.services.routing_guardrail_redactions import (
     _missing_redaction_rules_trace,
     _redact_list,
     _redact_mapping,
+    _redact_message,
     _redact_messages,
     _redact_request_fields,
     _redact_string,
@@ -101,6 +102,22 @@ def test_redactions_enabled_uses_explicit_flag_and_config_presence() -> None:
             "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
         }
     ) is False
+
+
+def test_redact_message_redacts_content_copy_and_passes_through_other_items() -> None:
+    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
+    counts: dict[tuple[str, str], int] = {}
+    message = {"role": "user", "content": "token-123", "metadata": {"keep": True}}
+
+    redacted = _redact_message(message, rules=rules, replacement="[MASKED]", counts=counts)
+
+    assert redacted == {"role": "user", "content": "[MASKED]", "metadata": {"keep": True}}
+    assert redacted is not message
+    assert message["content"] == "token-123"
+    passthrough = {"role": "assistant", "tool_calls": []}
+    assert _redact_message(passthrough, rules=rules, replacement="[MASKED]", counts=counts) is passthrough
+    assert _redact_message("raw", rules=rules, replacement="[MASKED]", counts=counts) == "raw"
+    assert counts == {("pattern", "token"): 1}
 
 
 def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
