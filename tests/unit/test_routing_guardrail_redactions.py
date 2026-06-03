@@ -2,6 +2,7 @@ from gateway.services.routing_guardrail_redactions import (
     _REDACTABLE_REQUEST_FIELDS,
     _missing_redaction_rules_trace,
     _pattern_redaction_rules,
+    _pii_redaction_rules,
     _redact_list,
     _redact_mapping,
     _redact_message,
@@ -162,6 +163,14 @@ def test_pattern_redaction_rules_preserves_named_patterns() -> None:
     ]
     assert rules[0][2].pattern == r"token-[0-9]+"
     assert _pattern_redaction_rules("not-a-list") == []
+
+
+def test_pii_redaction_rules_preserves_configured_types() -> None:
+    rules = _pii_redaction_rules({"pii": True, "pii_types": ["email"]})
+
+    assert [(kind, name) for kind, name, _pattern in rules] == [("pii", "email")]
+    assert rules[0][2].search("ada@example.com") is not None
+    assert _pii_redaction_rules({"pii": False, "pii_types": ["email"]}) == []
 
 
 def test_redact_request_fields_redacts_supported_fields_only() -> None:
