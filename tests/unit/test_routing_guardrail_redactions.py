@@ -6,7 +6,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_mapping,
     _redact_message,
     _redact_messages,
-    _redact_request_fields,
     _redact_string,
     _redaction_rules,
     _RedactionContext,
@@ -134,24 +133,6 @@ def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:
     ]
 
 
-def test_redact_request_fields_redacts_supported_fields_only() -> None:
-    context = _redaction_context()
-    body = {
-        "input": {"note": "token-123"},
-        "instructions": "token-456",
-        "other": "token-789",
-    }
-
-    _redact_request_fields(body, context=context)
-
-    assert body == {
-        "input": {"note": "[MASKED]"},
-        "instructions": "[MASKED]",
-        "other": "token-789",
-    }
-    assert context.counts == {("pattern", "token"): 2}
-
-
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
     body, trace = apply_guardrail_redactions(
         {
@@ -173,12 +154,14 @@ def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> N
             ],
             "input": {"note": "token-456"},
             "instructions": "Contact bob@example.com",
+            "other": "token-789",
         },
     )
 
     assert body["messages"][0]["content"] == "Email [MASKED] about [MASKED]."
     assert body["input"] == {"note": "[MASKED]"}
     assert body["instructions"] == "Contact [MASKED]"
+    assert body["other"] == "token-789"
     assert trace == {
         "enabled": True,
         "status": "redacted",

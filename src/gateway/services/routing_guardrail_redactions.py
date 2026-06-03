@@ -113,16 +113,6 @@ def _redact_messages(
     return [_redact_message(message, context=context) for message in messages]
 
 
-def _redact_request_fields(
-    body: dict[str, Any],
-    *,
-    context: _RedactionContext,
-) -> None:
-    for key in _REDACTABLE_REQUEST_FIELDS:
-        if key in body:
-            body[key] = _redact_content(body[key], context=context)
-
-
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -153,10 +143,9 @@ def apply_guardrail_redactions(
     if redacted_messages is not None:
         body["messages"] = redacted_messages
 
-    _redact_request_fields(
-        body,
-        context=context,
-    )
+    for key in _REDACTABLE_REQUEST_FIELDS:
+        if key in body:
+            body[key] = _redact_content(body[key], context=context)
 
     total_replacements = sum(context.counts.values())
     return body, {
