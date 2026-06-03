@@ -110,9 +110,11 @@ def _classifier_flagged(
     score: float | None,
     threshold: float | None,
 ) -> bool:
-    if payload.get("blocked") is True or payload.get("flagged") is True:
-        return True
-    return threshold is not None and score is not None and score >= threshold
+    return (
+        payload.get("blocked") is True
+        or payload.get("flagged") is True
+        or (threshold is not None and score is not None and score >= threshold)
+    )
 
 
 def _explicit_classifier_violations(payload: Mapping[str, Any], *, name: str) -> list[dict[str, str]]:
