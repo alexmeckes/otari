@@ -39,11 +39,21 @@ def _redact_content(
     if isinstance(value, list):
         return [_redact_content(item, rules=rules, replacement=replacement, counts=counts) for item in value]
     if isinstance(value, dict):
-        return {
-            key: _redact_content(item, rules=rules, replacement=replacement, counts=counts)
-            for key, item in value.items()
-        }
+        return _redact_mapping(value, rules=rules, replacement=replacement, counts=counts)
     return value
+
+
+def _redact_mapping(
+    value: Mapping[Any, Any],
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: dict[tuple[str, str], int],
+) -> dict[Any, Any]:
+    return {
+        key: _redact_content(item, rules=rules, replacement=replacement, counts=counts)
+        for key, item in value.items()
+    }
 
 
 def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
