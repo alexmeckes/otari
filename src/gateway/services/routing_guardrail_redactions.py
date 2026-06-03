@@ -159,17 +159,16 @@ def _redaction_count_items(counts: Mapping[_RedactionCountKey, int]) -> list[dic
 
 def _redaction_trace(
     *,
-    replacement: str,
-    counts: Mapping[_RedactionCountKey, int],
+    context: _RedactionContext,
     pattern_count: int,
 ) -> dict[str, Any]:
-    total_replacements = sum(counts.values())
+    total_replacements = sum(context.counts.values())
     return {
         "enabled": True,
         "status": "redacted" if total_replacements else "unchanged",
-        "replacement": replacement,
+        "replacement": context.replacement,
         "total_replacements": total_replacements,
-        "counts": _redaction_count_items(counts),
+        "counts": _redaction_count_items(context.counts),
         "pattern_count": pattern_count,
     }
 
@@ -203,7 +202,6 @@ def apply_guardrail_redactions(
     )
 
     return body, _redaction_trace(
-        replacement=context.replacement,
-        counts=context.counts,
+        context=context,
         pattern_count=pattern_count,
     )

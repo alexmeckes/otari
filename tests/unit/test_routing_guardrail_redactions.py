@@ -222,9 +222,14 @@ def test_redaction_count_items_sorts_counts() -> None:
 
 
 def test_redaction_trace_sorts_counts_and_marks_status() -> None:
-    trace = _redaction_trace(
+    context = _RedactionContext(
+        rules=[],
         replacement="[MASKED]",
         counts={("pii", "email"): 2, ("pattern", "token"): 1},
+    )
+
+    trace = _redaction_trace(
+        context=context,
         pattern_count=1,
     )
 
@@ -239,7 +244,8 @@ def test_redaction_trace_sorts_counts_and_marks_status() -> None:
         ],
         "pattern_count": 1,
     }
-    assert _redaction_trace(replacement="[MASKED]", counts={}, pattern_count=0) == {
+    unchanged_context = _RedactionContext(rules=[], replacement="[MASKED]", counts={})
+    assert _redaction_trace(context=unchanged_context, pattern_count=0) == {
         "enabled": True,
         "status": "unchanged",
         "replacement": "[MASKED]",
