@@ -43,19 +43,22 @@ async def post_external_guardrail_classifier(
     except httpx.HTTPError as exc:
         return None, None, str(exc)
 
-    payload: dict[str, Any] | None = None
-    try:
-        parsed = response.json()
-        if isinstance(parsed, dict):
-            payload = parsed
-    except ValueError:
-        pass
-
+    payload = _classifier_response_payload(response)
     if response.status_code < 200 or response.status_code >= 300:
         return response.status_code, payload, _classifier_http_error_text(response, payload)
     if payload is None:
         return response.status_code, None, "classifier returned non-object JSON"
     return response.status_code, payload, None
+
+
+def _classifier_response_payload(response: httpx.Response) -> dict[str, Any] | None:
+    try:
+        parsed = response.json()
+    except ValueError:
+        return None
+    if isinstance(parsed, dict):
+        return parsed
+    return None
 
 
 def _classifier_http_error_text(response: httpx.Response, payload: Mapping[str, Any] | None) -> str:

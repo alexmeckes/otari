@@ -6,6 +6,14 @@ import pytest
 from gateway.services import routing_guardrail_external
 
 
+def test_classifier_response_payload_accepts_object_json_only() -> None:
+    assert routing_guardrail_external._classifier_response_payload(
+        httpx.Response(200, json={"score": 0.5})
+    ) == {"score": 0.5}
+    assert routing_guardrail_external._classifier_response_payload(httpx.Response(200, json=["not-object"])) is None
+    assert routing_guardrail_external._classifier_response_payload(httpx.Response(200, content=b"not json")) is None
+
+
 def test_classifier_http_error_text_prefers_payload_detail() -> None:
     response = httpx.Response(429, text="body fallback")
 
