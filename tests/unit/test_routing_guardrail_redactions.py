@@ -3,7 +3,6 @@ import re
 from gateway.services.routing_guardrail_redactions import (
     _REDACTABLE_REQUEST_FIELDS,
     _missing_redaction_rules_trace,
-    _pii_redaction_rules,
     _redact_list,
     _redact_mapping,
     _redact_message,
@@ -47,6 +46,7 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
     assert pattern_count == 2
     assert rules[1][2].pattern == r"token-[0-9]+"
     assert _redaction_rules({"patterns": "not-a-list"}) == ([], 0)
+    assert _redaction_rules({"pii": False, "pii_types": ["email"]}) == ([], 0)
 
 
 def test_redactions_config_extracts_nested_redactions_mapping() -> None:
@@ -166,14 +166,6 @@ def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:
         ("pattern", "token", token),
         ("pattern", "email", email),
     ]
-
-
-def test_pii_redaction_rules_preserves_configured_types() -> None:
-    rules = _pii_redaction_rules({"pii": True, "pii_types": ["email"]})
-
-    assert [(kind, name) for kind, name, _pattern in rules] == [("pii", "email")]
-    assert rules[0][2].search("ada@example.com") is not None
-    assert _pii_redaction_rules({"pii": False, "pii_types": ["email"]}) == []
 
 
 def test_redact_request_fields_redacts_supported_fields_only() -> None:
