@@ -115,6 +115,7 @@ def test_guardrail_preset_values_prefers_presets_over_managed_presets() -> None:
 
 def test_normalized_guardrail_preset_accepts_strings_dicts_and_aliases() -> None:
     assert _normalized_guardrail_preset(" prompt-shield ") == "prompt_injection"
+    assert _normalized_guardrail_preset({"name": " prompt-shield ", "preset": " dlp "}) == "prompt_injection"
     assert _normalized_guardrail_preset({"preset": " credential "}) == "credential_leak"
     assert _normalized_guardrail_preset({"name": "unknown-preset"}) == "unknown_preset"
     assert _normalized_guardrail_preset({"name": " "}) is None

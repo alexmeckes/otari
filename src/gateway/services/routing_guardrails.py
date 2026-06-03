@@ -120,10 +120,9 @@ def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
 
 
 def _normalized_guardrail_preset(value: Any) -> str | None:
-    name: Any = value
     if isinstance(value, dict):
-        name = value.get("name") or value.get("preset")
-    name_value = string_or_none(name)
+        value = value.get("name") or value.get("preset")
+    name_value = string_or_none(value)
     if name_value is None:
         return None
     normalized = name_value.lower().replace("-", "_")
