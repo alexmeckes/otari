@@ -38,16 +38,6 @@ class ProviderHealth:
         }
 
 
-def _record_provider_outcome(
-    counts_by_provider: dict[str, dict[str, int]],
-    provider: str | None,
-    outcome: str | None,
-) -> None:
-    if provider not in counts_by_provider or outcome not in {"success", "error"}:
-        return
-    counts_by_provider[provider][outcome] += 1
-
-
 def _provider_health_from_counts(
     provider: str,
     *,
@@ -116,10 +106,14 @@ async def attach_provider_health(
                     continue
                 provider = attempt_provider(attempt)
                 outcome = attempt_outcome(attempt)
-                _record_provider_outcome(counts_by_provider, provider, outcome)
+                if provider is not None and outcome is not None and provider in counts_by_provider:
+                    counts_by_provider[provider][outcome] += 1
             continue
 
-        _record_provider_outcome(counts_by_provider, trace.selected_provider, trace.status)
+        provider = trace.selected_provider
+        outcome = trace.status
+        if provider is not None and outcome in {"success", "error"} and provider in counts_by_provider:
+            counts_by_provider[provider][outcome] += 1
 
     health_by_provider = {
         provider: _provider_health_from_counts(

@@ -1,11 +1,15 @@
 from types import SimpleNamespace
+from typing import Any
 
+import pytest
+
+from gateway.services.routing_policy_service import RoutingCandidate
 from gateway.services.routing_provider_health import (
     ProviderHealth,
     _provider_health_from_counts,
-    _record_provider_outcome,
     apply_provider_health_gate,
     apply_provider_health_order,
+    attach_provider_health,
 )
 
 
@@ -19,6 +23,69 @@ def _health(status: str, provider: str = "openai") -> ProviderHealth:
         failure_rate=0.75,
         reason="failure_rate_exceeds_unhealthy_threshold",
     )
+
+
+def _candidate(model: str, *, position: int) -> RoutingCandidate:
+    provider, provider_model = model.split(":", 1)
+    return RoutingCandidate(
+        model=model,
+        provider=provider,
+        provider_model=provider_model,
+        position=position,
+        tier=None,
+        estimated_cost=None,
+        input_price_per_million=None,
+        output_price_per_million=None,
+        quality_score=None,
+        average_latency_ms=None,
+        latency_sample_count=0,
+        routing_score=None,
+        score_components=None,
+        provider_health=None,
+        metadata={},
+    )
+
+
+class _Trace:
+    def __init__(
+        self,
+        attempts: list[Any] | None = None,
+        *,
+        selected_provider: str | None = None,
+        status: str = "success",
+    ) -> None:
+        self._attempts = attempts or []
+        self.selected_provider = selected_provider
+        self.status = status
+
+    def attempt_list(self) -> list[Any]:
+        return self._attempts
+
+
+class _Scalars:
+    def __init__(self, traces: list[_Trace]) -> None:
+        self._traces = traces
+
+    def all(self) -> list[_Trace]:
+        return self._traces
+
+
+class _Result:
+    def __init__(self, traces: list[_Trace]) -> None:
+        self._traces = traces
+
+    def scalars(self) -> _Scalars:
+        return _Scalars(self._traces)
+
+
+class _Db:
+    def __init__(self, traces: list[_Trace]) -> None:
+        self._traces = traces
+        self.statement: Any | None = None
+
+    async def execute(self, statement: Any) -> _Result:
+        self.statement = statement
+        return _Result(self._traces)
 
 
 def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds() -> None:
@@ -106,23 +173,55 @@ def test_provider_health_from_counts_caps_configured_thresholds() -> None:
     assert health.reason == "failure_rate_exceeds_unhealthy_threshold"
 
 
-def test_record_provider_outcome_counts_known_success_and_error_only() -> None:
-    counts_by_provider = {
-        "openai": {"success": 0, "error": 0},
-        "anthropic": {"success": 0, "error": 0},
-    }
+@pytest.mark.asyncio
+async def test_attach_provider_health_counts_known_attempt_and_trace_outcomes() -> None:
+    db = _Db(
+        [
+            _Trace(
+                [
+                    {"provider": "openai", "status": "success"},
+                    {"provider": "openai", "status": "error"},
+                    {"provider": "unknown", "status": "success"},
+                    {"provider": "anthropic", "status": "timeout"},
+                    "not-an-attempt",
+                ]
+            ),
+            _Trace(selected_provider="anthropic", status="error"),
+            _Trace(selected_provider="unknown", status="success"),
+            _Trace(selected_provider="openai", status="timeout"),
+        ]
+    )
 
-    _record_provider_outcome(counts_by_provider, "openai", "success")
-    _record_provider_outcome(counts_by_provider, "openai", "error")
-    _record_provider_outcome(counts_by_provider, "unknown", "success")
-    _record_provider_outcome(counts_by_provider, "anthropic", "timeout")
-    _record_provider_outcome(counts_by_provider, None, "error")
-    _record_provider_outcome(counts_by_provider, "anthropic", None)
+    enriched = await attach_provider_health(
+        db,
+        [
+            _candidate("openai:gpt-4o-mini", position=1),
+            _candidate("anthropic:claude-3-5-haiku-latest", position=2),
+        ],
+        config={
+            "health": {
+                "enabled": True,
+                "min_samples": 1,
+                "degraded_failure_rate": 0.75,
+                "unhealthy_failure_rate": 0.9,
+            }
+        },
+    )
 
-    assert counts_by_provider == {
-        "openai": {"success": 1, "error": 1},
-        "anthropic": {"success": 0, "error": 0},
-    }
+    health_by_provider = {candidate.provider: candidate.provider_health for candidate in enriched}
+    openai_health = health_by_provider["openai"]
+    anthropic_health = health_by_provider["anthropic"]
+
+    assert openai_health is not None
+    assert openai_health.success_count == 1
+    assert openai_health.error_count == 1
+    assert openai_health.status == "healthy"
+    assert openai_health.failure_rate == 0.5
+    assert anthropic_health is not None
+    assert anthropic_health.success_count == 0
+    assert anthropic_health.error_count == 1
+    assert anthropic_health.status == "unhealthy"
+    assert anthropic_health.failure_rate == 1.0
 
 
 def test_apply_provider_health_gate_partitions_unhealthy_candidates() -> None:
