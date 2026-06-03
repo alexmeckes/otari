@@ -199,6 +199,21 @@ def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _Class
     )
 
 
+async def _post_classifier_from_settings(
+    settings: _ClassifierSettings,
+    *,
+    request_text: str,
+    post_classifier: ExternalClassifierPost,
+) -> ExternalClassifierPostResult:
+    assert settings.url is not None
+    return await post_classifier(
+        url=settings.url,
+        request_text=request_text,
+        timeout_seconds=settings.timeout_seconds,
+        headers=settings.headers,
+    )
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -212,11 +227,10 @@ async def evaluate_external_classifiers(
         if settings.url is None:
             classifier_results.append(_classifier_skipped_result(settings))
             continue
-        status_code, payload, error = await post_classifier(
-            url=settings.url,
+        status_code, payload, error = await _post_classifier_from_settings(
+            settings,
             request_text=request_text,
-            timeout_seconds=settings.timeout_seconds,
-            headers=settings.headers,
+            post_classifier=post_classifier,
         )
         if error is not None:
             classifier_results.append(
