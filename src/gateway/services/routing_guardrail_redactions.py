@@ -1,16 +1,11 @@
 """Guardrail redaction helpers for provider-bound request content."""
 
 import copy
-import re
 from collections.abc import Mapping
 from typing import Any
 
 from gateway.services.routing_config_values import bool_config, dict_or_empty
 from gateway.services.routing_guardrail_helpers import guardrails_config, named_patterns, pii_patterns_from_config
-
-_RedactionRule = tuple[str, str, re.Pattern[str]]
-_RedactionCountKey = tuple[str, str]
-_RedactionCounts = dict[_RedactionCountKey, int]
 
 
 def apply_guardrail_redactions(
@@ -27,7 +22,7 @@ def apply_guardrail_redactions(
         ("pattern", name, pattern)
         for name, pattern in named_patterns(redactions.get("patterns"))
     ]
-    rules: list[_RedactionRule] = [
+    rules = [
         ("pii", name, pattern)
         for name, pattern in pii_patterns_from_config(
             redactions.get("pii"),
@@ -45,7 +40,7 @@ def apply_guardrail_redactions(
             "replacement": replacement,
         }
 
-    counts: _RedactionCounts = {}
+    counts: dict[tuple[str, str], int] = {}
 
     def redact_content(value: Any) -> Any:
         if isinstance(value, str):
