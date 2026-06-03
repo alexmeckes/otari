@@ -125,20 +125,6 @@ def normalize_eval_score_row(
     return item
 
 
-def _rows_from_json_payload(payload: Any) -> list[Mapping[str, Any]]:
-    if isinstance(payload, list):
-        return _object_rows(payload, error_message="JSON eval artifact list must contain objects")
-    if not isinstance(payload, dict):
-        raise EvalScorePipelineError("JSON eval artifact must be an object or list")
-    for key in _ROW_LIST_KEYS:
-        value = payload.get(key)
-        if isinstance(value, list):
-            return _object_rows(value, error_message=f"JSON eval artifact '{key}' list must contain objects")
-    if any(key in payload for key in _MODEL_KEYS):
-        return [payload]
-    raise EvalScorePipelineError("JSON eval artifact must contain scores, results, items, rows, evals, or model")
-
-
 def load_eval_score_rows(path: Path) -> list[Mapping[str, Any]]:
     """Load raw eval score rows from JSON, JSONL/NDJSON, or CSV."""
     suffix = path.suffix.lower()
@@ -160,7 +146,18 @@ def load_eval_score_rows(path: Path) -> list[Mapping[str, Any]]:
             return list(csv.DictReader(handle))
 
     with path.open(encoding="utf-8") as handle:
-        return _rows_from_json_payload(json.load(handle))
+        payload = json.load(handle)
+    if isinstance(payload, list):
+        return _object_rows(payload, error_message="JSON eval artifact list must contain objects")
+    if not isinstance(payload, dict):
+        raise EvalScorePipelineError("JSON eval artifact must be an object or list")
+    for key in _ROW_LIST_KEYS:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return _object_rows(value, error_message=f"JSON eval artifact '{key}' list must contain objects")
+    if any(key in payload for key in _MODEL_KEYS):
+        return [payload]
+    raise EvalScorePipelineError("JSON eval artifact must contain scores, results, items, rows, evals, or model")
 
 
 def build_eval_scores_payload(
