@@ -53,18 +53,6 @@ def _constraint_sets(constraints: Mapping[str, Any]) -> _ConstraintSets:
     )
 
 
-def _provider_model_failure(candidate: Any, constraint_sets: _ConstraintSets) -> str | None:
-    if constraint_sets.allowed_providers and candidate.provider not in constraint_sets.allowed_providers:
-        return "provider_not_allowed"
-    if candidate.provider in constraint_sets.blocked_providers:
-        return "provider_blocked"
-    if constraint_sets.allowed_models and candidate.model not in constraint_sets.allowed_models:
-        return "model_not_allowed"
-    if candidate.model in constraint_sets.blocked_models:
-        return "model_blocked"
-    return None
-
-
 def _region_failure(
     candidate_regions: set[str],
     constraint_sets: _ConstraintSets,
@@ -118,7 +106,15 @@ def apply_constraints(
         region = string_or_none(metadata.get("region"))
         if region is not None:
             candidate_regions.add(region.lower())
-        reason = _provider_model_failure(candidate, constraint_sets)
+        reason = None
+        if constraint_sets.allowed_providers and candidate.provider not in constraint_sets.allowed_providers:
+            reason = "provider_not_allowed"
+        elif candidate.provider in constraint_sets.blocked_providers:
+            reason = "provider_blocked"
+        elif constraint_sets.allowed_models and candidate.model not in constraint_sets.allowed_models:
+            reason = "model_not_allowed"
+        elif candidate.model in constraint_sets.blocked_models:
+            reason = "model_blocked"
         if reason is None:
             reason = _region_failure(
                 candidate_regions,

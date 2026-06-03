@@ -5,7 +5,6 @@ import pytest
 from gateway.services.routing_constraints import (
     _constraint_sets,
     _normalize_model_key_for_constraint,
-    _provider_model_failure,
     _region_failure,
     apply_constraints,
 )
@@ -71,35 +70,25 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
     ]
 
 
-def test_provider_model_failure_preserves_provider_before_model_order() -> None:
+def test_apply_constraints_preserves_provider_model_rejection_order() -> None:
     candidate = SimpleNamespace(provider="anthropic", model="anthropic:claude-3-5-haiku-latest")
 
-    assert (
-        _provider_model_failure(
-            candidate,
-            _constraint_sets({"allowed_providers": ["openai"], "blocked_models": [candidate.model]}),
+    def reason_for(constraints: dict[str, list[str]]) -> str | None:
+        allowed, rejected = apply_constraints(
+            [SimpleNamespace(**vars(candidate), estimated_cost=None, metadata={})],
+            config={"constraints": constraints},
+            tags={},
         )
-        == "provider_not_allowed"
-    )
-    assert (
-        _provider_model_failure(candidate, _constraint_sets({"blocked_providers": ["anthropic"]}))
-        == "provider_blocked"
-    )
-    assert (
-        _provider_model_failure(candidate, _constraint_sets({"allowed_models": ["openai:gpt-4o"]}))
-        == "model_not_allowed"
-    )
-    assert (
-        _provider_model_failure(candidate, _constraint_sets({"blocked_models": [candidate.model]}))
-        == "model_blocked"
-    )
-    assert (
-        _provider_model_failure(
-            candidate,
-            _constraint_sets({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}),
-        )
-        is None
-    )
+        if rejected:
+            return rejected[0]["reason"]
+        assert len(allowed) == 1
+        return None
+
+    assert reason_for({"allowed_providers": ["openai"], "blocked_models": [candidate.model]}) == "provider_not_allowed"
+    assert reason_for({"blocked_providers": ["anthropic"]}) == "provider_blocked"
+    assert reason_for({"allowed_models": ["openai:gpt-4o"]}) == "model_not_allowed"
+    assert reason_for({"blocked_models": [candidate.model]}) == "model_blocked"
+    assert reason_for({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}) is None
 
 
 def test_region_failure_preserves_allowed_blocked_and_request_region_order() -> None:
