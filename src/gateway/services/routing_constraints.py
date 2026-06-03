@@ -84,7 +84,8 @@ def apply_constraints(
         if reason is None:
             if max_estimated_cost is not None:
                 if candidate.estimated_cost is None:
-                    reason = None if allow_unknown_cost else "estimated_cost_unknown"
+                    if not allow_unknown_cost:
+                        reason = "estimated_cost_unknown"
                 elif candidate.estimated_cost > max_estimated_cost:
                     reason = "estimated_cost_exceeds_max"
         if reason is None:
