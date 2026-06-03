@@ -11,6 +11,7 @@ from gateway.services.routing_guardrail_helpers import guardrails_config, named_
 _RedactionRule = tuple[str, str, re.Pattern[str]]
 _RedactionCountKey = tuple[str, str]
 _RedactionCounts = dict[_RedactionCountKey, int]
+_REDACTABLE_REQUEST_FIELDS = ("input", "instructions")
 
 
 def _redact_string(
@@ -135,7 +136,7 @@ def _redact_request_fields(
     replacement: str,
     counts: _RedactionCounts,
 ) -> None:
-    for key in ("input", "instructions"):
+    for key in _REDACTABLE_REQUEST_FIELDS:
         if key in body:
             body[key] = _redact_content(body[key], rules=rules, replacement=replacement, counts=counts)
 
