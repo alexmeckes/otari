@@ -28,6 +28,39 @@ def test_classifier_configs_accept_single_dict_and_list_dicts() -> None:
     assert routing_guardrail_external._classifier_configs(None) == []
 
 
+def test_classifier_violations_preserve_explicit_rules_and_score() -> None:
+    violations, score = routing_guardrail_external._classifier_violations(
+        {
+            "violations": [
+                {"category": " customer_pii "},
+                " prompt_injection ",
+            ],
+            "flagged": True,
+            "label": "fallback",
+            "score": 0.91,
+        },
+        name="dlp",
+        threshold=0.8,
+    )
+
+    assert violations == [
+        {"type": "external_classifier", "rule": "customer_pii"},
+        {"type": "external_classifier", "rule": "prompt_injection"},
+    ]
+    assert score == 0.91
+
+
+def test_classifier_violations_use_threshold_label_fallback() -> None:
+    violations, score = routing_guardrail_external._classifier_violations(
+        {"score": 0.82, "label": " prompt_injection "},
+        name="prompt-shield",
+        threshold=0.8,
+    )
+
+    assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
+    assert score == 0.82
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []
