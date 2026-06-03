@@ -42,3 +42,19 @@ def test_apply_eval_scores_ignores_blank_dict_candidate_model() -> None:
     assert result.config["candidates"][1]["quality_score"] == 0.7
     assert [score.model for score in result.applied_scores] == ["openai:gpt-4o-mini"]
     assert result.unmatched_models == ["anthropic:claude-3-haiku"]
+
+
+def test_apply_eval_scores_ignores_unsupported_candidate_items() -> None:
+    result = apply_eval_scores_to_policy_config(
+        {
+            "candidates": [
+                123,
+            ]
+        },
+        [EvalScoreInput(model="openai:gpt-4o-mini", quality_score=0.7)],
+        updated_at="2026-06-01T00:00:00Z",
+    )
+
+    assert result.config["candidates"] == [123]
+    assert result.applied_scores == []
+    assert result.unmatched_models == ["openai:gpt-4o-mini"]
