@@ -162,6 +162,8 @@ def test_default_strategy_from_internal_preserves_tier_candidates() -> None:
                     {
                         "model": " anthropic:claude-3-5-sonnet-latest ",
                         "metadata": {"priority": 7, "region": "us"},
+                        "input_price_per_million": 3.0,
+                        "output_price_per_million": 15.0,
                     }
                 ],
                 1: ["openai:gpt-4o-mini"],
@@ -178,6 +180,8 @@ def test_default_strategy_from_internal_preserves_tier_candidates() -> None:
             "model": "claude-3-5-sonnet-latest",
             "priority": 7,
             "tier": "complex",
+            "input_price_per_million": 3.0,
+            "output_price_per_million": 15.0,
             "region": "us",
         },
     ]

@@ -160,13 +160,14 @@ def config_from_default_strategy(
 
 
 def _candidate_item_to_provider(item: Any, *, position: int, tier: str | None = None) -> dict[str, Any] | None:
+    metadata: Mapping[str, Any] = {}
+    input_price: Any = None
+    output_price: Any = None
+    candidate_tier = tier
     model_selector_value = string_or_none(item)
-    if model_selector_value is not None:
-        metadata: Mapping[str, Any] = {}
-        input_price = None
-        output_price = None
-        candidate_tier = tier
-    elif isinstance(item, dict):
+    if model_selector_value is None:
+        if not isinstance(item, dict):
+            return None
         model_selector_value = string_or_none(item.get("model"))
         if model_selector_value is None:
             return None
@@ -174,8 +175,6 @@ def _candidate_item_to_provider(item: Any, *, position: int, tier: str | None = 
         input_price = item.get("input_price_per_million")
         output_price = item.get("output_price_per_million")
         candidate_tier = item.get("tier") if isinstance(item.get("tier"), str) else tier
-    else:
-        return None
 
     provider, model = split_model_selector(model_selector_value)
     provider_item: dict[str, Any] = {"provider": provider, "model": model, "priority": position}
