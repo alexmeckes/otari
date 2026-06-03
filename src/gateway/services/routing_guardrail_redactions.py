@@ -71,10 +71,6 @@ def _typed_redaction_rules(kind: str, patterns: list[_PatternRule]) -> list[_Red
     return [(kind, name, pattern) for name, pattern in patterns]
 
 
-def _pattern_redaction_rules(patterns: Any) -> list[_RedactionRule]:
-    return _typed_redaction_rules("pattern", named_patterns(patterns))
-
-
 def _pii_redaction_rules(redactions: Mapping[str, Any]) -> list[_RedactionRule]:
     return _typed_redaction_rules(
         "pii",
@@ -86,7 +82,7 @@ def _pii_redaction_rules(redactions: Mapping[str, Any]) -> list[_RedactionRule]:
 
 
 def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule], int]:
-    pattern_rules = _pattern_redaction_rules(redactions.get("patterns"))
+    pattern_rules = _typed_redaction_rules("pattern", named_patterns(redactions.get("patterns")))
     return _pii_redaction_rules(redactions) + pattern_rules, len(pattern_rules)
 
 

@@ -3,7 +3,6 @@ import re
 from gateway.services.routing_guardrail_redactions import (
     _REDACTABLE_REQUEST_FIELDS,
     _missing_redaction_rules_trace,
-    _pattern_redaction_rules,
     _pii_redaction_rules,
     _redact_list,
     _redact_mapping,
@@ -33,15 +32,21 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
         {
             "pii": True,
             "pii_types": ["email"],
-            "patterns": [{"name": "token", "pattern": r"token-[0-9]+"}],
+            "patterns": [
+                {"name": "token", "pattern": r"token-[0-9]+"},
+                {"name": "secret", "pattern": r"secret-[a-z]+"},
+            ],
         }
     )
 
     assert [(kind, rule) for kind, rule, _pattern in rules] == [
         ("pii", "email"),
         ("pattern", "token"),
+        ("pattern", "secret"),
     ]
-    assert pattern_count == 1
+    assert pattern_count == 2
+    assert rules[1][2].pattern == r"token-[0-9]+"
+    assert _redaction_rules({"patterns": "not-a-list"}) == ([], 0)
 
 
 def test_redactions_config_extracts_nested_redactions_mapping() -> None:
@@ -161,22 +166,6 @@ def test_typed_redaction_rules_preserve_kind_order_names_and_patterns() -> None:
         ("pattern", "token", token),
         ("pattern", "email", email),
     ]
-
-
-def test_pattern_redaction_rules_preserves_named_patterns() -> None:
-    rules = _pattern_redaction_rules(
-        [
-            {"name": "token", "pattern": r"token-[0-9]+"},
-            {"name": "secret", "pattern": r"secret-[a-z]+"},
-        ]
-    )
-
-    assert [(kind, name) for kind, name, _pattern in rules] == [
-        ("pattern", "token"),
-        ("pattern", "secret"),
-    ]
-    assert rules[0][2].pattern == r"token-[0-9]+"
-    assert _pattern_redaction_rules("not-a-list") == []
 
 
 def test_pii_redaction_rules_preserves_configured_types() -> None:
