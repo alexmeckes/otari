@@ -15,6 +15,7 @@ from gateway.services.routing_guardrails import (
     _local_guardrail_violations,
     _normalized_guardrail_preset,
     _pii_violations,
+    _prompt_injection_enabled,
     _prompt_injection_violations,
     evaluate_guardrails,
     guardrail_action,
@@ -297,6 +298,13 @@ def test_prompt_injection_violations_preserve_configured_then_default_order() ->
         {"type": "prompt_injection", "rule": "Reveal Admin Token"},
         {"type": "prompt_injection", "rule": "ignore previous instructions"},
     ]
+
+
+def test_prompt_injection_enabled_preserves_dict_boolean_and_missing_config() -> None:
+    assert _prompt_injection_enabled({"enabled": True}) is True
+    assert _prompt_injection_enabled(True) is True
+    assert _prompt_injection_enabled({"enabled": False, "phrases": ["Reveal Admin Token"]}) is False
+    assert _prompt_injection_enabled(None) is False
 
 
 def test_prompt_injection_violations_respect_disabled_config() -> None:

@@ -208,13 +208,16 @@ def _pii_violations(guardrails: Mapping[str, Any], request_text: str) -> list[di
     ]
 
 
-def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
-    injection_config = guardrails.get("prompt_injection")
-    injection_enabled = bool_config(
+def _prompt_injection_enabled(injection_config: Any) -> bool:
+    return bool_config(
         guardrail_config_value(injection_config, "enabled", scalar_value=injection_config),
         False,
     )
-    if not injection_enabled:
+
+
+def _prompt_injection_violations(guardrails: Mapping[str, Any], normalized_text: str) -> list[dict[str, str]]:
+    injection_config = guardrails.get("prompt_injection")
+    if not _prompt_injection_enabled(injection_config):
         return []
     phrases = [*string_list(guardrail_config_value(injection_config, "phrases")), *_PROMPT_INJECTION_PHRASES]
     return [
