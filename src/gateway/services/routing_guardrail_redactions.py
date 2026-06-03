@@ -123,13 +123,6 @@ def _redact_request_fields(
             body[key] = _redact_content(body[key], context=context)
 
 
-def _redaction_count_items(counts: Mapping[_RedactionCountKey, int]) -> list[dict[str, Any]]:
-    return [
-        {"type": kind, "rule": rule, "count": count}
-        for (kind, rule), count in sorted(counts.items())
-    ]
-
-
 def _redaction_trace(
     *,
     context: _RedactionContext,
@@ -141,7 +134,10 @@ def _redaction_trace(
         "status": "redacted" if total_replacements else "unchanged",
         "replacement": context.replacement,
         "total_replacements": total_replacements,
-        "counts": _redaction_count_items(context.counts),
+        "counts": [
+            {"type": kind, "rule": rule, "count": count}
+            for (kind, rule), count in sorted(context.counts.items())
+        ],
         "pattern_count": pattern_count,
     }
 

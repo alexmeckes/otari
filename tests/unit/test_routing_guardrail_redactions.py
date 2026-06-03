@@ -8,7 +8,6 @@ from gateway.services.routing_guardrail_redactions import (
     _redact_messages,
     _redact_request_fields,
     _redact_string,
-    _redaction_count_items,
     _redaction_rules,
     _redaction_trace,
     _RedactionContext,
@@ -152,13 +151,6 @@ def test_redact_request_fields_redacts_supported_fields_only() -> None:
         "other": "token-789",
     }
     assert context.counts == {("pattern", "token"): 2}
-
-
-def test_redaction_count_items_sorts_counts() -> None:
-    assert _redaction_count_items({("pii", "email"): 2, ("pattern", "token"): 1}) == [
-        {"type": "pattern", "rule": "token", "count": 1},
-        {"type": "pii", "rule": "email", "count": 2},
-    ]
 
 
 def test_redaction_trace_sorts_counts_and_marks_status() -> None:
