@@ -62,6 +62,14 @@ def _named_pattern_item(item: Any, index: int) -> tuple[str, str] | None:
     return name, pattern_value
 
 
+def _compiled_named_pattern(name: str, pattern_value: str) -> tuple[str, re.Pattern[str]] | None:
+    try:
+        return name, re.compile(pattern_value, re.IGNORECASE)
+    except re.error:
+        logger.warning("Ignoring invalid routing guardrail regex pattern '%s'", name)
+        return None
+
+
 def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
     if not isinstance(value, list):
         return []
@@ -71,10 +79,9 @@ def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
         if pattern_item is None:
             continue
         name, pattern_value = pattern_item
-        try:
-            patterns.append((name, re.compile(pattern_value, re.IGNORECASE)))
-        except re.error:
-            logger.warning("Ignoring invalid routing guardrail regex pattern '%s'", name)
+        compiled_pattern = _compiled_named_pattern(name, pattern_value)
+        if compiled_pattern is not None:
+            patterns.append(compiled_pattern)
     return patterns
 
 
