@@ -42,11 +42,6 @@ def _provider_health_enabled(health_config: Mapping[str, Any]) -> bool:
     return bool_config(health_config.get("enabled"), False)
 
 
-def _provider_health_mode(health_config: Mapping[str, Any]) -> str:
-    mode = health_config.get("mode")
-    return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
-
-
 def _record_provider_outcome(
     counts_by_provider: dict[str, dict[str, int]],
     provider: str | None,
@@ -151,7 +146,9 @@ def apply_provider_health_gate(
     config: Mapping[str, Any],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     health_config = dict_or_empty(config.get("health"))
-    if not _provider_health_enabled(health_config) or _provider_health_mode(health_config) != "skip_unhealthy":
+    mode = health_config.get("mode")
+    health_mode = mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
+    if not _provider_health_enabled(health_config) or health_mode != "skip_unhealthy":
         return list(candidates), []
 
     allowed: list[Any] = []
@@ -179,7 +176,9 @@ def apply_provider_health_order(
     config: Mapping[str, Any],
 ) -> list[Any]:
     health_config = dict_or_empty(config.get("health"))
-    if not _provider_health_enabled(health_config) or _provider_health_mode(health_config) != "downrank":
+    mode = health_config.get("mode")
+    health_mode = mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
+    if not _provider_health_enabled(health_config) or health_mode != "downrank":
         return list(candidates)
     return sorted(
         candidates,

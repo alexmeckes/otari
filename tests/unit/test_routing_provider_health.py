@@ -4,7 +4,6 @@ from gateway.services.routing_provider_health import (
     ProviderHealth,
     _provider_health_enabled,
     _provider_health_from_counts,
-    _provider_health_mode,
     _record_provider_outcome,
     apply_provider_health_gate,
     apply_provider_health_order,
@@ -26,15 +25,9 @@ def _health(status: str, provider: str = "openai") -> ProviderHealth:
 def test_provider_health_helpers_read_shared_health_config_values() -> None:
     health_config = {
         "enabled": True,
-        "mode": "skip_unhealthy",
     }
 
     assert _provider_health_enabled(health_config) is True
-    assert _provider_health_mode(health_config) == "skip_unhealthy"
-
-
-def test_provider_health_mode_defaults_for_unknown_mode() -> None:
-    assert _provider_health_mode({"mode": "watch"}) == "downrank"
 
 
 def test_provider_health_from_counts_uses_configured_min_samples_and_thresholds() -> None:
@@ -220,6 +213,16 @@ def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
     assert apply_provider_health_order(
         candidates,
         config={"health": {"enabled": True, "mode": "downrank"}},
+    ) == [
+        healthy_candidate,
+        unknown_first_candidate,
+        unknown_later_candidate,
+        degraded_candidate,
+        unhealthy_candidate,
+    ]
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": {"enabled": True, "mode": "watch"}},
     ) == [
         healthy_candidate,
         unknown_first_candidate,
