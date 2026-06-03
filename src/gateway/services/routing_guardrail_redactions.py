@@ -123,15 +123,6 @@ def _redact_request_fields(
             body[key] = _redact_content(body[key], context=context)
 
 
-def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
-    return {
-        "enabled": True,
-        "status": "skipped",
-        "reason": "missing_rules",
-        "replacement": replacement,
-    }
-
-
 def _redaction_count_items(counts: Mapping[_RedactionCountKey, int]) -> list[dict[str, Any]]:
     return [
         {"type": kind, "rule": rule, "count": count}
@@ -170,7 +161,12 @@ def apply_guardrail_redactions(
     if not isinstance(replacement, str):
         replacement = "[REDACTED]"
     if not rules:
-        return body, _missing_redaction_rules_trace(replacement)
+        return body, {
+            "enabled": True,
+            "status": "skipped",
+            "reason": "missing_rules",
+            "replacement": replacement,
+        }
 
     context = _RedactionContext(rules=rules, replacement=replacement, counts={})
     redacted_messages = _redact_messages(
