@@ -1,4 +1,35 @@
-from gateway.services.routing_policy_eval_scores import EvalScoreInput, apply_eval_scores_to_policy_config
+import pytest
+
+from gateway.services.routing_policy_eval_scores import (
+    EvalScoreInput,
+    RoutingPolicyEvalScoreError,
+    aggregate_eval_scores,
+    apply_eval_scores_to_policy_config,
+)
+
+
+def test_aggregate_eval_scores_prefers_score_alias_order() -> None:
+    aggregates = aggregate_eval_scores(
+        [
+            EvalScoreInput(
+                model="openai:gpt-4o-mini",
+                score=0.2,
+                quality_score=0.7,
+                benchmark_score=0.9,
+            ),
+            EvalScoreInput(model="openai:gpt-4o", score=0.4, benchmark_score=0.8),
+            EvalScoreInput(model="anthropic:claude-3-haiku", benchmark_score=0.6),
+        ]
+    )
+
+    assert aggregates["openai:gpt-4o-mini"].quality_score == 0.7
+    assert aggregates["openai:gpt-4o"].quality_score == 0.4
+    assert aggregates["anthropic:claude-3-haiku"].quality_score == 0.6
+
+
+def test_aggregate_eval_scores_rejects_items_without_scores() -> None:
+    with pytest.raises(RoutingPolicyEvalScoreError, match="must include score"):
+        aggregate_eval_scores([EvalScoreInput(model="openai:gpt-4o-mini")])
 
 
 def test_apply_eval_scores_reports_previous_quality_score_alias() -> None:

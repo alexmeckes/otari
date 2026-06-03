@@ -49,6 +49,14 @@ class EvalScoreApplication:
     unmatched_models: list[str]
 
 
+def _eval_score_value(item: EvalScoreInput) -> float:
+    for value in (item.quality_score, item.score, item.benchmark_score):
+        score = score_or_none(value)
+        if score is not None:
+            return score
+    raise RoutingPolicyEvalScoreError("Each eval score must include score, quality_score, or benchmark_score")
+
+
 def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScoreAggregate]:
     totals: dict[str, float] = {}
     sample_counts: dict[str, int] = {}
@@ -57,13 +65,7 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
 
     for item in items:
         model_key = routing_policy_shape.normalized_model_selector(item.provider, item.model)
-        score: float | None = None
-        for value in (item.quality_score, item.score, item.benchmark_score):
-            score = score_or_none(value)
-            if score is not None:
-                break
-        if score is None:
-            raise RoutingPolicyEvalScoreError("Each eval score must include score, quality_score, or benchmark_score")
+        score = _eval_score_value(item)
         sample_count = item.sample_count or 1
         totals[model_key] = totals.get(model_key, 0.0) + (score * sample_count)
         sample_counts[model_key] = sample_counts.get(model_key, 0) + sample_count
