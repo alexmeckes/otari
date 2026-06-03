@@ -101,6 +101,21 @@ def test_classifier_success_result_passed_omits_non_string_label() -> None:
     }
 
 
+def test_classifier_error_result_truncates_error_and_preserves_fail_closed() -> None:
+    assert routing_guardrail_external._classifier_error_result(
+        name="dlp",
+        status_code=503,
+        error="x" * 205,
+        fail_closed=True,
+    ) == {
+        "name": "dlp",
+        "status": "error",
+        "status_code": 503,
+        "error": "x" * 200,
+        "fail_closed": True,
+    }
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []

@@ -125,6 +125,22 @@ def _classifier_success_result(
     }
 
 
+def _classifier_error_result(
+    *,
+    name: str,
+    status_code: int | None,
+    error: str,
+    fail_closed: bool,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "error",
+        "status_code": status_code,
+        "error": error[:200],
+        "fail_closed": fail_closed,
+    }
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -151,13 +167,12 @@ async def evaluate_external_classifiers(
         fail_closed = bool_config(classifier.get("fail_closed"), False)
         if error is not None:
             classifier_results.append(
-                {
-                    "name": name,
-                    "status": "error",
-                    "status_code": status_code,
-                    "error": error[:200],
-                    "fail_closed": fail_closed,
-                }
+                _classifier_error_result(
+                    name=name,
+                    status_code=status_code,
+                    error=error,
+                    fail_closed=fail_closed,
+                )
             )
             if fail_closed:
                 violations.append(guardrail_violation("external_classifier_error", name))
