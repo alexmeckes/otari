@@ -137,11 +137,6 @@ def _classifier_violations(
     return [_fallback_classifier_violation(settings, payload)], score
 
 
-def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
-    label = payload.get("label")
-    return label if isinstance(label, str) else None
-
-
 def _classifier_success_result(
     settings: _ClassifierSettings,
     *,
@@ -156,7 +151,7 @@ def _classifier_success_result(
         "status_code": status_code,
         "score": score,
         "threshold": settings.threshold,
-        "label": _classifier_result_label(payload),
+        "label": label if isinstance(label := payload.get("label"), str) else None,
         "violations": violations,
     }
 

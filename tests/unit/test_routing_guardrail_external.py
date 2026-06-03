@@ -234,12 +234,6 @@ def test_classifier_violations_default_empty_when_not_flagged() -> None:
     assert score == 0.7
 
 
-def test_classifier_result_label_preserves_string_values_only() -> None:
-    assert routing_guardrail_external._classifier_result_label({"label": " prompt_injection "}) == " prompt_injection "
-    assert routing_guardrail_external._classifier_result_label({"label": {"rule": "ignored"}}) is None
-    assert routing_guardrail_external._classifier_result_label({}) is None
-
-
 def test_classifier_success_result_preserves_flagged_shape_and_string_label() -> None:
     violations = [{"type": "external_classifier", "rule": "prompt_injection"}]
     settings = routing_guardrail_external._ClassifierSettings(
