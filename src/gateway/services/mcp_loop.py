@@ -106,10 +106,6 @@ def _accumulate_tool_call_deltas(slots: dict[int, dict[str, Any]], deltas: list[
                 slot["function"]["arguments"] += fn.arguments
 
 
-def _finalize_tool_calls(slots: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
-    return [slots[i] for i in sorted(slots)]
-
-
 def _execute_split(tool_calls: list[dict[str, Any]], pool: MCPClientPool) -> tuple[list[dict[str, Any]], bool]:
     """Return (mcp_owned_calls, has_foreign_calls). Foreign = user-supplied, gateway can't execute."""
     mcp_calls: list[dict[str, Any]] = []
@@ -212,7 +208,7 @@ async def mcp_tool_loop_stream(
                 yield pending_terminal
             return
 
-        tool_calls = _finalize_tool_calls(slots)
+        tool_calls = [slots[index] for index in sorted(slots)]
         mcp_calls, has_foreign = _execute_split(tool_calls, pool)
         if has_foreign or not mcp_calls:
             # Mixed (has_foreign with mcp_calls) is handled the same as
