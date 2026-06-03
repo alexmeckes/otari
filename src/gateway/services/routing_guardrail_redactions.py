@@ -49,6 +49,32 @@ def _redaction_rules(redactions: Mapping[str, Any]) -> tuple[list[_RedactionRule
     return rules, len(pattern_rules)
 
 
+def _redact_messages(
+    messages: Any,
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: dict[tuple[str, str], int],
+) -> list[Any] | None:
+    if not isinstance(messages, list):
+        return None
+
+    redacted_messages: list[Any] = []
+    for message in messages:
+        if isinstance(message, dict) and "content" in message:
+            redacted_message = dict(message)
+            redacted_message["content"] = _redact_content(
+                message.get("content"),
+                rules=rules,
+                replacement=replacement,
+                counts=counts,
+            )
+            redacted_messages.append(redacted_message)
+        else:
+            redacted_messages.append(message)
+    return redacted_messages
+
+
 def apply_guardrail_redactions(
     config: Mapping[str, Any],
     request_body: Mapping[str, Any],
@@ -72,21 +98,13 @@ def apply_guardrail_redactions(
         }
 
     counts: dict[tuple[str, str], int] = {}
-    messages = body.get("messages")
-    if isinstance(messages, list):
-        redacted_messages: list[Any] = []
-        for message in messages:
-            if isinstance(message, dict) and "content" in message:
-                redacted_message = dict(message)
-                redacted_message["content"] = _redact_content(
-                    message.get("content"),
-                    rules=rules,
-                    replacement=replacement,
-                    counts=counts,
-                )
-                redacted_messages.append(redacted_message)
-            else:
-                redacted_messages.append(message)
+    redacted_messages = _redact_messages(
+        body.get("messages"),
+        rules=rules,
+        replacement=replacement,
+        counts=counts,
+    )
+    if redacted_messages is not None:
         body["messages"] = redacted_messages
 
     for key in ("input", "instructions"):

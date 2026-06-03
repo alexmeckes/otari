@@ -1,4 +1,4 @@
-from gateway.services.routing_guardrail_redactions import _redaction_rules, apply_guardrail_redactions
+from gateway.services.routing_guardrail_redactions import _redact_messages, _redaction_rules, apply_guardrail_redactions
 
 
 def test_redaction_rules_collects_pii_and_named_patterns() -> None:
@@ -15,6 +15,27 @@ def test_redaction_rules_collects_pii_and_named_patterns() -> None:
         ("pattern", "token"),
     ]
     assert pattern_count == 1
+
+
+def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
+    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
+    counts: dict[tuple[str, str], int] = {}
+    messages = [
+        {"role": "user", "content": "token-123"},
+        {"role": "assistant", "tool_calls": []},
+        "raw",
+    ]
+
+    redacted = _redact_messages(messages, rules=rules, replacement="[MASKED]", counts=counts)
+
+    assert redacted == [
+        {"role": "user", "content": "[MASKED]"},
+        {"role": "assistant", "tool_calls": []},
+        "raw",
+    ]
+    assert messages[0]["content"] == "token-123"
+    assert counts == {("pattern", "token"): 1}
+    assert _redact_messages("not-a-list", rules=rules, replacement="[MASKED]", counts=counts) is None
 
 
 def test_apply_guardrail_redactions_uses_configured_rules_and_replacement() -> None:
