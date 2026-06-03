@@ -52,15 +52,19 @@ async def post_external_guardrail_classifier(
         pass
 
     if response.status_code < 200 or response.status_code >= 300:
-        error = response.text
-        if payload is not None:
-            detail = string_or_none(payload.get("detail")) or string_or_none(payload.get("error"))
-            if detail is not None:
-                error = detail
-        return response.status_code, payload, f"HTTP {response.status_code}: {error}"
+        return response.status_code, payload, _classifier_http_error_text(response, payload)
     if payload is None:
         return response.status_code, None, "classifier returned non-object JSON"
     return response.status_code, payload, None
+
+
+def _classifier_http_error_text(response: httpx.Response, payload: Mapping[str, Any] | None) -> str:
+    error = response.text
+    if payload is not None:
+        detail = string_or_none(payload.get("detail")) or string_or_none(payload.get("error"))
+        if detail is not None:
+            error = detail
+    return f"HTTP {response.status_code}: {error}"
 
 
 def _classifier_rule(value: Any, *, fallback: str) -> str:

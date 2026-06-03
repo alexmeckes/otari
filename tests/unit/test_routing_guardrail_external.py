@@ -6,6 +6,29 @@ import pytest
 from gateway.services import routing_guardrail_external
 
 
+def test_classifier_http_error_text_prefers_payload_detail() -> None:
+    response = httpx.Response(429, text="body fallback")
+
+    assert (
+        routing_guardrail_external._classifier_http_error_text(response, {"detail": " blocked by classifier "})
+        == "HTTP 429: blocked by classifier"
+    )
+
+
+def test_classifier_http_error_text_uses_payload_error_then_body() -> None:
+    response = httpx.Response(503, text="body fallback")
+
+    assert (
+        routing_guardrail_external._classifier_http_error_text(response, {"detail": " ", "error": " upstream down "})
+        == "HTTP 503: upstream down"
+    )
+    assert (
+        routing_guardrail_external._classifier_http_error_text(response, {"detail": " "})
+        == "HTTP 503: body fallback"
+    )
+    assert routing_guardrail_external._classifier_http_error_text(response, None) == "HTTP 503: body fallback"
+
+
 def test_classifier_headers_skip_blank_keys_without_trimming_kept_keys() -> None:
     assert routing_guardrail_external._classifier_headers(
         {" Authorization ": "Bearer test", " ": "skip", 0: 42}
