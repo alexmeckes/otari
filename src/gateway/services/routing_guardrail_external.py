@@ -244,6 +244,35 @@ async def _post_classifier_from_settings(
     )
 
 
+async def _evaluate_classifier_from_settings(
+    settings: _ClassifierSettings,
+    *,
+    request_text: str,
+    post_classifier: ExternalClassifierPost,
+) -> _ClassifierEvaluationResult:
+    if settings.url is None:
+        return [], _classifier_skipped_result(settings)
+
+    status_code, payload, error = await _post_classifier_from_settings(
+        settings,
+        request_text=request_text,
+        post_classifier=post_classifier,
+    )
+    if error is not None:
+        return _classifier_error_evaluation(
+            settings,
+            status_code=status_code,
+            error=error,
+        )
+
+    assert payload is not None
+    return _classifier_success_evaluation(
+        settings,
+        status_code=status_code,
+        payload=payload,
+    )
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -254,28 +283,10 @@ async def evaluate_external_classifiers(
     classifier_results: list[dict[str, Any]] = []
     for index, classifier in enumerate(_classifier_configs(guardrails.get("external_classifiers")), start=1):
         settings = _classifier_settings(classifier, index=index)
-        if settings.url is None:
-            classifier_results.append(_classifier_skipped_result(settings))
-            continue
-        status_code, payload, error = await _post_classifier_from_settings(
+        classifier_violations, classifier_result = await _evaluate_classifier_from_settings(
             settings,
             request_text=request_text,
             post_classifier=post_classifier,
-        )
-        if error is not None:
-            classifier_violations, classifier_result = _classifier_error_evaluation(
-                settings,
-                status_code=status_code,
-                error=error,
-            )
-            violations.extend(classifier_violations)
-            classifier_results.append(classifier_result)
-            continue
-        assert payload is not None
-        classifier_violations, classifier_result = _classifier_success_evaluation(
-            settings,
-            status_code=status_code,
-            payload=payload,
         )
         violations.extend(classifier_violations)
         classifier_results.append(classifier_result)

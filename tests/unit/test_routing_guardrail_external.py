@@ -537,6 +537,80 @@ async def test_post_classifier_from_settings_forwards_request_fields() -> None:
 
 
 @pytest.mark.asyncio
+async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_success_paths() -> None:
+    skipped_settings = routing_guardrail_external._ClassifierSettings(
+        name="classifier_1",
+        url=None,
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
+    )
+    error_settings = routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=True,
+    )
+    success_settings = routing_guardrail_external._ClassifierSettings(
+        name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=0.8,
+        headers=None,
+        fail_closed=False,
+    )
+
+    async def unexpected_post_classifier(**kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
+        raise AssertionError(f"unexpected classifier post: {kwargs}")
+
+    assert await routing_guardrail_external._evaluate_classifier_from_settings(
+        skipped_settings,
+        request_text="hello",
+        post_classifier=unexpected_post_classifier,
+    ) == (
+        [],
+        {
+            "name": "classifier_1",
+            "status": "skipped",
+            "reason": routing_guardrail_external._CLASSIFIER_MISSING_URL_REASON,
+        },
+    )
+
+    async def error_post_classifier(**_kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
+        return 503, None, "classifier down"
+
+    violations, result = await routing_guardrail_external._evaluate_classifier_from_settings(
+        error_settings,
+        request_text="hello",
+        post_classifier=error_post_classifier,
+    )
+    assert violations == [{"type": "external_classifier_error", "rule": "dlp"}]
+    assert result == {
+        "name": "dlp",
+        "status": "error",
+        "status_code": 503,
+        "error": "classifier down",
+        "fail_closed": True,
+    }
+
+    async def success_post_classifier(**_kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
+        return 200, {"score": 0.9, "label": "prompt_injection"}, None
+
+    violations, result = await routing_guardrail_external._evaluate_classifier_from_settings(
+        success_settings,
+        request_text="hello",
+        post_classifier=success_post_classifier,
+    )
+    assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
+    assert result["status"] == "flagged"
+    assert result["score"] == 0.9
+    assert result["threshold"] == 0.8
+
+
+@pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
     captured: list[dict[str, Any]] = []
