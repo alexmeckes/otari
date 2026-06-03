@@ -59,15 +59,6 @@ def test_classifier_configs_accept_single_dict_and_list_dicts() -> None:
     assert routing_guardrail_external._classifier_configs(None) == []
 
 
-def test_classifier_flagged_preserves_boolean_and_threshold_rules() -> None:
-    assert routing_guardrail_external._classifier_flagged({"blocked": True}, score=None, threshold=None)
-    assert routing_guardrail_external._classifier_flagged({"flagged": True}, score=None, threshold=None)
-    assert routing_guardrail_external._classifier_flagged({"score": 0.8}, score=0.8, threshold=0.8)
-    assert not routing_guardrail_external._classifier_flagged({"score": 0.7}, score=0.7, threshold=0.8)
-    assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=None, threshold=0.8)
-    assert not routing_guardrail_external._classifier_flagged({"score": 0.9}, score=0.9, threshold=None)
-
-
 def test_classifier_rule_uses_configured_field_precedence() -> None:
     assert (
         routing_guardrail_external._classifier_rule(
@@ -154,7 +145,7 @@ def test_classifier_violations_preserve_label_fallback_rules() -> None:
 
     violations, score = routing_guardrail_external._classifier_violations(
         prompt_shield,
-        {"flagged": True, "label": " prompt_injection "},
+        {"blocked": True, "label": " prompt_injection "},
     )
     assert violations == [{"type": "external_classifier", "rule": "prompt_injection"}]
     assert score is None
@@ -220,8 +211,8 @@ def test_classifier_violations_use_threshold_label_fallback() -> None:
     assert score == 0.82
 
 
-def test_classifier_violations_default_empty_when_not_flagged() -> None:
-    settings = routing_guardrail_external._ClassifierSettings(
+def test_classifier_violations_preserve_unflagged_score_rules() -> None:
+    threshold_settings = routing_guardrail_external._ClassifierSettings(
         name="prompt-shield",
         url="https://classifier.example.test/check",
         timeout_seconds=2.0,
@@ -229,14 +220,35 @@ def test_classifier_violations_default_empty_when_not_flagged() -> None:
         headers=None,
         fail_closed=False,
     )
-
-    violations, score = routing_guardrail_external._classifier_violations(
-        settings,
-        {"score": 0.7, "label": " prompt_injection "},
+    no_threshold_settings = routing_guardrail_external._ClassifierSettings(
+        name="prompt-shield",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers=None,
+        fail_closed=False,
     )
 
+    violations, score = routing_guardrail_external._classifier_violations(
+        threshold_settings,
+        {"score": 0.7, "label": " prompt_injection "},
+    )
     assert violations == []
     assert score == 0.7
+
+    violations, score = routing_guardrail_external._classifier_violations(
+        threshold_settings,
+        {"label": " prompt_injection "},
+    )
+    assert violations == []
+    assert score is None
+
+    violations, score = routing_guardrail_external._classifier_violations(
+        no_threshold_settings,
+        {"score": 0.9, "label": " prompt_injection "},
+    )
+    assert violations == []
+    assert score == 0.9
 
 
 def test_classifier_settings_normalizes_request_fields() -> None:
