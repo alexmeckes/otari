@@ -1,6 +1,7 @@
 import pytest
 
 from gateway.services.routing_guardrails import (
+    _blocked_pattern_violations,
     _blocked_term_violations,
     _combine_guardrail_list,
     _guardrail_list_items,
@@ -86,6 +87,29 @@ def test_blocked_term_violations_preserve_case_insensitive_config_order() -> Non
 def test_blocked_term_violations_default_empty_for_unsupported_config() -> None:
     assert _blocked_term_violations({"blocked_terms": {"term": "secret"}}, "secret") == []
     assert _blocked_term_violations({}, "secret") == []
+
+
+def test_blocked_pattern_violations_preserve_order_and_fallback_names() -> None:
+    violations = _blocked_pattern_violations(
+        {
+            "blocked_patterns": [
+                {"name": "token", "pattern": r"TOKEN-[0-9]+"},
+                r"secret-[a-z]+",
+                {"name": "missing", "pattern": r"not-present"},
+            ]
+        },
+        "token-123 and SECRET-value",
+    )
+
+    assert violations == [
+        {"type": "blocked_pattern", "rule": "token"},
+        {"type": "blocked_pattern", "rule": "pattern_2"},
+    ]
+
+
+def test_blocked_pattern_violations_default_empty_for_unsupported_config() -> None:
+    assert _blocked_pattern_violations({"blocked_patterns": {"pattern": "secret"}}, "secret") == []
+    assert _blocked_pattern_violations({}, "secret") == []
 
 
 def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:
