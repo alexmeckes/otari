@@ -91,21 +91,6 @@ def extract_web_search_tool(
     )
 
 
-def _web_search_env_max_results() -> int | None:
-    max_env = os.environ.get("GATEWAY_WEB_SEARCH_MAX_RESULTS")
-    if not max_env:
-        return None
-    try:
-        parsed_max = int(max_env)
-    except ValueError:
-        logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not an int; ignoring", max_env)
-        return None
-    if parsed_max < 1:
-        logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not >= 1; ignoring", max_env)
-        return None
-    return parsed_max
-
-
 def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> WebSearchBackend:
     """Construct a WebSearchBackend honoring environment and per-tool config."""
     kwargs: dict[str, Any] = {"base_url": base_url}
@@ -114,8 +99,17 @@ def build_web_search_backend(*, base_url: str, tool_entry: dict[str, Any]) -> We
     if engines:
         kwargs["engines"] = engines
 
-    if (max_env := _web_search_env_max_results()) is not None:
-        kwargs["max_results"] = max_env
+    max_env = os.environ.get("GATEWAY_WEB_SEARCH_MAX_RESULTS")
+    if max_env:
+        try:
+            parsed_max = int(max_env)
+        except ValueError:
+            logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not an int; ignoring", max_env)
+        else:
+            if parsed_max < 1:
+                logger.warning("GATEWAY_WEB_SEARCH_MAX_RESULTS=%r is not >= 1; ignoring", max_env)
+            else:
+                kwargs["max_results"] = parsed_max
     req_max = tool_entry.get("max_results")
     if isinstance(req_max, int) and req_max > 0:
         kwargs["max_results"] = req_max
