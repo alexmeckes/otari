@@ -124,6 +124,31 @@ def test_classifier_skipped_result_uses_missing_url_reason() -> None:
     }
 
 
+def test_classifier_settings_normalizes_request_fields() -> None:
+    assert routing_guardrail_external._classifier_settings(
+        {
+            "name": " dlp ",
+            "url": " https://classifier.example.test/check ",
+            "timeout_seconds": 0,
+            "threshold": -1,
+            "headers": {" Authorization ": "Bearer test", " ": "skip"},
+            "fail_closed": True,
+        },
+        index=2,
+    ) == routing_guardrail_external._ClassifierSettings(
+        name="dlp",
+        url="https://classifier.example.test/check",
+        timeout_seconds=2.0,
+        threshold=None,
+        headers={" Authorization ": "Bearer test"},
+        fail_closed=True,
+    )
+
+
+def test_classifier_settings_uses_index_name_fallback() -> None:
+    assert routing_guardrail_external._classifier_settings({"name": " ", "url": " "}, index=3).name == "classifier_3"
+
+
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
     captured: list[dict[str, Any]] = []

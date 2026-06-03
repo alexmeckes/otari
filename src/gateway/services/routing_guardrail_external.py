@@ -1,6 +1,7 @@
 """External guardrail classifier helpers."""
 
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -17,6 +18,16 @@ ExternalClassifierPost = Callable[
     ...,
     Awaitable[tuple[int | None, dict[str, Any] | None, str | None]],
 ]
+
+
+@dataclass(frozen=True)
+class _ClassifierSettings:
+    name: str
+    url: str | None
+    timeout_seconds: float
+    threshold: float | None
+    headers: dict[str, str] | None
+    fail_closed: bool
 
 
 async def post_external_guardrail_classifier(
@@ -145,6 +156,17 @@ def _classifier_skipped_result(name: str) -> dict[str, str]:
     return {"name": name, "status": "skipped", "reason": "missing_url"}
 
 
+def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
+    return _ClassifierSettings(
+        name=string_or_none(classifier.get("name")) or f"classifier_{index}",
+        url=string_or_none(classifier.get("url")),
+        timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0,
+        threshold=non_negative_float_or_none(classifier.get("threshold")),
+        headers=_classifier_headers(classifier.get("headers")),
+        fail_closed=bool_config(classifier.get("fail_closed"), False),
+    )
+
+
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
@@ -154,43 +176,42 @@ async def evaluate_external_classifiers(
     violations: list[dict[str, str]] = []
     classifier_results: list[dict[str, Any]] = []
     for index, classifier in enumerate(_classifier_configs(guardrails.get("external_classifiers")), start=1):
-        name = string_or_none(classifier.get("name")) or f"classifier_{index}"
-        url = string_or_none(classifier.get("url"))
-        if url is None:
-            classifier_results.append(_classifier_skipped_result(name))
+        settings = _classifier_settings(classifier, index=index)
+        if settings.url is None:
+            classifier_results.append(_classifier_skipped_result(settings.name))
             continue
-        timeout_seconds = non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0
-        threshold = non_negative_float_or_none(classifier.get("threshold"))
-        normalized_headers = _classifier_headers(classifier.get("headers"))
         status_code, payload, error = await post_classifier(
-            url=url,
+            url=settings.url,
             request_text=request_text,
-            timeout_seconds=timeout_seconds,
-            headers=normalized_headers,
+            timeout_seconds=settings.timeout_seconds,
+            headers=settings.headers,
         )
-        fail_closed = bool_config(classifier.get("fail_closed"), False)
         if error is not None:
             classifier_results.append(
                 _classifier_error_result(
-                    name=name,
+                    name=settings.name,
                     status_code=status_code,
                     error=error,
-                    fail_closed=fail_closed,
+                    fail_closed=settings.fail_closed,
                 )
             )
-            if fail_closed:
-                violations.append(guardrail_violation("external_classifier_error", name))
+            if settings.fail_closed:
+                violations.append(guardrail_violation("external_classifier_error", settings.name))
             continue
         assert payload is not None
-        classifier_violations, score = _classifier_violations(payload, name=name, threshold=threshold)
+        classifier_violations, score = _classifier_violations(
+            payload,
+            name=settings.name,
+            threshold=settings.threshold,
+        )
         violations.extend(classifier_violations)
         classifier_results.append(
             _classifier_success_result(
-                name=name,
+                name=settings.name,
                 status_code=status_code,
                 payload=payload,
                 score=score,
-                threshold=threshold,
+                threshold=settings.threshold,
                 violations=classifier_violations,
             )
         )
