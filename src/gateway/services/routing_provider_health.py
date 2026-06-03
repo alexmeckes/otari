@@ -72,6 +72,11 @@ def _provider_health_from_counts(
     )
 
 
+def _health_mode(health_config: Mapping[str, Any]) -> str:
+    mode = health_config.get("mode")
+    return mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
+
+
 async def attach_provider_health(
     db: AsyncSession,
     candidates: Sequence[Any],
@@ -130,9 +135,7 @@ def apply_provider_health_gate(
     config: Mapping[str, Any],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     health_config = dict_or_empty(config.get("health"))
-    mode = health_config.get("mode")
-    health_mode = mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
-    if not bool_config(health_config.get("enabled"), False) or health_mode != "skip_unhealthy":
+    if not bool_config(health_config.get("enabled"), False) or _health_mode(health_config) != "skip_unhealthy":
         return list(candidates), []
 
     allowed: list[Any] = []
@@ -160,9 +163,7 @@ def apply_provider_health_order(
     config: Mapping[str, Any],
 ) -> list[Any]:
     health_config = dict_or_empty(config.get("health"))
-    mode = health_config.get("mode")
-    health_mode = mode if isinstance(mode, str) and mode in _HEALTH_MODES else "downrank"
-    if not bool_config(health_config.get("enabled"), False) or health_mode != "downrank":
+    if not bool_config(health_config.get("enabled"), False) or _health_mode(health_config) != "downrank":
         return list(candidates)
     return sorted(
         candidates,

@@ -295,6 +295,10 @@ def test_apply_provider_health_gate_requires_enabled_skip_mode() -> None:
     ) == ([unhealthy_candidate], [])
     assert apply_provider_health_gate(
         [unhealthy_candidate],
+        config={"health": {"enabled": True, "mode": "observe"}},
+    ) == ([unhealthy_candidate], [])
+    assert apply_provider_health_gate(
+        [unhealthy_candidate],
         config={"health": {"mode": "skip_unhealthy"}},
     ) == ([unhealthy_candidate], [])
     assert apply_provider_health_gate(
@@ -340,6 +344,10 @@ def test_apply_provider_health_order_requires_enabled_downrank_mode() -> None:
     assert apply_provider_health_order(
         candidates,
         config={"health": {"enabled": True, "mode": "skip_unhealthy"}},
+    ) == candidates
+    assert apply_provider_health_order(
+        candidates,
+        config={"health": {"enabled": True, "mode": "observe"}},
     ) == candidates
     assert apply_provider_health_order(
         candidates,
