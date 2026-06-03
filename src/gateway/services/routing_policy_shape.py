@@ -20,7 +20,6 @@ _DEFAULT_STRATEGY_PROVIDER_KEYS = {
     "input_price_per_million",
     "output_price_per_million",
 }
-_DEFAULT_STRATEGY_CONFIG_KEYS = ("constraints", "health", "match", "tier_thresholds")
 _WEIGHTED_SCORE_KEYS = {
     "weights",
     "quality_weight",
@@ -115,7 +114,7 @@ def config_from_default_strategy(
         provider_items.append(item)
 
     config = dict(base_config or {})
-    for key in _DEFAULT_STRATEGY_CONFIG_KEYS:
+    for key in ("constraints", "health", "match", "tier_thresholds"):
         if key in default_strategy:
             config[key] = default_strategy[key]
 
