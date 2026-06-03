@@ -75,6 +75,18 @@ def _redact_messages(
     return redacted_messages
 
 
+def _redact_request_fields(
+    body: dict[str, Any],
+    *,
+    rules: Sequence[_RedactionRule],
+    replacement: str,
+    counts: dict[tuple[str, str], int],
+) -> None:
+    for key in ("input", "instructions"):
+        if key in body:
+            body[key] = _redact_content(body[key], rules=rules, replacement=replacement, counts=counts)
+
+
 def _missing_redaction_rules_trace(replacement: str) -> dict[str, Any]:
     return {
         "enabled": True,
@@ -132,9 +144,12 @@ def apply_guardrail_redactions(
     if redacted_messages is not None:
         body["messages"] = redacted_messages
 
-    for key in ("input", "instructions"):
-        if key in body:
-            body[key] = _redact_content(body[key], rules=rules, replacement=replacement, counts=counts)
+    _redact_request_fields(
+        body,
+        rules=rules,
+        replacement=replacement,
+        counts=counts,
+    )
 
     return body, _redaction_trace(
         replacement=replacement,

@@ -1,6 +1,7 @@
 from gateway.services.routing_guardrail_redactions import (
     _missing_redaction_rules_trace,
     _redact_messages,
+    _redact_request_fields,
     _redaction_rules,
     _redaction_trace,
     apply_guardrail_redactions,
@@ -42,6 +43,25 @@ def test_redact_messages_redacts_content_and_preserves_other_items() -> None:
     assert messages[0]["content"] == "token-123"
     assert counts == {("pattern", "token"): 1}
     assert _redact_messages("not-a-list", rules=rules, replacement="[MASKED]", counts=counts) is None
+
+
+def test_redact_request_fields_redacts_supported_fields_only() -> None:
+    rules, _pattern_count = _redaction_rules({"patterns": [{"name": "token", "pattern": r"token-[0-9]+"}]})
+    counts: dict[tuple[str, str], int] = {}
+    body = {
+        "input": {"note": "token-123"},
+        "instructions": "token-456",
+        "other": "token-789",
+    }
+
+    _redact_request_fields(body, rules=rules, replacement="[MASKED]", counts=counts)
+
+    assert body == {
+        "input": {"note": "[MASKED]"},
+        "instructions": "[MASKED]",
+        "other": "token-789",
+    }
+    assert counts == {("pattern", "token"): 2}
 
 
 def test_missing_redaction_rules_trace_marks_skipped() -> None:
