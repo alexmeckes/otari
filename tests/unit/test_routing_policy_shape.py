@@ -94,6 +94,36 @@ def test_default_strategy_candidate_ordering_preserves_strategy_semantics() -> N
     ]
 
 
+@pytest.mark.parametrize("strategy_type", ["fallback", "weighted_score", "intelligent"])
+def test_default_strategy_candidate_construction_preserves_provider_fields(strategy_type: str) -> None:
+    _strategy, config = routing_policy_shape.config_from_default_strategy(
+        {
+            "type": strategy_type,
+            "providers": [
+                {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "priority": 2,
+                    "tier": "medium",
+                    "input_price_per_million": 0.15,
+                    "output_price_per_million": 0.6,
+                    "region": "us",
+                }
+            ],
+        }
+    )
+
+    assert config["candidates"] == [
+        {
+            "model": "openai:gpt-4o-mini",
+            "tier": "medium",
+            "input_price_per_million": 0.15,
+            "output_price_per_million": 0.6,
+            "metadata": {"priority": 2, "region": "us"},
+        }
+    ]
+
+
 def test_default_strategy_provider_validation_preserves_error_messages() -> None:
     with pytest.raises(
         routing_policy_shape.RoutingPolicyShapeError,
