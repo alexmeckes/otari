@@ -264,12 +264,12 @@ def _local_guardrail_violations(
     request_text: str,
 ) -> list[dict[str, str]]:
     normalized_text = request_text.lower()
-    violations: list[dict[str, str]] = []
-    violations.extend(_blocked_term_violations(guardrails, normalized_text))
-    violations.extend(_blocked_pattern_violations(guardrails, request_text))
-    violations.extend(_pii_violations(guardrails, request_text))
-    violations.extend(_prompt_injection_violations(guardrails, normalized_text))
-    return violations
+    return [
+        *_blocked_term_violations(guardrails, normalized_text),
+        *_blocked_pattern_violations(guardrails, request_text),
+        *_pii_violations(guardrails, request_text),
+        *_prompt_injection_violations(guardrails, normalized_text),
+    ]
 
 
 def _guardrail_result(
