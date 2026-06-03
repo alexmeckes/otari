@@ -51,18 +51,26 @@ def pii_patterns_from_config(
     ]
 
 
+def _named_pattern_item(item: Any, index: int) -> tuple[str, str] | None:
+    name = f"pattern_{index}"
+    pattern_value: Any = item
+    if isinstance(item, dict):
+        name = string_or_none(item.get("name")) or name
+        pattern_value = item.get("pattern")
+    if not isinstance(pattern_value, str) or not pattern_value.strip():
+        return None
+    return name, pattern_value
+
+
 def named_patterns(value: Any) -> list[tuple[str, re.Pattern[str]]]:
     if not isinstance(value, list):
         return []
     patterns: list[tuple[str, re.Pattern[str]]] = []
     for index, item in enumerate(value, start=1):
-        name = f"pattern_{index}"
-        pattern_value: Any = item
-        if isinstance(item, dict):
-            name = string_or_none(item.get("name")) or name
-            pattern_value = item.get("pattern")
-        if string_or_none(pattern_value) is None:
+        pattern_item = _named_pattern_item(item, index)
+        if pattern_item is None:
             continue
+        name, pattern_value = pattern_item
         try:
             patterns.append((name, re.compile(pattern_value, re.IGNORECASE)))
         except re.error:

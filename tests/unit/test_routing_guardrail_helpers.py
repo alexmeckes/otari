@@ -1,4 +1,5 @@
 from gateway.services.routing_guardrail_helpers import (
+    _named_pattern_item,
     guardrail_config_value,
     guardrail_violation,
     guardrails_config,
@@ -73,6 +74,14 @@ def test_named_patterns_skips_blank_pattern_values() -> None:
 
 def test_named_patterns_skips_invalid_regex() -> None:
     assert named_patterns([{"name": "bad", "pattern": "["}]) == []
+
+
+def test_named_pattern_item_normalizes_name_and_preserves_regex_text() -> None:
+    assert _named_pattern_item(" secret ", 1) == ("pattern_1", " secret ")
+    assert _named_pattern_item({"name": " token ", "pattern": " token "}, 2) == ("token", " token ")
+    assert _named_pattern_item({"name": " ", "pattern": " token "}, 3) == ("pattern_3", " token ")
+    assert _named_pattern_item({"name": "blank", "pattern": "   "}, 4) is None
+    assert _named_pattern_item({"name": "numeric", "pattern": 123}, 5) is None
 
 
 def test_guardrail_violation_shape() -> None:
