@@ -18,7 +18,6 @@ from gateway.services.routing_request_analysis import (
 )
 
 _SYSTEM_MESSAGE_ROLES = {"system", "developer"}
-_SUMMARY_MESSAGE_ROLES = {*_SYSTEM_MESSAGE_ROLES, "user"}
 
 
 def _message_role(message: Any) -> str:
@@ -207,7 +206,7 @@ def apply_context_policy(
             max_message_chars=int_config(context_config.get("summary_message_max_chars"), 240),
         )
         summary_role = (string_or_none(context_config.get("summary_role")) or "system").lower()
-        if summary_role not in _SUMMARY_MESSAGE_ROLES:
+        if summary_role not in {*_SYSTEM_MESSAGE_ROLES, "user"}:
             summary_role = "system"
         summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
         body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
