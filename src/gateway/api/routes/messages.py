@@ -46,7 +46,6 @@ def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPExc
 
 _ERR_INVALID_REQUEST = "invalid_request_error"
 _ERR_API = "api_error"
-_MASTER_KEY_USER_REQUIRED = "When using master key, 'metadata.user_id' is required in request body"
 _API_KEY_VALIDATION_FAILED = "API key validation failed"
 _API_KEY_NO_USER = "API key has no associated user"
 
@@ -113,7 +112,7 @@ def _resolve_message_request_context(
         is_master_key=is_master_key,
         master_key_error=_anthropic_error(
             _ERR_INVALID_REQUEST,
-            _MASTER_KEY_USER_REQUIRED,
+            "When using master key, 'metadata.user_id' is required in request body",
             status.HTTP_400_BAD_REQUEST,
         ),
         no_api_key_error=_anthropic_error(
