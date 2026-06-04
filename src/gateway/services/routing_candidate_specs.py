@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from any_llm import AnyLLM
@@ -111,14 +111,5 @@ def configured_candidate_specs(config: Mapping[str, Any]) -> list[CandidateSpec]
         if normalized in seen:
             continue
         seen.add(normalized)
-        deduped.append(
-            CandidateSpec(
-                model=normalized,
-                tier=spec.tier,
-                input_price_per_million=spec.input_price_per_million,
-                output_price_per_million=spec.output_price_per_million,
-                quality_score=spec.quality_score,
-                metadata=spec.metadata,
-            )
-        )
+        deduped.append(replace(spec, model=normalized))
     return deduped
