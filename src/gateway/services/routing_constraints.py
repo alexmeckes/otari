@@ -81,13 +81,11 @@ def apply_constraints(
                     reason = "region_unknown"
                 elif requested_region not in candidate_regions:
                     reason = "region_not_supported"
-        if reason is None:
-            if max_estimated_cost is not None:
-                if candidate.estimated_cost is None:
-                    if not allow_unknown_cost:
-                        reason = "estimated_cost_unknown"
-                elif candidate.estimated_cost > max_estimated_cost:
-                    reason = "estimated_cost_exceeds_max"
+        if reason is None and max_estimated_cost is not None:
+            if candidate.estimated_cost is None and not allow_unknown_cost:
+                reason = "estimated_cost_unknown"
+            elif candidate.estimated_cost is not None and candidate.estimated_cost > max_estimated_cost:
+                reason = "estimated_cost_exceeds_max"
         if reason is None:
             allowed.append(candidate)
             continue
