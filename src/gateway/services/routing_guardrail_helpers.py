@@ -57,7 +57,7 @@ def _named_pattern_item(item: Any, index: int) -> tuple[str, str] | None:
     if isinstance(item, dict):
         name = string_or_none(item.get("name")) or name
         pattern_value = item.get("pattern")
-    if not isinstance(pattern_value, str) or not pattern_value.strip():
+    if string_or_none(pattern_value) is None:
         return None
     return name, pattern_value
 
