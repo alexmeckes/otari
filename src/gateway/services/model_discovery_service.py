@@ -85,9 +85,7 @@ def get_model_cache() -> ModelCache:
 def _supports_list_models(provider_name: str) -> bool:
     """Check whether a provider supports model listing without instantiating it."""
     try:
-        provider_class = AnyLLM.get_provider_class(provider_name)
-        metadata = provider_class.get_provider_metadata()
-        return metadata.list_models
+        return AnyLLM.get_provider_class(provider_name).get_provider_metadata().list_models
     except Exception:
         return False
 
