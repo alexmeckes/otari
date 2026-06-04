@@ -68,7 +68,6 @@ _FETCH_MAX_REDIRECTS = 5
 # pointing GATEWAY_WEB_SEARCH_URL at any service exposing the same
 # /search?format=json shape.
 _DEFAULT_ENGINES = ("duckduckgo", "mojeek", "qwant", "wikipedia")
-_CONTENT_TRUNCATE_CHARS = 1500
 
 _DEFAULT_PURPOSE_HINT = (
     "Prefer `web_search` for current information, news, recent events, "
@@ -370,13 +369,14 @@ def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
         return f"No results for query: {query!r}"
 
     parts: list[str] = []
+    content_truncate_chars = 1500
     for i, r in enumerate(results, start=1):
         title = _coerced_text(r.get("title"), default="(untitled)")
         url = _coerced_text(r.get("url"))
         snippet = _coerced_text(r.get("content"))
         extracted = _coerced_text(r.get("extracted_content"))
         body = extracted or snippet
-        if len(body) > _CONTENT_TRUNCATE_CHARS:
-            body = body[:_CONTENT_TRUNCATE_CHARS].rstrip() + "…"
+        if len(body) > content_truncate_chars:
+            body = body[:content_truncate_chars].rstrip() + "…"
         parts.append(f"[{i}] {title}\n{url}\n{body}".rstrip())
     return "\n\n".join(parts)

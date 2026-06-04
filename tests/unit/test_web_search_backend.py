@@ -193,6 +193,22 @@ def test_format_results_for_model_normalizes_result_fields_and_preserves_falsey_
     assert result == "[1] Result A\nhttps://example.com/a\nextracted\n\n[2] (untitled)\nhttps://example.com/b"
 
 
+def test_format_results_for_model_truncates_long_body() -> None:
+    result = _format_results_for_model(
+        "query",
+        [
+            {
+                "url": "https://example.com/long",
+                "title": "Long",
+                "content": "x" * 1600,
+            },
+        ],
+    )
+
+    body = result.rsplit("\n", maxsplit=1)[-1]
+    assert body == ("x" * 1500) + "…"
+
+
 @pytest.mark.asyncio
 async def test_extraction_failure_falls_back_to_snippet(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed per-URL fetch must not break the whole search — degrade silently to snippet."""
