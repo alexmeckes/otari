@@ -34,6 +34,14 @@ def _classifier_http_error_text(response: httpx.Response, payload: Mapping[str, 
     return string_or_none(payload.get("detail")) or string_or_none(payload.get("error")) or response.text
 
 
+def _classifier_response_payload(response: httpx.Response) -> dict[str, Any] | None:
+    try:
+        parsed = response.json()
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 async def post_external_guardrail_classifier(
     *,
     url: str,
@@ -47,12 +55,7 @@ async def post_external_guardrail_classifier(
     except httpx.HTTPError as exc:
         return None, None, str(exc)
 
-    try:
-        parsed = response.json()
-    except ValueError:
-        payload = None
-    else:
-        payload = parsed if isinstance(parsed, dict) else None
+    payload = _classifier_response_payload(response)
     if not response.is_success:
         error = _classifier_http_error_text(response, payload)
         return response.status_code, payload, f"HTTP {response.status_code}: {error}"
