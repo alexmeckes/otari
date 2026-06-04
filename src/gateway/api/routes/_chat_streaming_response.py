@@ -15,8 +15,6 @@ from gateway.services.log_writer import LogWriter
 from gateway.services.platform_gateway import report_platform_usage
 from gateway.streaming import OPENAI_STREAM_FORMAT, streaming_generator
 
-_CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
-
 
 def _schedule_platform_streaming_usage(
     *,
@@ -56,7 +54,7 @@ async def _log_standalone_streaming_usage(
         api_key_id=api_key_id,
         model=model,
         provider=provider,
-        endpoint=_CHAT_COMPLETIONS_ENDPOINT,
+        endpoint="/v1/chat/completions",
         user_id=user_id,
         project_id=project_id,
         tags=tags,
