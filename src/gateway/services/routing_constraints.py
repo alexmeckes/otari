@@ -73,22 +73,20 @@ def _candidate_regions(metadata: Mapping[str, Any]) -> set[str]:
 def _region_constraint_failure(
     candidate_regions: set[str],
     *,
-    allowed_regions: set[str],
-    blocked_regions: set[str],
-    requested_region: str | None,
+    constraints: _PreparedConstraints,
 ) -> str | None:
-    if allowed_regions:
+    if constraints.allowed_regions:
         if not candidate_regions:
             return "region_unknown"
-        if not candidate_regions & allowed_regions:
+        if not candidate_regions & constraints.allowed_regions:
             return "region_not_allowed"
-    if blocked_regions and candidate_regions & blocked_regions:
+    if constraints.blocked_regions and candidate_regions & constraints.blocked_regions:
         return "region_blocked"
-    if requested_region is None:
+    if constraints.requested_region is None:
         return None
     if not candidate_regions:
         return "region_unknown"
-    if requested_region not in candidate_regions:
+    if constraints.requested_region not in candidate_regions:
         return "region_not_supported"
     return None
 
@@ -161,9 +159,7 @@ def _constraint_failure(
         return reason
     reason = _region_constraint_failure(
         candidate_regions,
-        allowed_regions=constraints.allowed_regions,
-        blocked_regions=constraints.blocked_regions,
-        requested_region=constraints.requested_region,
+        constraints=constraints,
     )
     if reason is not None:
         return reason

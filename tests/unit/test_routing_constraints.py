@@ -325,45 +325,45 @@ def test_region_constraint_failure_preserves_rejection_order() -> None:
     assert (
         _region_constraint_failure(
             set(),
-            allowed_regions={"eu"},
-            blocked_regions=set(),
-            requested_region=None,
+            constraints=_constraints(allowed_regions={"eu"}),
         )
         == "region_unknown"
     )
     assert (
         _region_constraint_failure(
             {"us"},
-            allowed_regions={"eu"},
-            blocked_regions={"us"},
-            requested_region=None,
+            constraints=_constraints(
+                allowed_regions={"eu"},
+                blocked_regions={"us"},
+            ),
         )
         == "region_not_allowed"
     )
     assert (
         _region_constraint_failure(
             {"us"},
-            allowed_regions=set(),
-            blocked_regions={"us"},
-            requested_region="eu",
+            constraints=_constraints(
+                blocked_regions={"us"},
+                requested_region="eu",
+            ),
         )
         == "region_blocked"
     )
     assert (
         _region_constraint_failure(
             {"us"},
-            allowed_regions=set(),
-            blocked_regions=set(),
-            requested_region="eu",
+            constraints=_constraints(requested_region="eu"),
         )
         == "region_not_supported"
     )
     assert (
         _region_constraint_failure(
             {"eu"},
-            allowed_regions={"eu"},
-            blocked_regions={"us"},
-            requested_region="eu",
+            constraints=_constraints(
+                allowed_regions={"eu"},
+                blocked_regions={"us"},
+                requested_region="eu",
+            ),
         )
         is None
     )
