@@ -46,7 +46,6 @@ def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPExc
 
 _ERR_INVALID_REQUEST = "invalid_request_error"
 _ERR_API = "api_error"
-_API_KEY_NO_USER = "API key has no associated user"
 
 
 @dataclass(frozen=True)
@@ -121,7 +120,7 @@ def _resolve_message_request_context(
         ),
         no_user_error=_anthropic_error(
             _ERR_API,
-            _API_KEY_NO_USER,
+            "API key has no associated user",
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         ),
     )

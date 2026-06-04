@@ -126,6 +126,20 @@ def test_resolve_message_request_context_preserves_missing_api_key_error_shape()
     }
 
 
+def test_resolve_message_request_context_preserves_api_key_without_user_error_shape() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        messages._resolve_message_request_context(_messages_request(), (_api_key(user_id=None), False))
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == {
+        "type": "error",
+        "error": {
+            "type": "api_error",
+            "message": "API key has no associated user",
+        },
+    }
+
+
 def test_message_provider_call_context_preserves_request_field_precedence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
