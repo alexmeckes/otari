@@ -16,8 +16,6 @@ from gateway.services.log_writer import LogWriter
 
 router = APIRouter(prefix="/v1", tags=["images"])
 
-_IMAGE_GENERATIONS_ENDPOINT = "/v1/images/generations"
-
 
 @router.post("/images/generations", response_model=None)
 async def create_image(
@@ -65,7 +63,7 @@ async def create_image(
         await context.log_input_metered_usage(
             db,
             log_writer,
-            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
+            endpoint="/v1/images/generations",
             prompt_tokens=0,
             total_tokens=0,
             cost_units=n_images,
@@ -78,7 +76,7 @@ async def create_image(
     except Exception as e:
         await context.log_and_raise_provider_error(
             log_writer,
-            endpoint=_IMAGE_GENERATIONS_ENDPOINT,
+            endpoint="/v1/images/generations",
             error=e,
         )
 
