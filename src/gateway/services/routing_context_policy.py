@@ -89,9 +89,13 @@ def _build_context_summary(
 ) -> str:
     if max_chars <= 0:
         return ""
-    lines = [string_or_none(prefix) or "Earlier conversation summary:"]
-    for index in summarized_indexes:
-        lines.append(_summary_line_for_message(messages[index], max_chars=max_message_chars))
+    lines = [
+        string_or_none(prefix) or "Earlier conversation summary:",
+        *(
+            _summary_line_for_message(messages[index], max_chars=max_message_chars)
+            for index in summarized_indexes
+        ),
+    ]
     return _trim_summary_to_chars("\n".join(lines), max_chars)
 
 
