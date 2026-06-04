@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -249,10 +250,8 @@ class BudgetAlertWebhookRetryWorker:
         if self._task is None:
             return
         self._task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await self._task
-        except asyncio.CancelledError:
-            pass
         self._task = None
 
     async def run_once(self) -> int:
