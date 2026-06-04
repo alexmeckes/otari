@@ -34,6 +34,8 @@ def test_strip_gateway_fields_preserves_tools_when_not_extracted() -> None:
             "user": "user-1",
             "project_id": "project-1",
             "tags": {"team": "platform"},
+            "mcp_servers": [{"url": "https://mcp.example"}],
+            "mcp_server_ids": ["server-1"],
             "tools": [user_tool],
             "tools_header": "prefer external tools",
             "max_tool_iterations": 3,

@@ -7,18 +7,6 @@ from gateway.log_config import logger
 from gateway.services.routing_config_values import bool_config, comma_separated_string_list
 from gateway.services.web_search_backend import WebSearchBackend
 
-# Gateway-internal fields the provider SDKs (any-llm, anthropic, openai, ...)
-# do not accept as ``acompletion`` kwargs.
-_GATEWAY_INTERNAL_FIELDS = (
-    "mcp_servers",
-    "mcp_server_ids",
-    "tools_header",
-    "max_tool_iterations",
-    "user",
-    "project_id",
-    "tags",
-)
-
 
 def strip_gateway_fields(
     fields: dict[str, Any],
@@ -27,7 +15,15 @@ def strip_gateway_fields(
     remaining_user_tools: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Strip gateway-internal fields from a request payload before provider dispatch."""
-    for key in _GATEWAY_INTERNAL_FIELDS:
+    for key in (
+        "mcp_servers",
+        "mcp_server_ids",
+        "tools_header",
+        "max_tool_iterations",
+        "user",
+        "project_id",
+        "tags",
+    ):
         fields.pop(key, None)
     if not tools_extracted:
         return fields
