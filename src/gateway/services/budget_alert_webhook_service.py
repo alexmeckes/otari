@@ -21,8 +21,6 @@ from gateway.metrics import (
 )
 from gateway.models.entities import BudgetAlert
 
-_RETRYABLE_DELIVERY_STATUSES = ("pending", "failed")
-
 
 @dataclass(frozen=True)
 class WebhookDeliveryResult:
@@ -81,12 +79,13 @@ async def dispatch_pending_budget_alert_webhooks(
 ) -> int:
     """Retry pending or failed budget alert webhooks and return the number selected."""
     effective_now = now or datetime.now(UTC)
+    retryable_delivery_statuses = ("pending", "failed")
     async with create_session() as db:
         maxed_result = await db.execute(
             select(BudgetAlert)
             .where(
                 BudgetAlert.webhook_url.is_not(None),
-                BudgetAlert.delivery_status.in_(_RETRYABLE_DELIVERY_STATUSES),
+                BudgetAlert.delivery_status.in_(retryable_delivery_statuses),
                 BudgetAlert.delivery_attempts >= max_attempts,
             )
             .order_by(BudgetAlert.created_at.asc(), BudgetAlert.id.asc())
@@ -105,7 +104,7 @@ async def dispatch_pending_budget_alert_webhooks(
             select(BudgetAlert.id)
             .where(
                 BudgetAlert.webhook_url.is_not(None),
-                BudgetAlert.delivery_status.in_(_RETRYABLE_DELIVERY_STATUSES),
+                BudgetAlert.delivery_status.in_(retryable_delivery_statuses),
                 BudgetAlert.delivery_attempts < max_attempts,
                 or_(
                     BudgetAlert.next_delivery_attempt_at.is_(None),
