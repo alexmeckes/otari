@@ -534,40 +534,35 @@ def test_estimated_cost_constraint_failure_preserves_unknown_and_limit_behavior(
     assert (
         _estimated_cost_constraint_failure(
             None,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=False,
+            constraints=_constraints(max_estimated_cost=0.01),
         )
         == "estimated_cost_unknown"
     )
     assert (
         _estimated_cost_constraint_failure(
             None,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=True,
+            constraints=_constraints(max_estimated_cost=0.01, allow_unknown_cost=True),
         )
         is None
     )
     assert (
         _estimated_cost_constraint_failure(
             0.02,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=True,
+            constraints=_constraints(max_estimated_cost=0.01, allow_unknown_cost=True),
         )
         == "estimated_cost_exceeds_max"
     )
     assert (
         _estimated_cost_constraint_failure(
             0.01,
-            max_estimated_cost=0.01,
-            allow_unknown_cost=False,
+            constraints=_constraints(max_estimated_cost=0.01),
         )
         is None
     )
     assert (
         _estimated_cost_constraint_failure(
             None,
-            max_estimated_cost=None,
-            allow_unknown_cost=False,
+            constraints=_constraints(),
         )
         is None
     )

@@ -122,14 +122,13 @@ def _prepared_constraints(constraints: Mapping[str, Any], tags: Mapping[str, str
 def _estimated_cost_constraint_failure(
     estimated_cost: float | None,
     *,
-    max_estimated_cost: float | None,
-    allow_unknown_cost: bool,
+    constraints: _PreparedConstraints,
 ) -> str | None:
-    if max_estimated_cost is None:
+    if constraints.max_estimated_cost is None:
         return None
     if estimated_cost is None:
-        return None if allow_unknown_cost else "estimated_cost_unknown"
-    if estimated_cost > max_estimated_cost:
+        return None if constraints.allow_unknown_cost else "estimated_cost_unknown"
+    if estimated_cost > constraints.max_estimated_cost:
         return "estimated_cost_exceeds_max"
     return None
 
@@ -165,8 +164,7 @@ def _constraint_failure(
         return reason
     return _estimated_cost_constraint_failure(
         candidate.estimated_cost,
-        max_estimated_cost=constraints.max_estimated_cost,
-        allow_unknown_cost=constraints.allow_unknown_cost,
+        constraints=constraints,
     )
 
 
