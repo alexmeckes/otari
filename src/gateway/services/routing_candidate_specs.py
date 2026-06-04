@@ -9,11 +9,6 @@ from gateway.services.routing_config_values import dict_or_empty, float_or_none,
 from gateway.services.routing_quality_scores import candidate_quality_score
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
-_INFERRED_TIER_BY_OUTPUT_PRICE = (
-    (1.50, "simple"),
-    (2.00, "medium"),
-    (5.00, "complex"),
-)
 
 
 @dataclass(frozen=True)
@@ -81,7 +76,11 @@ def infer_tier_from_output_price(output_price_per_million: float | None) -> str 
     """Infer an internal complexity tier from output-token pricing."""
     if output_price_per_million is None:
         return None
-    for max_output_price, tier in _INFERRED_TIER_BY_OUTPUT_PRICE:
+    for max_output_price, tier in (
+        (1.50, "simple"),
+        (2.00, "medium"),
+        (5.00, "complex"),
+    ):
         if output_price_per_million < max_output_price:
             return tier
     return "reasoning"
