@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _constraint_rejection,
     _estimated_cost_constraint_failure,
     _lower_string_set,
     _model_constraint_set,
@@ -132,6 +133,18 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
             "regions": ["apac", "eu", "us"],
         }
     ]
+
+
+def test_constraint_rejection_preserves_candidate_fields_and_sorted_regions() -> None:
+    candidate = SimpleNamespace(model="openai:gpt-4o", provider="openai", estimated_cost=0.01)
+
+    assert _constraint_rejection(candidate, reason="region_not_allowed", candidate_regions={"us", "eu"}) == {
+        "model": "openai:gpt-4o",
+        "provider": "openai",
+        "reason": "region_not_allowed",
+        "estimated_cost": 0.01,
+        "regions": ["eu", "us"],
+    }
 
 
 def test_candidate_regions_normalizes_list_and_single_region_metadata() -> None:

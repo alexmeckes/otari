@@ -103,6 +103,16 @@ def _estimated_cost_constraint_failure(
     return None
 
 
+def _constraint_rejection(candidate: Any, *, reason: str, candidate_regions: set[str]) -> dict[str, Any]:
+    return {
+        "model": candidate.model,
+        "provider": candidate.provider,
+        "reason": reason,
+        "estimated_cost": candidate.estimated_cost,
+        "regions": sorted(candidate_regions),
+    }
+
+
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -155,13 +165,5 @@ def apply_constraints(
         if reason is None:
             allowed.append(candidate)
             continue
-        rejected.append(
-            {
-                "model": candidate.model,
-                "provider": candidate.provider,
-                "reason": reason,
-                "estimated_cost": candidate.estimated_cost,
-                "regions": sorted(candidate_regions),
-            }
-        )
+        rejected.append(_constraint_rejection(candidate, reason=reason, candidate_regions=candidate_regions))
     return allowed, rejected
