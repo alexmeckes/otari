@@ -5,6 +5,7 @@ import pytest
 from gateway.services.routing_constraints import (
     _estimated_cost_constraint_failure,
     _normalize_model_key_for_constraint,
+    _provider_model_constraint_failure,
     _region_constraint_failure,
     apply_constraints,
 )
@@ -109,6 +110,64 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
             "regions": ["apac", "eu", "us"],
         }
     ]
+
+
+def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
+    assert (
+        _provider_model_constraint_failure(
+            provider="anthropic",
+            model="anthropic:claude-3-5-haiku-latest",
+            allowed_providers={"openai"},
+            blocked_providers={"anthropic"},
+            allowed_models=set(),
+            blocked_models=set(),
+        )
+        == "provider_not_allowed"
+    )
+    assert (
+        _provider_model_constraint_failure(
+            provider="anthropic",
+            model="anthropic:claude-3-5-haiku-latest",
+            allowed_providers=set(),
+            blocked_providers={"anthropic"},
+            allowed_models={"openai:gpt-4o"},
+            blocked_models=set(),
+        )
+        == "provider_blocked"
+    )
+    assert (
+        _provider_model_constraint_failure(
+            provider="anthropic",
+            model="anthropic:claude-3-5-haiku-latest",
+            allowed_providers=set(),
+            blocked_providers=set(),
+            allowed_models={"openai:gpt-4o"},
+            blocked_models={"anthropic:claude-3-5-haiku-latest"},
+        )
+        == "model_not_allowed"
+    )
+    assert (
+        _provider_model_constraint_failure(
+            provider="anthropic",
+            model="anthropic:claude-3-5-haiku-latest",
+            allowed_providers=set(),
+            blocked_providers=set(),
+            allowed_models=set(),
+            blocked_models={"anthropic:claude-3-5-haiku-latest"},
+        )
+        == "model_blocked"
+    )
+    assert (
+        _provider_model_constraint_failure(
+            provider="anthropic",
+            model="anthropic:claude-3-5-haiku-latest",
+            allowed_providers={"anthropic"},
+            blocked_providers=set(),
+            allowed_models={"anthropic:claude-3-5-haiku-latest"},
+            blocked_models=set(),
+        )
+        is None
+    )
 
 
 def test_apply_constraints_preserves_provider_model_rejection_order() -> None:

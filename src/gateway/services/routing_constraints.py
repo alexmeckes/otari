@@ -19,6 +19,26 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
+def _provider_model_constraint_failure(
+    *,
+    provider: str,
+    model: str,
+    allowed_providers: set[str],
+    blocked_providers: set[str],
+    allowed_models: set[str],
+    blocked_models: set[str],
+) -> str | None:
+    if allowed_providers and provider not in allowed_providers:
+        return "provider_not_allowed"
+    if provider in blocked_providers:
+        return "provider_blocked"
+    if allowed_models and model not in allowed_models:
+        return "model_not_allowed"
+    if model in blocked_models:
+        return "model_blocked"
+    return None
+
+
 def _region_constraint_failure(
     candidate_regions: set[str],
     *,
@@ -97,15 +117,14 @@ def apply_constraints(
         region = string_or_none(metadata.get("region"))
         if region is not None:
             candidate_regions.add(region.lower())
-        reason = None
-        if allowed_providers and candidate.provider not in allowed_providers:
-            reason = "provider_not_allowed"
-        elif candidate.provider in blocked_providers:
-            reason = "provider_blocked"
-        elif allowed_models and candidate.model not in allowed_models:
-            reason = "model_not_allowed"
-        elif candidate.model in blocked_models:
-            reason = "model_blocked"
+        reason = _provider_model_constraint_failure(
+            provider=candidate.provider,
+            model=candidate.model,
+            allowed_providers=allowed_providers,
+            blocked_providers=blocked_providers,
+            allowed_models=allowed_models,
+            blocked_models=blocked_models,
+        )
         if reason is None:
             reason = _region_constraint_failure(
                 candidate_regions,
