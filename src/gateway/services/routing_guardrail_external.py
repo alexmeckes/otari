@@ -136,10 +136,6 @@ def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _Class
     )
 
 
-def _classifier_skipped_evaluation(settings: _ClassifierSettings) -> ExternalClassifierEvaluation:
-    return [], {"name": settings.name, "status": "skipped", "reason": "missing_url"}
-
-
 def _classifier_error_evaluation(
     settings: _ClassifierSettings,
     *,
@@ -184,7 +180,7 @@ async def _evaluate_classifier_from_settings(
     post_classifier: ExternalClassifierPost,
 ) -> ExternalClassifierEvaluation:
     if settings.url is None:
-        return _classifier_skipped_evaluation(settings)
+        return [], {"name": settings.name, "status": "skipped", "reason": "missing_url"}
 
     status_code, payload, error = await post_classifier(
         url=settings.url,
