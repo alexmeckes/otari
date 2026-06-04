@@ -70,10 +70,7 @@ def _guardrail_list_items(value: Any) -> list[Any]:
         return value
     if isinstance(value, dict):
         return [value]
-    item = string_or_none(value)
-    if item is not None:
-        return [item]
-    return []
+    return string_list(value)
 
 
 def _combine_guardrail_list(existing: Any, incoming: Any) -> list[Any]:
@@ -112,8 +109,7 @@ def _guardrail_preset_values(guardrails: Mapping[str, Any]) -> list[Any]:
         presets = guardrails.get("managed_presets")
     if isinstance(presets, list):
         return presets
-    preset = string_or_none(presets)
-    return [preset] if preset is not None else []
+    return string_list(presets)
 
 
 def _normalized_guardrail_preset(value: Any) -> str | None:
