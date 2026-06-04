@@ -5,6 +5,7 @@ Mocks the HTTP layer with `respx` so the suite needs no sandbox container.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -97,8 +98,9 @@ async def test_call_tool_dispatches_code_to_sandbox(monkeypatch: pytest.MonkeyPa
     assert "stdout:" in result
     assert "42" in result
     exec_request = next(r for r in transport.captured if r.url.path == "/sessions/s1/exec")
-    body = exec_request.read().decode()
-    assert "print(6 * 7)" in body
+    body = json.loads(exec_request.read())
+    assert body["input"]["code"] == "print(6 * 7)"
+    assert body["timeout_seconds"] == 60
 
 
 @pytest.mark.asyncio

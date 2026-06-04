@@ -43,7 +43,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CODE_EXECUTION_TOOL_NAME = "code_execution"
-_DEFAULT_TIMEOUT_S = 60.0
 _DEFAULT_PURPOSE_HINT = (
     "Prefer `code_execution` for any computation, data analysis, date "
     "arithmetic, statistics, or anything that benefits from exact output. "
@@ -72,7 +71,7 @@ class SandboxBackend:
         *,
         sandbox_url: str,
         purpose_hint: str | None = None,
-        timeout_s: float = _DEFAULT_TIMEOUT_S,
+        timeout_s: float = 60.0,
     ) -> None:
         self._sandbox_url = sandbox_url.rstrip("/")
         self._purpose_hint = purpose_hint or _DEFAULT_PURPOSE_HINT
