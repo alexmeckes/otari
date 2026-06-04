@@ -159,6 +159,24 @@ def _classifier_error_evaluation(
     )
 
 
+def _classifier_success_evaluation(
+    settings: _ClassifierSettings,
+    *,
+    status_code: int | None,
+    payload: Mapping[str, Any],
+) -> ExternalClassifierEvaluation:
+    violations, score = _classifier_violations(settings, payload)
+    return violations, {
+        "name": settings.name,
+        "status": "flagged" if violations else "passed",
+        "status_code": status_code,
+        "score": score,
+        "threshold": settings.threshold,
+        "label": _classifier_result_label(payload),
+        "violations": violations,
+    }
+
+
 async def _evaluate_classifier_from_settings(
     settings: _ClassifierSettings,
     *,
@@ -178,16 +196,7 @@ async def _evaluate_classifier_from_settings(
         return _classifier_error_evaluation(settings, status_code=status_code, error=error)
 
     assert payload is not None
-    violations, score = _classifier_violations(settings, payload)
-    return violations, {
-        "name": settings.name,
-        "status": "flagged" if violations else "passed",
-        "status_code": status_code,
-        "score": score,
-        "threshold": settings.threshold,
-        "label": _classifier_result_label(payload),
-        "violations": violations,
-    }
+    return _classifier_success_evaluation(settings, status_code=status_code, payload=payload)
 
 
 def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[str, Any]]:
