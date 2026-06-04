@@ -1,11 +1,33 @@
 import pytest
 
-from gateway.services.routing_candidate_specs import configured_candidate_specs, split_model_selector
+from gateway.services.routing_candidate_specs import (
+    configured_candidate_specs,
+    infer_tier_from_output_price,
+    split_model_selector,
+)
 
 
 def test_split_model_selector_returns_normalized_selector() -> None:
     with pytest.warns(DeprecationWarning, match="provider/model"):
         assert split_model_selector("openai/gpt-4o") == ("openai", "gpt-4o", "openai:gpt-4o")
+
+
+@pytest.mark.parametrize(
+    ("output_price", "expected_tier"),
+    [
+        (None, None),
+        (0.05, "simple"),
+        (1.49, "simple"),
+        (1.50, "medium"),
+        (2.50, "complex"),
+        (5.00, "reasoning"),
+    ],
+)
+def test_infer_tier_from_output_price_preserves_boundaries(
+    output_price: float | None,
+    expected_tier: str | None,
+) -> None:
+    assert infer_tier_from_output_price(output_price) == expected_tier
 
 
 def test_configured_candidate_specs_dedupes_with_normalized_selector() -> None:

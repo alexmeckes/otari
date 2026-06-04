@@ -10,7 +10,6 @@ from gateway.services.routing_quality_scores import candidate_quality_score
 
 TIER_ORDER = ("simple", "medium", "complex", "reasoning")
 _INFERRED_TIER_BY_OUTPUT_PRICE = (
-    (0.10, "simple"),
     (1.50, "simple"),
     (2.00, "medium"),
     (5.00, "complex"),
