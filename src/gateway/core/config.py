@@ -164,9 +164,7 @@ class GatewayConfig(BaseSettings):
 
     @property
     def effective_mode(self) -> str:
-        if self.platform_token:
-            return "platform"
-        return "standalone"
+        return "platform" if self.platform_token else "standalone"
 
     @property
     def is_platform_mode(self) -> bool:
