@@ -4,8 +4,6 @@ from typing import Any
 
 from gateway.services.routing_config_values import nested_dict_or_empty, non_negative_float_or_none, score_or_none
 
-_DEFAULT_SCORE_WEIGHTS = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
-
 
 def _normalized_lower_is_better(
     value: float | None,
@@ -50,13 +48,14 @@ def attach_weighted_scores(
     config: Mapping[str, Any],
 ) -> list[Any]:
     scoring = nested_dict_or_empty(config, "scoring", "score_weights")
+    default_weights = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
     weights: dict[str, float] = {}
     configured_weights = scoring.get("weights")
-    for key, default in _DEFAULT_SCORE_WEIGHTS.items():
+    for key, default in default_weights.items():
         weights[key] = _weight_setting(scoring, configured_weights, key, default)
     weight_total = sum(weights.values())
     if weight_total <= 0:
-        weights = dict(_DEFAULT_SCORE_WEIGHTS)
+        weights = dict(default_weights)
         weight_total = sum(weights.values())
     default_quality_score = _score_setting(scoring, "default_quality_score", 0.5)
     unknown_cost_score = _score_setting(scoring, "unknown_cost_score", 0.0)
