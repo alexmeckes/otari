@@ -15,6 +15,7 @@ from gateway.services.routing_guardrails import (
     _guardrail_preset_values,
     _guardrail_request_text,
     _guardrail_result,
+    _guardrail_status,
     _local_guardrail_violations,
     _normalized_guardrail_preset,
     _pattern_search_violations,
@@ -265,6 +266,14 @@ def test_local_guardrail_violations_preserve_source_order() -> None:
         {"type": "pii", "rule": "email"},
         {"type": "prompt_injection", "rule": "Reveal Admin Token"},
     ]
+
+
+def test_guardrail_status_preserves_passed_blocked_and_observed_states() -> None:
+    violations = [{"type": "blocked_term", "rule": "secret"}]
+
+    assert _guardrail_status("block", []) == "passed"
+    assert _guardrail_status("block", violations) == "blocked"
+    assert _guardrail_status("observe", violations) == "observed"
 
 
 def test_guardrail_result_preserves_blocked_shape_and_presets() -> None:

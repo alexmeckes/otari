@@ -258,6 +258,14 @@ def _local_guardrail_violations(
     ]
 
 
+def _guardrail_status(action: str, violations: list[dict[str, str]]) -> str:
+    if not violations:
+        return "passed"
+    if action == "block":
+        return "blocked"
+    return "observed"
+
+
 def _guardrail_result(
     *,
     action: str,
@@ -268,7 +276,7 @@ def _guardrail_result(
 ) -> dict[str, Any]:
     return {
         "enabled": True,
-        "status": "passed" if not violations else "blocked" if action == "block" else "observed",
+        "status": _guardrail_status(action, violations),
         "action": action,
         "violations": violations,
         "external_classifiers": classifier_results,
