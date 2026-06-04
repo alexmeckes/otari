@@ -16,7 +16,6 @@ from gateway.repositories.api_keys_repository import get_api_key_by_hash
 from gateway.services.log_writer import LogWriter
 
 _config: GatewayConfig | None = None
-_LAST_USED_UPDATE_INTERVAL_SECONDS = 300
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -122,9 +121,7 @@ async def _verify_and_update_api_key(db: AsyncSession, token: str) -> APIKey:
 
     now = datetime.now(UTC)
     last_used_at = _as_utc(api_key.last_used_at)
-    should_update_last_used = (
-        last_used_at is None or (now - last_used_at).total_seconds() >= _LAST_USED_UPDATE_INTERVAL_SECONDS
-    )
+    should_update_last_used = last_used_at is None or (now - last_used_at).total_seconds() >= 5 * 60
 
     if should_update_last_used:
         api_key.last_used_at = now
