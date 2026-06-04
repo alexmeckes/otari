@@ -44,10 +44,11 @@ def attach_weighted_scores(
 ) -> list[Any]:
     scoring = nested_dict_or_empty(config, "scoring", "score_weights")
     default_weights = {"quality": 0.5, "cost": 0.3, "latency": 0.2}
-    weights: dict[str, float] = {}
     configured_weights = scoring.get("weights")
-    for key, default in default_weights.items():
-        weights[key] = _configured_weight(scoring, configured_weights, key, default)
+    weights = {
+        key: _configured_weight(scoring, configured_weights, key, default)
+        for key, default in default_weights.items()
+    }
     weight_total = sum(weights.values())
     if weight_total <= 0:
         weights = dict(default_weights)
