@@ -22,7 +22,6 @@ from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import string_or_none
 from gateway.services.routing_policy_shape import split_model_selector
 
-_USAGE_NON_RETRYABLE_STATUS_CODES = {401, 404, 409, 422}
 _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES = {401, 402, 403, 404, 429}
 
 # Status codes that cause the gateway to move on to the next attempt in a
@@ -291,7 +290,7 @@ async def report_platform_usage(
                 body=payload,
                 timeout_seconds=timeout_seconds,
             )
-            if response.status_code == 204 or response.status_code in _USAGE_NON_RETRYABLE_STATUS_CODES:
+            if response.status_code == 204 or response.status_code in {401, 404, 409, 422}:
                 should_retry = False
             else:
                 should_retry = response.status_code >= 500
