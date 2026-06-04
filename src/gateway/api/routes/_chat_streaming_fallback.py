@@ -31,20 +31,15 @@ from gateway.services.platform_gateway import (
 from gateway.services.sandbox_backend import SandboxBackend
 from gateway.streaming import StreamingAttemptFailure, iterate_streaming_attempts
 
-_DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS = 2000
-_DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP = 30000
-_STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY = "streaming_first_chunk_timeout_ms"
-_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY = "streaming_first_chunk_timeout_ms_tool_loop"
-
 
 def _first_chunk_timeout_seconds(config: GatewayConfig, *, tool_mode: bool) -> float:
     if tool_mode:
         return platform_timeout_seconds(
             config,
-            _STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP_KEY,
-            _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS_TOOL_LOOP,
+            "streaming_first_chunk_timeout_ms_tool_loop",
+            30000,
         )
-    return platform_timeout_seconds(config, _STREAM_FIRST_CHUNK_TIMEOUT_MS_KEY, _DEFAULT_STREAM_FIRST_CHUNK_TIMEOUT_MS)
+    return platform_timeout_seconds(config, "streaming_first_chunk_timeout_ms", 2000)
 
 
 async def run_streaming_with_fallback(
