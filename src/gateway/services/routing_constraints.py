@@ -19,6 +19,10 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
+def _string_set(value: Any) -> set[str]:
+    return set(string_list(value))
+
+
 def _model_constraint_set(value: Any) -> set[str]:
     return {_normalize_model_key_for_constraint(item) for item in string_list(value)}
 
@@ -123,8 +127,8 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
-    allowed_providers = set(string_list(constraints.get("allowed_providers")))
-    blocked_providers = set(string_list(constraints.get("blocked_providers")))
+    allowed_providers = _string_set(constraints.get("allowed_providers"))
+    blocked_providers = _string_set(constraints.get("blocked_providers"))
     allowed_models = _model_constraint_set(constraints.get("allowed_models"))
     blocked_models = _model_constraint_set(constraints.get("blocked_models"))
     allowed_regions = _lower_string_set(constraints.get("allowed_regions"))

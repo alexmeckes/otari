@@ -12,6 +12,7 @@ from gateway.services.routing_constraints import (
     _provider_model_constraint_failure,
     _region_constraint_failure,
     _requested_region,
+    _string_set,
     apply_constraints,
 )
 
@@ -39,6 +40,12 @@ def test_model_constraint_set_normalizes_model_values() -> None:
             "openai:gpt-4o",
         }
     assert _model_constraint_set(None) == set()
+
+
+def test_string_set_normalizes_string_values() -> None:
+    assert _string_set([" openai ", "anthropic", None, " "]) == {"None", "anthropic", "openai"}
+    assert _string_set(" openai ") == {"openai"}
+    assert _string_set(None) == set()
 
 
 def test_lower_string_set_normalizes_string_values() -> None:
