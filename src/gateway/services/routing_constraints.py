@@ -149,22 +149,20 @@ def _constraint_failure(
     candidate_regions: set[str],
     constraints: _PreparedConstraints,
 ) -> str | None:
-    reason = _provider_model_constraint_failure(
-        provider=candidate.provider,
-        model=candidate.model,
-        constraints=constraints,
-    )
-    if reason is not None:
-        return reason
-    reason = _region_constraint_failure(
-        candidate_regions,
-        constraints=constraints,
-    )
-    if reason is not None:
-        return reason
-    return _estimated_cost_constraint_failure(
-        candidate.estimated_cost,
-        constraints=constraints,
+    return (
+        _provider_model_constraint_failure(
+            provider=candidate.provider,
+            model=candidate.model,
+            constraints=constraints,
+        )
+        or _region_constraint_failure(
+            candidate_regions,
+            constraints=constraints,
+        )
+        or _estimated_cost_constraint_failure(
+            candidate.estimated_cost,
+            constraints=constraints,
+        )
     )
 
 
