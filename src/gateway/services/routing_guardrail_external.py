@@ -17,9 +17,6 @@ from gateway.services.routing_guardrail_helpers import guardrail_violation
 ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
 ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
 
-_CLASSIFIER_ERROR_TEXT_LIMIT = 200
-_CLASSIFIER_DEFAULT_TIMEOUT_SECONDS = 2.0
-
 
 @dataclass(frozen=True)
 class _ClassifierSettings:
@@ -108,8 +105,7 @@ def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _Class
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
         url=string_or_none(classifier.get("url")),
-        timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds"))
-        or _CLASSIFIER_DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds=non_negative_float_or_none(classifier.get("timeout_seconds")) or 2.0,
         threshold=non_negative_float_or_none(classifier.get("threshold")),
         headers=headers,
         fail_closed=bool_config(classifier.get("fail_closed"), False),
@@ -138,7 +134,7 @@ async def _evaluate_classifier_from_settings(
                 "name": settings.name,
                 "status": "error",
                 "status_code": status_code,
-                "error": error[:_CLASSIFIER_ERROR_TEXT_LIMIT],
+                "error": error[:200],
                 "fail_closed": settings.fail_closed,
             },
         )

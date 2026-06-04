@@ -207,8 +207,6 @@ def test_classifier_violations_preserve_unflagged_score_rules() -> None:
 
 
 def test_classifier_settings_normalizes_request_fields() -> None:
-    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
-
     assert routing_guardrail_external._classifier_settings(
         {
             "name": " dlp ",
@@ -222,7 +220,7 @@ def test_classifier_settings_normalizes_request_fields() -> None:
     ) == routing_guardrail_external._ClassifierSettings(
         name="dlp",
         url="https://classifier.example.test/check",
-        timeout_seconds=default_timeout,
+        timeout_seconds=2.0,
         threshold=None,
         headers={" Authorization ": "Bearer test"},
         fail_closed=True,
@@ -237,7 +235,6 @@ def test_classifier_settings_uses_index_name_fallback() -> None:
 
 @pytest.mark.asyncio
 async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_success_paths() -> None:
-    limit = routing_guardrail_external._CLASSIFIER_ERROR_TEXT_LIMIT
     skipped_settings = routing_guardrail_external._ClassifierSettings(
         name="classifier_1",
         url=None,
@@ -296,7 +293,7 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
     )
 
     async def error_post_classifier(**_kwargs: Any) -> routing_guardrail_external.ExternalClassifierPostResult:
-        return 503, None, "x" * (limit + 5)
+        return 503, None, "x" * 205
 
     violations, result = await routing_guardrail_external._evaluate_classifier_from_settings(
         error_settings,
@@ -308,7 +305,7 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
         "name": "dlp",
         "status": "error",
         "status_code": 503,
-        "error": "x" * limit,
+        "error": "x" * 200,
         "fail_closed": True,
     }
 
@@ -374,7 +371,6 @@ async def test_evaluate_classifier_from_settings_preserves_skipped_error_and_suc
 
 @pytest.mark.asyncio
 async def test_external_classifier_trims_config_strings_and_violation_rules() -> None:
-    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
     captured: list[dict[str, Any]] = []
 
     async def post_classifier(
@@ -411,7 +407,7 @@ async def test_external_classifier_trims_config_strings_and_violation_rules() ->
         {
             "url": "https://classifier.example.test/check",
             "request_text": "hello",
-            "timeout_seconds": default_timeout,
+            "timeout_seconds": 2.0,
             "headers": None,
         }
     ]
@@ -589,7 +585,6 @@ async def test_external_classifier_threshold_uses_shared_score_parsing() -> None
 
 @pytest.mark.asyncio
 async def test_external_classifier_float_config_preserves_timeout_and_threshold_fallbacks() -> None:
-    default_timeout = routing_guardrail_external._CLASSIFIER_DEFAULT_TIMEOUT_SECONDS
     captured: list[dict[str, Any]] = []
 
     async def post_classifier(
@@ -627,7 +622,7 @@ async def test_external_classifier_float_config_preserves_timeout_and_threshold_
         {
             "url": "https://classifier.example.test/check",
             "request_text": "hello",
-            "timeout_seconds": default_timeout,
+            "timeout_seconds": 2.0,
             "headers": None,
         }
     ]
