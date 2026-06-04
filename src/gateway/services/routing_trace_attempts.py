@@ -7,13 +7,15 @@ from gateway.services.pricing_service import pricing_model_ref
 
 
 def attempt_model_key(attempt: Mapping[str, Any]) -> str | None:
-    model_key = attempt.get("model_key")
-    if isinstance(model_key, str) and model_key:
+    if isinstance(model_key := attempt.get("model_key"), str) and model_key:
         return model_key
 
-    provider = attempt.get("provider")
-    model = attempt.get("model")
-    if isinstance(provider, str) and provider and isinstance(model, str) and model:
+    if (
+        isinstance(provider := attempt.get("provider"), str)
+        and provider
+        and isinstance(model := attempt.get("model"), str)
+        and model
+    ):
         return pricing_model_ref(provider, model)
     return None
 
