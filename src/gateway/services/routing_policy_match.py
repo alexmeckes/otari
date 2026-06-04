@@ -66,6 +66,12 @@ def policy_rollout_info(
     }
 
 
+def _expected_membership_values(expected: Any) -> set[str] | None:
+    if isinstance(expected, list | tuple | set):
+        return {str(item) for item in expected}
+    return None
+
+
 def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[str, str]) -> bool:
     tag_key = None
     for key in ("tag", "key", "field", "name"):
@@ -93,12 +99,12 @@ def _evaluate_tag_condition(condition: Mapping[str, Any], request_tags: Mapping[
     if op in {"ne", "neq", "not_eq", "!="}:
         return actual_value != str(expected)
     if op == "in":
-        if isinstance(expected, list | tuple | set):
-            return actual_value in {str(item) for item in expected}
+        if (expected_values := _expected_membership_values(expected)) is not None:
+            return actual_value in expected_values
         return actual_value == str(expected)
     if op in {"not_in", "nin"}:
-        if isinstance(expected, list | tuple | set):
-            return actual_value not in {str(item) for item in expected}
+        if (expected_values := _expected_membership_values(expected)) is not None:
+            return actual_value not in expected_values
         return actual_value != str(expected)
     if op == "contains":
         return str(expected) in actual_value
