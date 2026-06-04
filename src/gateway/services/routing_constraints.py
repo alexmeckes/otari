@@ -91,28 +91,28 @@ def _region_constraint_failure(
     return None
 
 
-def _requested_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
-    if not bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
+def _requested_region(constraint_config: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
+    if not bool_config(constraint_config.get("require_region_match"), False, coerce_strings=True):
         return None
-    region_tag = string_or_none(constraints.get("region_tag", "region"))
+    region_tag = string_or_none(constraint_config.get("region_tag", "region"))
     if region_tag is None:
         return None
     region = string_or_none(tags.get(region_tag))
     return region.lower() if region is not None else None
 
 
-def _prepared_constraints(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
+def _prepared_constraints(constraint_config: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
     return _PreparedConstraints(
-        allowed_providers=_string_set(constraints.get("allowed_providers")),
-        blocked_providers=_string_set(constraints.get("blocked_providers")),
-        allowed_models=_model_constraint_set(constraints.get("allowed_models")),
-        blocked_models=_model_constraint_set(constraints.get("blocked_models")),
-        allowed_regions=_lower_string_set(constraints.get("allowed_regions")),
-        blocked_regions=_lower_string_set(constraints.get("blocked_regions")),
-        requested_region=_requested_region(constraints, tags),
-        max_estimated_cost=non_negative_float_or_none(constraints.get("max_estimated_cost")),
+        allowed_providers=_string_set(constraint_config.get("allowed_providers")),
+        blocked_providers=_string_set(constraint_config.get("blocked_providers")),
+        allowed_models=_model_constraint_set(constraint_config.get("allowed_models")),
+        blocked_models=_model_constraint_set(constraint_config.get("blocked_models")),
+        allowed_regions=_lower_string_set(constraint_config.get("allowed_regions")),
+        blocked_regions=_lower_string_set(constraint_config.get("blocked_regions")),
+        requested_region=_requested_region(constraint_config, tags),
+        max_estimated_cost=non_negative_float_or_none(constraint_config.get("max_estimated_cost")),
         allow_unknown_cost=bool_config(
-            constraints.get("allow_unknown_cost"),
+            constraint_config.get("allow_unknown_cost"),
             False,
             coerce_strings=True,
         ),
@@ -187,11 +187,11 @@ def apply_constraints(
     config: Mapping[str, Any],
     tags: Mapping[str, str],
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    constraints = dict_or_empty(config.get("constraints"))
-    if not constraints:
+    constraint_config = dict_or_empty(config.get("constraints"))
+    if not constraint_config:
         return list(candidates), []
 
-    prepared = _prepared_constraints(constraints, tags)
+    prepared = _prepared_constraints(constraint_config, tags)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
