@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.log_config import logger
 from gateway.models.entities import ModelPricing
 
-_PRICE_UNIT = 1_000_000
-
 
 def pricing_model_ref(provider: str | None, model: str) -> str:
     return f"{provider}:{model}" if provider else model
@@ -49,7 +47,7 @@ def input_metered_cost(
     pricing: ModelPricing,
     *,
     units: float,
-    price_divisor: float = _PRICE_UNIT,
+    price_divisor: float = 1_000_000,
 ) -> float:
     return (units / price_divisor) * pricing.input_price_per_million
 
@@ -61,7 +59,7 @@ def token_usage_cost(
     completion_tokens: int,
 ) -> float:
     return input_metered_cost(pricing, units=prompt_tokens) + (
-        completion_tokens / _PRICE_UNIT
+        completion_tokens / 1_000_000
     ) * pricing.output_price_per_million
 
 
