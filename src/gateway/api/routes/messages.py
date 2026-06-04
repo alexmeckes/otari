@@ -49,7 +49,6 @@ _ERR_API = "api_error"
 _MASTER_KEY_USER_REQUIRED = "When using master key, 'metadata.user_id' is required in request body"
 _API_KEY_VALIDATION_FAILED = "API key validation failed"
 _API_KEY_NO_USER = "API key has no associated user"
-_PROVIDER_ERROR = "The request could not be completed by the provider"
 
 
 @dataclass(frozen=True)
@@ -257,7 +256,7 @@ async def _log_and_raise_message_provider_error(
     )
     raise _anthropic_error(
         _ERR_API,
-        _PROVIDER_ERROR,
+        "The request could not be completed by the provider",
         status.HTTP_500_INTERNAL_SERVER_ERROR,
     ) from error
 
