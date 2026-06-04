@@ -42,9 +42,6 @@ def _to_async_url(database_url: str) -> tuple[str, dict[str, Any]]:
             connect_args["ssl"] = sslmode
         return async_url.render_as_string(hide_password=False), connect_args
 
-    if drivername == "postgresql+asyncpg":
-        return database_url, connect_args
-
     return database_url, connect_args
 
 
