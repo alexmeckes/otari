@@ -175,8 +175,7 @@ class GatewayConfig(BaseSettings):
             msg = "Invalid GATEWAY_MODE value. Expected 'standalone' or 'platform'."
             raise ValueError(msg)
 
-        token_present = self.platform_token is not None
-        if configured_mode == "platform" and not token_present:
+        if configured_mode == "platform" and self.platform_token is None:
             msg = (
                 "GATEWAY_MODE=platform requires OTARI_AI_TOKEN to be set "
                 "(legacy aliases: OTARI_PLATFORM_TOKEN, ANY_LLM_PLATFORM_TOKEN)."
