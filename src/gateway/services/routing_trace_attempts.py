@@ -28,8 +28,7 @@ def attempt_duration_ms(attempt: Mapping[str, Any]) -> float | None:
 
 
 def attempt_provider(attempt: Mapping[str, Any]) -> str | None:
-    provider = attempt.get("provider")
-    return provider if isinstance(provider, str) and provider else None
+    return provider if isinstance(provider := attempt.get("provider"), str) and provider else None
 
 
 def attempt_outcome(attempt: Mapping[str, Any]) -> str | None:
