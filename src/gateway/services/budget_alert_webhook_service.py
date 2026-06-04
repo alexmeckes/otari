@@ -21,10 +21,7 @@ from gateway.metrics import (
 )
 from gateway.models.entities import BudgetAlert
 
-_WEBHOOK_TIMEOUT_SECONDS = 5.0
-_MAX_ERROR_CHARS = 500
 _RETRYABLE_DELIVERY_STATUSES = ("pending", "failed")
-_DEAD_LETTER_DELIVERY_STATUS = "dead_letter"
 
 
 @dataclass(frozen=True)
@@ -41,19 +38,19 @@ async def _post_budget_alert_webhook(
     *,
     webhook_url: str,
     payload: dict[str, Any],
-    timeout_seconds: float = _WEBHOOK_TIMEOUT_SECONDS,
+    timeout_seconds: float = 5.0,
 ) -> WebhookDeliveryResult:
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(webhook_url, json=payload)
     except httpx.HTTPError as exc:
-        return WebhookDeliveryResult(status_code=None, error=str(exc)[:_MAX_ERROR_CHARS])
+        return WebhookDeliveryResult(status_code=None, error=str(exc)[:500])
 
     if 200 <= response.status_code < 300:
         return WebhookDeliveryResult(status_code=response.status_code)
     return WebhookDeliveryResult(
         status_code=response.status_code,
-        error=f"HTTP {response.status_code}: {response.text}"[:_MAX_ERROR_CHARS],
+        error=f"HTTP {response.status_code}: {response.text}"[:500],
     )
 
 
@@ -97,7 +94,7 @@ async def dispatch_pending_budget_alert_webhooks(
         )
         maxed_alerts = list(maxed_result.scalars().all())
         for alert in maxed_alerts:
-            alert.delivery_status = _DEAD_LETTER_DELIVERY_STATUS
+            alert.delivery_status = "dead_letter"
             alert.dead_lettered_at = effective_now
             alert.next_delivery_attempt_at = None
             record_budget_alert_webhook_dead_letter(alert.scope_type, "max_attempts_before_delivery")
@@ -185,7 +182,7 @@ async def dispatch_budget_alert_webhook(
         else:
             alert.delivered_at = None
             if max_attempts is not None and alert.delivery_attempts >= max_attempts:
-                alert.delivery_status = _DEAD_LETTER_DELIVERY_STATUS
+                alert.delivery_status = "dead_letter"
                 alert.dead_lettered_at = now
                 alert.next_delivery_attempt_at = None
                 record_budget_alert_webhook_dead_letter(alert.scope_type, "max_attempts_after_delivery")
