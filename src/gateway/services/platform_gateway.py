@@ -3,6 +3,7 @@
 import asyncio
 import uuid
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any, NoReturn
 
 import httpx
@@ -73,11 +74,8 @@ def extract_platform_user_token(request: Request) -> str:
 def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
     if response.status_code in {401, 402, 403, 404, 429}:
         detail = passthrough_fallback
-        try:
+        with suppress(ValueError):
             payload = response.json()
-        except ValueError:
-            pass
-        else:
             platform_detail = payload.get("detail") if isinstance(payload, dict) else None
             if isinstance(platform_detail, str):
                 detail = platform_detail
