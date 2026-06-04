@@ -142,13 +142,10 @@ BUDGET_ALERT_WEBHOOK_DEAD_LETTERS = Counter(
 )
 
 
-_PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
-
-
 async def metrics_endpoint(request: Request) -> Response:
     """Serve Prometheus metrics."""
     body = generate_latest(REGISTRY)
-    return Response(content=body, media_type=_PROMETHEUS_CONTENT_TYPE)
+    return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 class MetricsMiddleware:
