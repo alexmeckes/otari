@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from gateway.services.platform_gateway import classify_upstream_error
 
@@ -21,6 +22,11 @@ def test_classify_upstream_error_treats_timeouts_as_retryable() -> None:
 
 def test_classify_upstream_error_treats_network_errors_as_retryable() -> None:
     assert classify_upstream_error(httpx.ConnectError("connection failed")) == (True, "conn_err")
+
+
+@pytest.mark.parametrize("status_code", [401, 403, 408, 429, 500, 502, 503, 504, 599])
+def test_classify_upstream_error_treats_retryable_status_codes_as_retryable(status_code: int) -> None:
+    assert classify_upstream_error(_StatusCodeError(status_code)) == (True, f"http_{status_code}")
 
 
 def test_classify_upstream_error_uses_exception_status_code() -> None:

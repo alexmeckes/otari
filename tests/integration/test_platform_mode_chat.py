@@ -432,8 +432,7 @@ def test_platform_mode_streaming_falls_through_on_first_attempt_failure(
 
     class _FakeApiStatusError(Exception):
         # status_code on the exception is what classify_upstream_error reads;
-        # 401 is in _FALLBACK_RETRYABLE_STATUS_CODES so the gateway will move
-        # on to the next attempt.
+        # 401 is retryable so the gateway will move on to the next attempt.
         status_code = 401
 
     async def fake_acompletion(**kwargs: Any) -> Any:

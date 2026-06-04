@@ -22,11 +22,6 @@ from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import string_or_none
 from gateway.services.routing_policy_shape import split_model_selector
 
-# Status codes that cause the gateway to move on to the next attempt in a
-# multi-attempt route. 401/403 are included because users configure multi-attempt
-# routing policies on the platform precisely to handle credential outages.
-_FALLBACK_RETRYABLE_STATUS_CODES = {401, 403, 408, 429, 500, 502, 503, 504}
-
 
 class ResolvedAttempt(BaseModel):
     """A single resolution attempt returned by the platform."""
@@ -216,7 +211,9 @@ def classify_upstream_error(exc: BaseException) -> tuple[bool, str]:
     error_class = f"http_{status_code}"
     if status_code in {400, 422}:
         return False, error_class
-    if status_code in _FALLBACK_RETRYABLE_STATUS_CODES or 500 <= status_code <= 599:
+    # 401/403 are retryable because multi-attempt routing policies can handle
+    # credential outages by falling back to another configured provider.
+    if status_code in {401, 403, 408, 429} or 500 <= status_code <= 599:
         return True, error_class
     return False, error_class
 
