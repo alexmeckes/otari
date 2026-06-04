@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _normalize_model_key_for_constraint,
+    _region_constraint_failure,
     apply_constraints,
 )
 
@@ -128,6 +129,54 @@ def test_apply_constraints_preserves_provider_model_rejection_order() -> None:
     assert reason_for({"allowed_models": ["openai:gpt-4o"]}) == "model_not_allowed"
     assert reason_for({"blocked_models": [candidate.model]}) == "model_blocked"
     assert reason_for({"allowed_providers": ["anthropic"], "allowed_models": [candidate.model]}) is None
+
+
+def test_region_constraint_failure_preserves_rejection_order() -> None:
+    assert (
+        _region_constraint_failure(
+            set(),
+            allowed_regions={"eu"},
+            blocked_regions=set(),
+            requested_region=None,
+        )
+        == "region_unknown"
+    )
+    assert (
+        _region_constraint_failure(
+            {"us"},
+            allowed_regions={"eu"},
+            blocked_regions={"us"},
+            requested_region=None,
+        )
+        == "region_not_allowed"
+    )
+    assert (
+        _region_constraint_failure(
+            {"us"},
+            allowed_regions=set(),
+            blocked_regions={"us"},
+            requested_region="eu",
+        )
+        == "region_blocked"
+    )
+    assert (
+        _region_constraint_failure(
+            {"us"},
+            allowed_regions=set(),
+            blocked_regions=set(),
+            requested_region="eu",
+        )
+        == "region_not_supported"
+    )
+    assert (
+        _region_constraint_failure(
+            {"eu"},
+            allowed_regions={"eu"},
+            blocked_regions={"us"},
+            requested_region="eu",
+        )
+        is None
+    )
 
 
 def test_apply_constraints_preserves_region_rejection_order() -> None:

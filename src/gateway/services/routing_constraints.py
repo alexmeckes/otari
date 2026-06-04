@@ -19,6 +19,29 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
+def _region_constraint_failure(
+    candidate_regions: set[str],
+    *,
+    allowed_regions: set[str],
+    blocked_regions: set[str],
+    requested_region: str | None,
+) -> str | None:
+    if allowed_regions:
+        if not candidate_regions:
+            return "region_unknown"
+        if not candidate_regions & allowed_regions:
+            return "region_not_allowed"
+    if blocked_regions and candidate_regions & blocked_regions:
+        return "region_blocked"
+    if requested_region is None:
+        return None
+    if not candidate_regions:
+        return "region_unknown"
+    if requested_region not in candidate_regions:
+        return "region_not_supported"
+    return None
+
+
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -69,18 +92,12 @@ def apply_constraints(
         elif candidate.model in blocked_models:
             reason = "model_blocked"
         if reason is None:
-            if allowed_regions:
-                if not candidate_regions:
-                    reason = "region_unknown"
-                elif not candidate_regions & allowed_regions:
-                    reason = "region_not_allowed"
-            if reason is None and blocked_regions and candidate_regions & blocked_regions:
-                reason = "region_blocked"
-            if reason is None and requested_region is not None:
-                if not candidate_regions:
-                    reason = "region_unknown"
-                elif requested_region not in candidate_regions:
-                    reason = "region_not_supported"
+            reason = _region_constraint_failure(
+                candidate_regions,
+                allowed_regions=allowed_regions,
+                blocked_regions=blocked_regions,
+                requested_region=requested_region,
+            )
         if reason is None and max_estimated_cost is not None:
             if candidate.estimated_cost is None and not allow_unknown_cost:
                 reason = "estimated_cost_unknown"
