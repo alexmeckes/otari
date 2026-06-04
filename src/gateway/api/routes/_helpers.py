@@ -7,11 +7,6 @@ from fastapi import HTTPException, status
 if TYPE_CHECKING:
     from gateway.db import APIKey
 
-_OPENAI_MASTER_KEY_USER_REQUIRED = "When using master key, 'user' field is required in request body"
-_OPENAI_API_KEY_VALIDATION_FAILED = "API key validation failed"
-_OPENAI_API_KEY_NO_USER = "API key has no associated user"
-
-
 def resolve_user_id(
     user_id_from_request: str | None,
     api_key: APIKey | None,
@@ -67,14 +62,14 @@ def resolve_openai_user_id(
         is_master_key=is_master_key,
         master_key_error=HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_OPENAI_MASTER_KEY_USER_REQUIRED,
+            detail="When using master key, 'user' field is required in request body",
         ),
         no_api_key_error=HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_OPENAI_API_KEY_VALIDATION_FAILED,
+            detail="API key validation failed",
         ),
         no_user_error=HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_OPENAI_API_KEY_NO_USER,
+            detail="API key has no associated user",
         ),
     )
