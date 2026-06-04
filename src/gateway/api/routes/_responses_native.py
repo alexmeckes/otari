@@ -19,8 +19,6 @@ from gateway.api.routes._usage import log_usage
 from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
 
-RESPONSES_ENDPOINT = "/v1/responses"
-
 
 def native_response_call_kwargs(
     request_body: ResponsesRequest,
@@ -56,7 +54,7 @@ async def log_native_response_usage(
         api_key_id=context.api_key_id,
         model=context.model,
         provider=context.provider,
-        endpoint=RESPONSES_ENDPOINT,
+        endpoint="/v1/responses",
         user_id=context.user_id,
         project_id=request_body.project_id,
         tags=request_body.tags,
