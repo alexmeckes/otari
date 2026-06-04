@@ -28,7 +28,6 @@ _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES = {401, 402, 403, 404, 429}
 # multi-attempt route. 401/403 are included because users configure multi-attempt
 # routing policies on the platform precisely to handle credential outages.
 _FALLBACK_RETRYABLE_STATUS_CODES = {401, 403, 408, 429, 500, 502, 503, 504}
-_FALLBACK_NON_RETRYABLE_STATUS_CODES = {400, 422}
 
 
 class ResolvedAttempt(BaseModel):
@@ -217,7 +216,7 @@ def classify_upstream_error(exc: BaseException) -> tuple[bool, str]:
         status_code = response_status
 
     error_class = f"http_{status_code}"
-    if status_code in _FALLBACK_NON_RETRYABLE_STATUS_CODES:
+    if status_code in {400, 422}:
         return False, error_class
     if status_code in _FALLBACK_RETRYABLE_STATUS_CODES or 500 <= status_code <= 599:
         return True, error_class
