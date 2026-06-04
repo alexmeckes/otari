@@ -19,7 +19,6 @@ router = APIRouter(prefix="/v1", tags=["audio"])
 
 # Maximum upload size for audio files (25 MB, matching OpenAI's limit)
 _MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024
-_TRANSCRIPTIONS_ENDPOINT = "/v1/audio/transcriptions"
 _SPEECH_ENDPOINT = "/v1/audio/speech"
 
 # Mapping from response_format to MIME type for speech endpoint
@@ -85,14 +84,14 @@ async def create_transcription(
 
     try:
         result: Transcription = await atranscription(**transcription_kwargs)
-        await context.log_zero_token_usage(log_writer, endpoint=_TRANSCRIPTIONS_ENDPOINT)
+        await context.log_zero_token_usage(log_writer, endpoint="/v1/audio/transcriptions")
 
     except HTTPException:
         raise
     except Exception as e:
         await context.log_and_raise_provider_error(
             log_writer=log_writer,
-            endpoint=_TRANSCRIPTIONS_ENDPOINT,
+            endpoint="/v1/audio/transcriptions",
             error=e,
         )
 
