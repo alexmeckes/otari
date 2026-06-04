@@ -27,6 +27,16 @@ def _score_setting(scoring: Mapping[str, Any], key: str, default: float) -> floa
     return default if parsed is None else parsed
 
 
+def _configured_weight(scoring: Mapping[str, Any], configured_weights: Any, key: str, default: float) -> float:
+    if isinstance(configured_weights, dict):
+        weight_value = configured_weights.get(key, configured_weights.get(f"{key}_weight"))
+        if (parsed_weight := non_negative_float_or_none(weight_value)) is not None:
+            return parsed_weight
+    if (parsed_weight := non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))) is not None:
+        return parsed_weight
+    return default
+
+
 def attach_weighted_scores(
     candidates: Sequence[Any],
     *,
@@ -37,13 +47,7 @@ def attach_weighted_scores(
     weights: dict[str, float] = {}
     configured_weights = scoring.get("weights")
     for key, default in default_weights.items():
-        parsed_weight = None
-        if isinstance(configured_weights, dict):
-            weight_value = configured_weights.get(key, configured_weights.get(f"{key}_weight"))
-            parsed_weight = non_negative_float_or_none(weight_value)
-        if parsed_weight is None:
-            parsed_weight = non_negative_float_or_none(scoring.get(f"{key}_weight", scoring.get(key)))
-        weights[key] = default if parsed_weight is None else parsed_weight
+        weights[key] = _configured_weight(scoring, configured_weights, key, default)
     weight_total = sum(weights.values())
     if weight_total <= 0:
         weights = dict(default_weights)
