@@ -4,6 +4,7 @@ import pytest
 
 from gateway.services.routing_constraints import (
     _candidate_regions,
+    _constraint_failure,
     _constraint_rejection,
     _estimated_cost_constraint_failure,
     _lower_string_set,
@@ -152,6 +153,35 @@ def test_constraint_rejection_preserves_candidate_fields_and_sorted_regions() ->
         "estimated_cost": 0.01,
         "regions": ["eu", "us"],
     }
+
+
+def test_constraint_failure_preserves_provider_region_and_cost_order() -> None:
+    candidate = SimpleNamespace(model="openai:gpt-4o", provider="openai", estimated_cost=0.02)
+
+    def reason_for(
+        *,
+        allowed_providers: set[str] | None = None,
+        allowed_regions: set[str] | None = None,
+        max_estimated_cost: float | None = 0.01,
+    ) -> str | None:
+        return _constraint_failure(
+            candidate,
+            candidate_regions={"us"},
+            allowed_providers=allowed_providers or set(),
+            blocked_providers=set(),
+            allowed_models=set(),
+            blocked_models=set(),
+            allowed_regions=allowed_regions or set(),
+            blocked_regions=set(),
+            requested_region=None,
+            max_estimated_cost=max_estimated_cost,
+            allow_unknown_cost=False,
+        )
+
+    assert reason_for(allowed_providers={"anthropic"}, allowed_regions={"eu"}) == "provider_not_allowed"
+    assert reason_for(allowed_regions={"eu"}) == "region_not_allowed"
+    assert reason_for() == "estimated_cost_exceeds_max"
+    assert reason_for(max_estimated_cost=None) is None
 
 
 def test_candidate_regions_normalizes_list_and_single_region_metadata() -> None:

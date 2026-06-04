@@ -117,6 +117,45 @@ def _constraint_rejection(candidate: Any, *, reason: str, candidate_regions: set
     }
 
 
+def _constraint_failure(
+    candidate: Any,
+    *,
+    candidate_regions: set[str],
+    allowed_providers: set[str],
+    blocked_providers: set[str],
+    allowed_models: set[str],
+    blocked_models: set[str],
+    allowed_regions: set[str],
+    blocked_regions: set[str],
+    requested_region: str | None,
+    max_estimated_cost: float | None,
+    allow_unknown_cost: bool,
+) -> str | None:
+    reason = _provider_model_constraint_failure(
+        provider=candidate.provider,
+        model=candidate.model,
+        allowed_providers=allowed_providers,
+        blocked_providers=blocked_providers,
+        allowed_models=allowed_models,
+        blocked_models=blocked_models,
+    )
+    if reason is not None:
+        return reason
+    reason = _region_constraint_failure(
+        candidate_regions,
+        allowed_regions=allowed_regions,
+        blocked_regions=blocked_regions,
+        requested_region=requested_region,
+    )
+    if reason is not None:
+        return reason
+    return _estimated_cost_constraint_failure(
+        candidate.estimated_cost,
+        max_estimated_cost=max_estimated_cost,
+        allow_unknown_cost=allow_unknown_cost,
+    )
+
+
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -145,27 +184,19 @@ def apply_constraints(
     for candidate in candidates:
         metadata = dict_or_empty(candidate.metadata)
         candidate_regions = _candidate_regions(metadata)
-        reason = _provider_model_constraint_failure(
-            provider=candidate.provider,
-            model=candidate.model,
+        reason = _constraint_failure(
+            candidate,
+            candidate_regions=candidate_regions,
             allowed_providers=allowed_providers,
             blocked_providers=blocked_providers,
             allowed_models=allowed_models,
             blocked_models=blocked_models,
+            allowed_regions=allowed_regions,
+            blocked_regions=blocked_regions,
+            requested_region=requested_region,
+            max_estimated_cost=max_estimated_cost,
+            allow_unknown_cost=allow_unknown_cost,
         )
-        if reason is None:
-            reason = _region_constraint_failure(
-                candidate_regions,
-                allowed_regions=allowed_regions,
-                blocked_regions=blocked_regions,
-                requested_region=requested_region,
-            )
-        if reason is None:
-            reason = _estimated_cost_constraint_failure(
-                candidate.estimated_cost,
-                max_estimated_cost=max_estimated_cost,
-                allow_unknown_cost=allow_unknown_cost,
-            )
         if reason is None:
             allowed.append(candidate)
             continue
