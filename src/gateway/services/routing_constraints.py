@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from gateway.services.routing_candidate_specs import split_model_selector
@@ -9,6 +10,19 @@ from gateway.services.routing_config_values import (
     string_list,
     string_or_none,
 )
+
+
+@dataclass(frozen=True)
+class _PreparedConstraints:
+    allowed_providers: set[str]
+    blocked_providers: set[str]
+    allowed_models: set[str]
+    blocked_models: set[str]
+    allowed_regions: set[str]
+    blocked_regions: set[str]
+    requested_region: str | None
+    max_estimated_cost: float | None
+    allow_unknown_cost: bool
 
 
 def _normalize_model_key_for_constraint(value: str) -> str:
@@ -92,6 +106,24 @@ def _requested_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -
     return region.lower() if region is not None else None
 
 
+def _prepared_constraints(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
+    return _PreparedConstraints(
+        allowed_providers=_string_set(constraints.get("allowed_providers")),
+        blocked_providers=_string_set(constraints.get("blocked_providers")),
+        allowed_models=_model_constraint_set(constraints.get("allowed_models")),
+        blocked_models=_model_constraint_set(constraints.get("blocked_models")),
+        allowed_regions=_lower_string_set(constraints.get("allowed_regions")),
+        blocked_regions=_lower_string_set(constraints.get("blocked_regions")),
+        requested_region=_requested_region(constraints, tags),
+        max_estimated_cost=non_negative_float_or_none(constraints.get("max_estimated_cost")),
+        allow_unknown_cost=bool_config(
+            constraints.get("allow_unknown_cost"),
+            False,
+            coerce_strings=True,
+        ),
+    )
+
+
 def _estimated_cost_constraint_failure(
     estimated_cost: float | None,
     *,
@@ -121,38 +153,30 @@ def _constraint_failure(
     candidate: Any,
     *,
     candidate_regions: set[str],
-    allowed_providers: set[str],
-    blocked_providers: set[str],
-    allowed_models: set[str],
-    blocked_models: set[str],
-    allowed_regions: set[str],
-    blocked_regions: set[str],
-    requested_region: str | None,
-    max_estimated_cost: float | None,
-    allow_unknown_cost: bool,
+    constraints: _PreparedConstraints,
 ) -> str | None:
     reason = _provider_model_constraint_failure(
         provider=candidate.provider,
         model=candidate.model,
-        allowed_providers=allowed_providers,
-        blocked_providers=blocked_providers,
-        allowed_models=allowed_models,
-        blocked_models=blocked_models,
+        allowed_providers=constraints.allowed_providers,
+        blocked_providers=constraints.blocked_providers,
+        allowed_models=constraints.allowed_models,
+        blocked_models=constraints.blocked_models,
     )
     if reason is not None:
         return reason
     reason = _region_constraint_failure(
         candidate_regions,
-        allowed_regions=allowed_regions,
-        blocked_regions=blocked_regions,
-        requested_region=requested_region,
+        allowed_regions=constraints.allowed_regions,
+        blocked_regions=constraints.blocked_regions,
+        requested_region=constraints.requested_region,
     )
     if reason is not None:
         return reason
     return _estimated_cost_constraint_failure(
         candidate.estimated_cost,
-        max_estimated_cost=max_estimated_cost,
-        allow_unknown_cost=allow_unknown_cost,
+        max_estimated_cost=constraints.max_estimated_cost,
+        allow_unknown_cost=constraints.allow_unknown_cost,
     )
 
 
@@ -166,19 +190,7 @@ def apply_constraints(
     if not constraints:
         return list(candidates), []
 
-    allowed_providers = _string_set(constraints.get("allowed_providers"))
-    blocked_providers = _string_set(constraints.get("blocked_providers"))
-    allowed_models = _model_constraint_set(constraints.get("allowed_models"))
-    blocked_models = _model_constraint_set(constraints.get("blocked_models"))
-    allowed_regions = _lower_string_set(constraints.get("allowed_regions"))
-    blocked_regions = _lower_string_set(constraints.get("blocked_regions"))
-    requested_region = _requested_region(constraints, tags)
-    max_estimated_cost = non_negative_float_or_none(constraints.get("max_estimated_cost"))
-    allow_unknown_cost = bool_config(
-        constraints.get("allow_unknown_cost"),
-        False,
-        coerce_strings=True,
-    )
+    prepared = _prepared_constraints(constraints, tags)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
@@ -187,15 +199,7 @@ def apply_constraints(
         reason = _constraint_failure(
             candidate,
             candidate_regions=candidate_regions,
-            allowed_providers=allowed_providers,
-            blocked_providers=blocked_providers,
-            allowed_models=allowed_models,
-            blocked_models=blocked_models,
-            allowed_regions=allowed_regions,
-            blocked_regions=blocked_regions,
-            requested_region=requested_region,
-            max_estimated_cost=max_estimated_cost,
-            allow_unknown_cost=allow_unknown_cost,
+            constraints=prepared,
         )
         if reason is None:
             allowed.append(candidate)

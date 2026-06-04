@@ -10,6 +10,8 @@ from gateway.services.routing_constraints import (
     _lower_string_set,
     _model_constraint_set,
     _normalize_model_key_for_constraint,
+    _prepared_constraints,
+    _PreparedConstraints,
     _provider_model_constraint_failure,
     _region_constraint_failure,
     _requested_region,
@@ -164,9 +166,7 @@ def test_constraint_failure_preserves_provider_region_and_cost_order() -> None:
         allowed_regions: set[str] | None = None,
         max_estimated_cost: float | None = 0.01,
     ) -> str | None:
-        return _constraint_failure(
-            candidate,
-            candidate_regions={"us"},
+        constraints = _PreparedConstraints(
             allowed_providers=allowed_providers or set(),
             blocked_providers=set(),
             allowed_models=set(),
@@ -176,6 +176,11 @@ def test_constraint_failure_preserves_provider_region_and_cost_order() -> None:
             requested_region=None,
             max_estimated_cost=max_estimated_cost,
             allow_unknown_cost=False,
+        )
+        return _constraint_failure(
+            candidate,
+            candidate_regions={"us"},
+            constraints=constraints,
         )
 
     assert reason_for(allowed_providers={"anthropic"}, allowed_regions={"eu"}) == "provider_not_allowed"
@@ -431,6 +436,37 @@ def test_requested_region_respects_match_gate_tag_and_blank_inputs() -> None:
     assert (
         _requested_region({"require_region_match": "true", "region_tag": "request_region"}, {"request_region": " "})
         is None
+    )
+
+
+def test_prepared_constraints_normalizes_config_values() -> None:
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        prepared = _prepared_constraints(
+            {
+                "allowed_providers": [" openai "],
+                "blocked_providers": [" anthropic "],
+                "allowed_models": ["openai/gpt-4o"],
+                "blocked_models": ["openai:gpt-4o-mini"],
+                "allowed_regions": [" EU "],
+                "blocked_regions": [" US "],
+                "require_region_match": "true",
+                "region_tag": " request_region ",
+                "max_estimated_cost": 0.01,
+                "allow_unknown_cost": "true",
+            },
+            {"request_region": " EU "},
+        )
+
+    assert prepared == _PreparedConstraints(
+        allowed_providers={"openai"},
+        blocked_providers={"anthropic"},
+        allowed_models={"openai:gpt-4o"},
+        blocked_models={"openai:gpt-4o-mini"},
+        allowed_regions={"eu"},
+        blocked_regions={"us"},
+        requested_region="eu",
+        max_estimated_cost=0.01,
+        allow_unknown_cost=True,
     )
 
 
