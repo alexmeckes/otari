@@ -12,8 +12,6 @@ _ROW_LIST_KEYS = ("scores", "results", "items", "rows", "evals")
 _MODEL_KEYS = ("model", "model_key", "candidate_model")
 _PROVIDER_KEYS = ("provider", "vendor")
 _SCORE_KEYS = ("score", "eval_score", "accuracy", "pass_rate", "mean_score")
-_QUALITY_SCORE_KEYS = ("quality_score",)
-_BENCHMARK_SCORE_KEYS = ("benchmark_score",)
 _METRIC_KEYS = ("metric", "eval", "benchmark", "task")
 _SAMPLE_COUNT_KEYS = ("sample_count", "samples", "n", "count")
 _KNOWN_KEYS = {
@@ -21,8 +19,8 @@ _KNOWN_KEYS = {
     *_MODEL_KEYS,
     *_PROVIDER_KEYS,
     *_SCORE_KEYS,
-    *_QUALITY_SCORE_KEYS,
-    *_BENCHMARK_SCORE_KEYS,
+    "quality_score",
+    "benchmark_score",
     *_METRIC_KEYS,
     *_SAMPLE_COUNT_KEYS,
     "metadata",
@@ -87,8 +85,8 @@ def normalize_eval_score_row(
     if model is None:
         raise EvalScorePipelineError(f"Eval score row {row_number} is missing a model")
 
-    quality_score = _first_float(row, _QUALITY_SCORE_KEYS)
-    benchmark_score = _first_float(row, _BENCHMARK_SCORE_KEYS)
+    quality_score = float_or_none(row.get("quality_score"), coerce_strings=True, allow_percent=True)
+    benchmark_score = float_or_none(row.get("benchmark_score"), coerce_strings=True, allow_percent=True)
     score = _first_float(row, _SCORE_KEYS)
     if quality_score is None and benchmark_score is None and score is None:
         raise EvalScorePipelineError(

@@ -114,6 +114,16 @@ def test_eval_score_pipeline_rejects_rows_without_score() -> None:
         normalize_eval_score_row({"model": "openai:gpt-4o"})
 
 
+def test_eval_score_pipeline_normalizes_benchmark_score_field() -> None:
+    item = normalize_eval_score_row({"model": "openai:gpt-4o", "benchmark_score": "84%"})
+
+    assert item == {
+        "model": "openai:gpt-4o",
+        "benchmark_score": 84.0,
+        "metadata": {"row_number": 1},
+    }
+
+
 def test_eval_score_pipeline_metadata_presence_omits_blank_values_and_preserves_scalars() -> None:
     item = normalize_eval_score_row(
         {
