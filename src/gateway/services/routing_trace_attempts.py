@@ -20,11 +20,9 @@ def attempt_model_key(attempt: Mapping[str, Any]) -> str | None:
 
 def attempt_duration_ms(attempt: Mapping[str, Any]) -> float | None:
     duration = attempt.get("duration_ms")
-    if isinstance(duration, bool):
+    if isinstance(duration, bool) or not isinstance(duration, int | float) or duration < 0:
         return None
-    if isinstance(duration, int | float) and duration >= 0:
-        return float(duration)
-    return None
+    return float(duration)
 
 
 def attempt_provider(attempt: Mapping[str, Any]) -> str | None:
