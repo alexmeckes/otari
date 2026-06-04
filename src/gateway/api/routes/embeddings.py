@@ -16,8 +16,6 @@ from gateway.services.log_writer import LogWriter
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
 
-_EMBEDDINGS_ENDPOINT = "/v1/embeddings"
-
 
 @router.post("/embeddings", response_model=None)
 async def create_embedding(
@@ -60,7 +58,7 @@ async def create_embedding(
         await context.log_input_metered_usage(
             db,
             log_writer,
-            endpoint=_EMBEDDINGS_ENDPOINT,
+            endpoint="/v1/embeddings",
             prompt_tokens=usage.prompt_tokens if usage else None,
             total_tokens=usage.total_tokens if usage else None,
             cost_units=usage.prompt_tokens if usage else None,
@@ -72,7 +70,7 @@ async def create_embedding(
     except Exception as e:
         await context.log_and_raise_provider_error(
             log_writer,
-            endpoint=_EMBEDDINGS_ENDPOINT,
+            endpoint="/v1/embeddings",
             error=e,
         )
 
