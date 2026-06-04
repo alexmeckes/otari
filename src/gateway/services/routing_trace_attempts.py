@@ -34,6 +34,4 @@ def attempt_provider(attempt: Mapping[str, Any]) -> str | None:
 
 def attempt_outcome(attempt: Mapping[str, Any]) -> str | None:
     status = attempt.get("status")
-    if status in {"success", "error"}:
-        return str(status)
-    return None
+    return str(status) if status in {"success", "error"} else None
