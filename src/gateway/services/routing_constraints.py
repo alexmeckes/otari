@@ -70,6 +70,16 @@ def _region_constraint_failure(
     return None
 
 
+def _requested_region(constraints: Mapping[str, Any], tags: Mapping[str, str]) -> str | None:
+    if not bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
+        return None
+    region_tag = string_or_none(constraints.get("region_tag", "region"))
+    if region_tag is None:
+        return None
+    region = string_or_none(tags.get(region_tag))
+    return region.lower() if region is not None else None
+
+
 def _estimated_cost_constraint_failure(
     estimated_cost: float | None,
     *,
@@ -105,12 +115,7 @@ def apply_constraints(
     }
     allowed_regions = {item.lower() for item in string_list(constraints.get("allowed_regions"))}
     blocked_regions = {item.lower() for item in string_list(constraints.get("blocked_regions"))}
-    requested_region = None
-    if bool_config(constraints.get("require_region_match"), False, coerce_strings=True):
-        region_tag = string_or_none(constraints.get("region_tag", "region"))
-        if region_tag is not None:
-            region = string_or_none(tags.get(region_tag))
-            requested_region = region.lower() if region is not None else None
+    requested_region = _requested_region(constraints, tags)
     max_estimated_cost = non_negative_float_or_none(constraints.get("max_estimated_cost"))
     allow_unknown_cost = bool_config(
         constraints.get("allow_unknown_cost"),

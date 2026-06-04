@@ -8,6 +8,7 @@ from gateway.services.routing_constraints import (
     _normalize_model_key_for_constraint,
     _provider_model_constraint_failure,
     _region_constraint_failure,
+    _requested_region,
     apply_constraints,
 )
 
@@ -348,6 +349,19 @@ def test_apply_constraints_ignores_request_region_unless_match_is_required() -> 
 
     assert allowed == [candidate]
     assert rejected == []
+
+
+def test_requested_region_respects_match_gate_tag_and_blank_inputs() -> None:
+    assert _requested_region({"region_tag": "request_region"}, {"request_region": "EU"}) is None
+    assert (
+        _requested_region({"require_region_match": "true", "region_tag": "request_region"}, {"request_region": " EU "})
+        == "eu"
+    )
+    assert _requested_region({"require_region_match": "true", "region_tag": " "}, {"region": "EU"}) is None
+    assert (
+        _requested_region({"require_region_match": "true", "region_tag": "request_region"}, {"request_region": " "})
+        is None
+    )
 
 
 def test_apply_constraints_ignores_blank_request_region_inputs() -> None:
