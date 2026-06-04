@@ -44,10 +44,8 @@ def _provider_health_from_counts(
 ) -> ProviderHealth:
     sample_count = success_count + error_count
     min_samples = int_config(health_config.get("min_samples"), 3)
-    degraded_rate = non_negative_float_or_none(health_config.get("degraded_failure_rate"))
-    degraded_rate = 0.25 if degraded_rate is None else min(degraded_rate, 1.0)
-    unhealthy_rate = non_negative_float_or_none(health_config.get("unhealthy_failure_rate"))
-    unhealthy_rate = 0.50 if unhealthy_rate is None else min(unhealthy_rate, 1.0)
+    degraded_rate = _failure_rate_threshold(health_config.get("degraded_failure_rate"), 0.25)
+    unhealthy_rate = _failure_rate_threshold(health_config.get("unhealthy_failure_rate"), 0.50)
     failure_rate = None if sample_count == 0 else error_count / sample_count
     if sample_count < min_samples or failure_rate is None:
         status, reason = "unknown", "insufficient_samples"
@@ -67,6 +65,11 @@ def _provider_health_from_counts(
         failure_rate=failure_rate,
         reason=reason,
     )
+
+
+def _failure_rate_threshold(value: Any, default: float) -> float:
+    parsed = non_negative_float_or_none(value)
+    return default if parsed is None else min(parsed, 1.0)
 
 
 def _health_mode(health_config: Mapping[str, Any]) -> str:
