@@ -26,8 +26,6 @@ from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.services.sandbox_backend import SandboxNotReachableError
 from gateway.services.web_search_backend import WebSearchNotReachableError
 
-_CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
-
 
 async def _log_standalone_chat_usage(
     *,
@@ -49,7 +47,7 @@ async def _log_standalone_chat_usage(
         api_key_id=api_key_id,
         model=model,
         provider=provider,
-        endpoint=_CHAT_COMPLETIONS_ENDPOINT,
+        endpoint="/v1/chat/completions",
         user_id=user_id,
         project_id=request.project_id,
         tags=request.tags,
