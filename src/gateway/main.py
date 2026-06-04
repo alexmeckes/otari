@@ -20,8 +20,6 @@ from gateway.services.platform_config import platform_base_url
 from gateway.services.pricing_init_service import initialize_pricing_from_config
 from gateway.version import __version__
 
-_PUBLIC_PREFIXES = ("/health",)
-
 _ROOT_TUTORIAL_HTML = """<!doctype html>
 <html lang="en">
   <head>
@@ -136,7 +134,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if not request.url.path.startswith(_PUBLIC_PREFIXES):
+        if not request.url.path.startswith(("/health",)):
             response.headers["Cache-Control"] = "private, no-store, no-cache"
             vary_values = {part.strip() for part in response.headers.get("Vary", "").split(",") if part.strip()}
             vary_values.add("Authorization")
