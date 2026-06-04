@@ -21,6 +21,31 @@ from gateway.services.routing_constraints import (
 )
 
 
+def _constraints(
+    *,
+    allowed_providers: set[str] | None = None,
+    blocked_providers: set[str] | None = None,
+    allowed_models: set[str] | None = None,
+    blocked_models: set[str] | None = None,
+    allowed_regions: set[str] | None = None,
+    blocked_regions: set[str] | None = None,
+    requested_region: str | None = None,
+    max_estimated_cost: float | None = None,
+    allow_unknown_cost: bool = False,
+) -> _PreparedConstraints:
+    return _PreparedConstraints(
+        allowed_providers=allowed_providers or set(),
+        blocked_providers=blocked_providers or set(),
+        allowed_models=allowed_models or set(),
+        blocked_models=blocked_models or set(),
+        allowed_regions=allowed_regions or set(),
+        blocked_regions=blocked_regions or set(),
+        requested_region=requested_region,
+        max_estimated_cost=max_estimated_cost,
+        allow_unknown_cost=allow_unknown_cost,
+    )
+
+
 def test_normalize_model_key_for_constraint_returns_canonical_selector() -> None:
     assert _normalize_model_key_for_constraint("openai:gpt-4o") == "openai:gpt-4o"
 
@@ -159,17 +184,7 @@ def test_constraint_rejection_preserves_candidate_fields_and_sorted_regions() ->
 
 
 def test_constraint_rejection_for_candidate_returns_payload_or_none() -> None:
-    constraints = _PreparedConstraints(
-        allowed_providers=set(),
-        blocked_providers=set(),
-        allowed_models=set(),
-        blocked_models=set(),
-        allowed_regions={"eu"},
-        blocked_regions=set(),
-        requested_region=None,
-        max_estimated_cost=None,
-        allow_unknown_cost=False,
-    )
+    constraints = _constraints(allowed_regions={"eu"})
     allowed_candidate = SimpleNamespace(
         model="openai:gpt-4o",
         provider="openai",
@@ -202,16 +217,10 @@ def test_constraint_failure_preserves_provider_region_and_cost_order() -> None:
         allowed_regions: set[str] | None = None,
         max_estimated_cost: float | None = 0.01,
     ) -> str | None:
-        constraints = _PreparedConstraints(
+        constraints = _constraints(
             allowed_providers=allowed_providers or set(),
-            blocked_providers=set(),
-            allowed_models=set(),
-            blocked_models=set(),
             allowed_regions=allowed_regions or set(),
-            blocked_regions=set(),
-            requested_region=None,
             max_estimated_cost=max_estimated_cost,
-            allow_unknown_cost=False,
         )
         return _constraint_failure(
             candidate,
@@ -241,10 +250,10 @@ def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
         _provider_model_constraint_failure(
             provider="anthropic",
             model="anthropic:claude-3-5-haiku-latest",
-            allowed_providers={"openai"},
-            blocked_providers={"anthropic"},
-            allowed_models=set(),
-            blocked_models=set(),
+            constraints=_constraints(
+                allowed_providers={"openai"},
+                blocked_providers={"anthropic"},
+            ),
         )
         == "provider_not_allowed"
     )
@@ -252,10 +261,10 @@ def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
         _provider_model_constraint_failure(
             provider="anthropic",
             model="anthropic:claude-3-5-haiku-latest",
-            allowed_providers=set(),
-            blocked_providers={"anthropic"},
-            allowed_models={"openai:gpt-4o"},
-            blocked_models=set(),
+            constraints=_constraints(
+                blocked_providers={"anthropic"},
+                allowed_models={"openai:gpt-4o"},
+            ),
         )
         == "provider_blocked"
     )
@@ -263,10 +272,10 @@ def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
         _provider_model_constraint_failure(
             provider="anthropic",
             model="anthropic:claude-3-5-haiku-latest",
-            allowed_providers=set(),
-            blocked_providers=set(),
-            allowed_models={"openai:gpt-4o"},
-            blocked_models={"anthropic:claude-3-5-haiku-latest"},
+            constraints=_constraints(
+                allowed_models={"openai:gpt-4o"},
+                blocked_models={"anthropic:claude-3-5-haiku-latest"},
+            ),
         )
         == "model_not_allowed"
     )
@@ -274,10 +283,7 @@ def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
         _provider_model_constraint_failure(
             provider="anthropic",
             model="anthropic:claude-3-5-haiku-latest",
-            allowed_providers=set(),
-            blocked_providers=set(),
-            allowed_models=set(),
-            blocked_models={"anthropic:claude-3-5-haiku-latest"},
+            constraints=_constraints(blocked_models={"anthropic:claude-3-5-haiku-latest"}),
         )
         == "model_blocked"
     )
@@ -285,10 +291,10 @@ def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
         _provider_model_constraint_failure(
             provider="anthropic",
             model="anthropic:claude-3-5-haiku-latest",
-            allowed_providers={"anthropic"},
-            blocked_providers=set(),
-            allowed_models={"anthropic:claude-3-5-haiku-latest"},
-            blocked_models=set(),
+            constraints=_constraints(
+                allowed_providers={"anthropic"},
+                allowed_models={"anthropic:claude-3-5-haiku-latest"},
+            ),
         )
         is None
     )

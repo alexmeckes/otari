@@ -49,18 +49,15 @@ def _provider_model_constraint_failure(
     *,
     provider: str,
     model: str,
-    allowed_providers: set[str],
-    blocked_providers: set[str],
-    allowed_models: set[str],
-    blocked_models: set[str],
+    constraints: _PreparedConstraints,
 ) -> str | None:
-    if allowed_providers and provider not in allowed_providers:
+    if constraints.allowed_providers and provider not in constraints.allowed_providers:
         return "provider_not_allowed"
-    if provider in blocked_providers:
+    if provider in constraints.blocked_providers:
         return "provider_blocked"
-    if allowed_models and model not in allowed_models:
+    if constraints.allowed_models and model not in constraints.allowed_models:
         return "model_not_allowed"
-    if model in blocked_models:
+    if model in constraints.blocked_models:
         return "model_blocked"
     return None
 
@@ -158,10 +155,7 @@ def _constraint_failure(
     reason = _provider_model_constraint_failure(
         provider=candidate.provider,
         model=candidate.model,
-        allowed_providers=constraints.allowed_providers,
-        blocked_providers=constraints.blocked_providers,
-        allowed_models=constraints.allowed_models,
-        blocked_models=constraints.blocked_models,
+        constraints=constraints,
     )
     if reason is not None:
         return reason
