@@ -30,6 +30,13 @@ async def _items(*values: str) -> AsyncIterator[str]:
         yield value
 
 
+def test_anthropic_stream_error_payload_is_pinned() -> None:
+    assert ANTHROPIC_STREAM_FORMAT.error_payload == (
+        'event: error\ndata: {"type": "error", "error": {"type": "api_error", '
+        '"message": "An error occurred during streaming"}}\n\n'
+    )
+
+
 @pytest.mark.asyncio
 async def test_streaming_generator_success_with_usage() -> None:
     completed_usage: list[CompletionUsage] = []

@@ -36,9 +36,6 @@ class StreamFormat:
 
 
 _OPENAI_ERROR = json.dumps({"error": {"message": "An error occurred during streaming", "type": "server_error"}})
-_ANTHROPIC_ERROR = json.dumps(
-    {"type": "error", "error": {"type": "api_error", "message": "An error occurred during streaming"}}
-)
 
 OPENAI_STREAM_FORMAT = StreamFormat(
     done_marker="data: [DONE]\n\n",
@@ -54,7 +51,10 @@ RESPONSES_STREAM_FORMAT = StreamFormat(
 
 ANTHROPIC_STREAM_FORMAT = StreamFormat(
     done_marker="event: done\ndata: {}\n\n",
-    error_payload=f"event: error\ndata: {_ANTHROPIC_ERROR}\n\n",
+    error_payload=(
+        'event: error\ndata: {"type": "error", "error": {"type": "api_error", '
+        '"message": "An error occurred during streaming"}}\n\n'
+    ),
     yield_done_on_error=False,
 )
 
