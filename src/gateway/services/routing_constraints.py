@@ -39,6 +39,14 @@ def _provider_model_constraint_failure(
     return None
 
 
+def _candidate_regions(metadata: Mapping[str, Any]) -> set[str]:
+    regions = {item.lower() for item in string_list(metadata.get("regions"))}
+    region = string_or_none(metadata.get("region"))
+    if region is not None:
+        regions.add(region.lower())
+    return regions
+
+
 def _region_constraint_failure(
     candidate_regions: set[str],
     *,
@@ -113,10 +121,7 @@ def apply_constraints(
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
         metadata = dict_or_empty(candidate.metadata)
-        candidate_regions = {item.lower() for item in string_list(metadata.get("regions"))}
-        region = string_or_none(metadata.get("region"))
-        if region is not None:
-            candidate_regions.add(region.lower())
+        candidate_regions = _candidate_regions(metadata)
         reason = _provider_model_constraint_failure(
             provider=candidate.provider,
             model=candidate.model,

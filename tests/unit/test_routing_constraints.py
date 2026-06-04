@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from gateway.services.routing_constraints import (
+    _candidate_regions,
     _estimated_cost_constraint_failure,
     _normalize_model_key_for_constraint,
     _provider_model_constraint_failure,
@@ -110,6 +111,17 @@ def test_apply_constraints_normalizes_region_metadata_in_rejections() -> None:
             "regions": ["apac", "eu", "us"],
         }
     ]
+
+
+def test_candidate_regions_normalizes_list_and_single_region_metadata() -> None:
+    assert _candidate_regions({"regions": [" EU ", "us", None], "region": " Apac "}) == {
+        "apac",
+        "eu",
+        "none",
+        "us",
+    }
+    assert _candidate_regions({"regions": " EU ", "region": " "}) == {"eu"}
+    assert _candidate_regions({}) == set()
 
 
 def test_provider_model_constraint_failure_preserves_rejection_order() -> None:
