@@ -15,7 +15,8 @@ import uvicorn
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.postgres import PostgresContainer
@@ -54,6 +55,26 @@ def _to_async_url(database_url: str) -> str:
     return database_url
 
 
+def _drop_alembic_version_table(engine: Engine) -> None:
+    cascade = "" if engine.dialect.name == "sqlite" else " CASCADE"
+    with engine.connect() as conn:
+        conn.execute(text(f"DROP TABLE IF EXISTS alembic_version{cascade}"))
+        conn.commit()
+
+
+def _create_sync_engine(database_url: str) -> Engine:
+    engine = create_engine(database_url, pool_pre_ping=True)
+    if engine.dialect.name == "sqlite":
+
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection: Any, _: Any) -> None:  # noqa: ANN001, ANN202
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
+
+
 def build_async_session_override(
     database_url: str,
 ) -> tuple[Callable[[], AsyncGenerator[AsyncSession, None]], Callable[[], None]]:
@@ -89,7 +110,7 @@ def postgres_url() -> Generator[str]:
 @pytest.fixture
 def test_db(postgres_url: str) -> Generator[Session]:
     """Create a test database session."""
-    engine = create_engine(postgres_url, pool_pre_ping=True)
+    engine = _create_sync_engine(postgres_url)
     _run_alembic_migrations(postgres_url)
 
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -100,9 +121,7 @@ def test_db(postgres_url: str) -> Generator[Session]:
     finally:
         db.close()
         Base.metadata.drop_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
-            conn.commit()
+        _drop_alembic_version_table(engine)
 
 
 @pytest_asyncio.fixture
@@ -117,18 +136,16 @@ async def async_db(postgres_url: str) -> AsyncGenerator[AsyncSession, None]:
             yield session
     finally:
         await async_engine.dispose()
-        engine = create_engine(postgres_url, pool_pre_ping=True)
+        engine = _create_sync_engine(postgres_url)
         Base.metadata.drop_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
-            conn.commit()
+        _drop_alembic_version_table(engine)
         engine.dispose()
 
 
 @pytest.fixture
 def db_session(test_config: GatewayConfig) -> Generator[Session]:
     """Create a standalone DB session for verifying state outside the test client."""
-    engine = create_engine(test_config.database_url, pool_pre_ping=True)
+    engine = _create_sync_engine(test_config.database_url)
     session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     try:
         yield session
@@ -153,7 +170,7 @@ def test_config(postgres_url: str) -> GatewayConfig:
 def client(test_config: GatewayConfig) -> Generator[TestClient]:
     """Create a test client for the FastAPI app."""
     _run_alembic_migrations(test_config.database_url)
-    engine = create_engine(test_config.database_url, pool_pre_ping=True)
+    engine = _create_sync_engine(test_config.database_url)
     async_engine = create_async_engine(_to_async_url(test_config.database_url), pool_pre_ping=True)
     async_session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
     app = create_app(test_config)
@@ -169,9 +186,7 @@ def client(test_config: GatewayConfig) -> Generator[TestClient]:
             yield test_client
     finally:
         Base.metadata.drop_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
-            conn.commit()
+        _drop_alembic_version_table(engine)
         try:
             asyncio.run(async_engine.dispose())
         except RuntimeError:

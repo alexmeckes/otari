@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,24 +12,11 @@ from gateway.core.config import API_KEY_HEADER, LEGACY_API_KEY_HEADERS, GatewayC
 from gateway.core.database import get_db
 from gateway.metrics import record_auth_failure
 from gateway.models.entities import APIKey
+from gateway.repositories.api_keys_repository import get_api_key_by_hash
+from gateway.services.budget_periods import as_utc as _as_utc
 from gateway.services.log_writer import LogWriter
 
 _config: GatewayConfig | None = None
-_LAST_USED_UPDATE_INTERVAL_SECONDS = 300
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Return ``value`` as a timezone-aware datetime in UTC.
-
-    SQLite stores ``DateTime(timezone=True)`` columns as naive strings and
-    returns them naive on read. PostgreSQL returns them as aware. Normalising
-    here keeps the subtraction/comparison call sites identical across both
-    backends — a naive value is *assumed* to be UTC, which matches how the
-    gateway writes them (always ``datetime.now(UTC)``).
-    """
-    if value is None or value.tzinfo is not None:
-        return value
-    return value.replace(tzinfo=UTC)
 
 
 def set_config(config: GatewayConfig) -> None:
@@ -96,8 +82,7 @@ async def _verify_and_update_api_key(db: AsyncSession, token: str) -> APIKey:
             detail=f"Invalid API key format: {e}",
         ) from e
 
-    result = await db.execute(select(APIKey).where(APIKey.key_hash == key_hash))
-    api_key = result.scalar_one_or_none()
+    api_key = await get_api_key_by_hash(db, key_hash)
 
     if not api_key:
         record_auth_failure("invalid_key")
@@ -123,9 +108,7 @@ async def _verify_and_update_api_key(db: AsyncSession, token: str) -> APIKey:
 
     now = datetime.now(UTC)
     last_used_at = _as_utc(api_key.last_used_at)
-    should_update_last_used = (
-        last_used_at is None or (now - last_used_at).total_seconds() >= _LAST_USED_UPDATE_INTERVAL_SECONDS
-    )
+    should_update_last_used = last_used_at is None or (now - last_used_at).total_seconds() >= 5 * 60
 
     if should_update_last_used:
         api_key.last_used_at = now
@@ -240,6 +223,7 @@ def get_log_writer(request: Request) -> LogWriter:
 
 
 __all__ = [
+    "_as_utc",
     "get_config",
     "get_db",
     "reset_config",

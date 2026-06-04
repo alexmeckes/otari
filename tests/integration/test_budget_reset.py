@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from gateway.services.budget_service import calculate_next_reset
+from gateway.services.budget_periods import calculate_next_reset
 
 from .conftest import MODEL_NAME
 
@@ -148,7 +148,7 @@ def test_budget_actually_resets_when_duration_passes(
 
     initial_time = datetime(2025, 10, 1, 12, 0, 0, tzinfo=UTC)
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = initial_time
 
         client.post(
@@ -165,8 +165,8 @@ def test_budget_actually_resets_when_duration_passes(
     with patch("gateway.services.budget_service.datetime") as mock_datetime_budget:
         mock_datetime_budget.now.return_value = initial_time
 
-        with patch("gateway.api.routes.chat.datetime") as mock_datetime_chat:
-            mock_datetime_chat.now.return_value = initial_time
+        with patch("gateway.api.routes._usage.datetime") as mock_datetime_usage:
+            mock_datetime_usage.now.return_value = initial_time
 
             response = client.post(
                 "/v1/chat/completions",
@@ -190,8 +190,8 @@ def test_budget_actually_resets_when_duration_passes(
     with patch("gateway.services.budget_service.datetime") as mock_datetime_budget:
         mock_datetime_budget.now.return_value = time_after_reset
 
-        with patch("gateway.api.routes.chat.datetime") as mock_datetime_chat:
-            mock_datetime_chat.now.return_value = time_after_reset
+        with patch("gateway.api.routes._usage.datetime") as mock_datetime_usage:
+            mock_datetime_usage.now.return_value = time_after_reset
 
             response = client.post(
                 "/v1/chat/completions",
@@ -225,7 +225,7 @@ def test_per_user_reset_schedules_with_actual_reset(client: TestClient, master_k
     user_a_time = datetime(2025, 10, 1, 0, 0, 0, tzinfo=UTC)
     user_b_time = datetime(2025, 10, 2, 0, 0, 0, tzinfo=UTC)
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = user_a_time
 
         response_a = client.post(
@@ -234,7 +234,7 @@ def test_per_user_reset_schedules_with_actual_reset(client: TestClient, master_k
             headers=master_key_header,
         )
 
-    with patch("gateway.api.routes.users.datetime") as mock_datetime:
+    with patch("gateway.services.budget_periods.datetime") as mock_datetime:
         mock_datetime.now.return_value = user_b_time
 
         response_b = client.post(

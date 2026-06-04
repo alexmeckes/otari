@@ -26,6 +26,8 @@ import asyncio
 import ipaddress
 import os
 import socket
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 
@@ -33,19 +35,19 @@ class UnsafeURLError(ValueError):
     """Raised when an MCP server URL is rejected by the safety checks."""
 
 
-def _allow_loopback() -> bool:
-    return os.environ.get("GATEWAY_MCP_ALLOW_LOOPBACK", "true").lower() not in {"0", "false", "no"}
+def _env_flag(name: str, *, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return default
 
 
-def _allow_private_hosts() -> bool:
-    return os.environ.get("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "false").lower() in {"1", "true", "yes"}
-
-
-def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return []
+def _addresses_from_addrinfo(infos: Iterable[Any]) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     for info in infos:
         sockaddr = info[4]
@@ -54,6 +56,14 @@ def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Addres
         except ValueError:
             continue
     return out
+
+
+def _resolve_all(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return []
+    return _addresses_from_addrinfo(infos)
 
 
 def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
@@ -72,7 +82,7 @@ def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
     if not host:
         raise UnsafeURLError("MCP server URL must include a hostname")
 
-    if _allow_private_hosts():
+    if _env_flag("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", default=False):
         return
 
     try:
@@ -96,7 +106,7 @@ def validate_mcp_url(url: str, *, has_authorization_token: bool) -> None:
             )
 
     for addr in addresses:
-        if addr.is_loopback and _allow_loopback():
+        if addr.is_loopback and _env_flag("GATEWAY_MCP_ALLOW_LOOPBACK", default=True):
             continue
         reason = _blocked_reason(addr)
         if reason is not None:
@@ -124,10 +134,6 @@ def _blocked_reason(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str 
     return None
 
 
-def _allow_web_search_private_hosts() -> bool:
-    return os.environ.get("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", "false").lower() in {"1", "true", "yes"}
-
-
 async def _resolve_all_async(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     """Async DNS resolution. Off-loads to the loop's default resolver so the
     event loop isn't blocked while we wait — critical when the per-fetch
@@ -138,14 +144,7 @@ async def _resolve_all_async(host: str) -> list[ipaddress.IPv4Address | ipaddres
         infos = await loop.getaddrinfo(host, None)
     except socket.gaierror:
         return []
-    out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    for info in infos:
-        sockaddr = info[4]
-        try:
-            out.append(ipaddress.ip_address(sockaddr[0]))
-        except ValueError:
-            continue
-    return out
+    return _addresses_from_addrinfo(infos)
 
 
 async def validate_outbound_fetch_url(url: str) -> None:
@@ -167,7 +166,7 @@ async def validate_outbound_fetch_url(url: str) -> None:
     if not host:
         raise UnsafeURLError("fetch URL must include a hostname")
 
-    if _allow_web_search_private_hosts():
+    if _env_flag("GATEWAY_WEB_SEARCH_ALLOW_PRIVATE_HOSTS", default=False):
         return
 
     try:

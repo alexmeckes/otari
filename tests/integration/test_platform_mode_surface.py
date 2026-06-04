@@ -40,20 +40,21 @@ def test_platform_mode_disables_local_management_endpoints(monkeypatch: pytest.M
     app = create_app(config)
 
     with TestClient(app) as client:
-        users_response = client.post("/v1/users", json={"user_id": "u1"})
-        keys_response = client.get("/v1/keys")
-        budgets_response = client.get("/v1/budgets")
-        spend_response = client.get("/v1/spend")
+        responses = [
+            client.post("/v1/users", json={"user_id": "u1"}),
+            client.get("/v1/users/u1"),
+            client.get("/v1/keys"),
+            client.delete("/v1/keys/key_123"),
+            client.get("/v1/budgets"),
+            client.patch("/v1/budgets/budget_123"),
+            client.get("/v1/spend"),
+            client.get("/v1/spend/projects/project_123"),
+        ]
 
     expected = {"detail": "This endpoint is not available in platform mode. Manage this resource via the platform UI."}
-    assert users_response.status_code == 404
-    assert users_response.json() == expected
-    assert keys_response.status_code == 404
-    assert keys_response.json() == expected
-    assert budgets_response.status_code == 404
-    assert budgets_response.json() == expected
-    assert spend_response.status_code == 404
-    assert spend_response.json() == expected
+    for response in responses:
+        assert response.status_code == 404
+        assert response.json() == expected
 
     reset_config()
     reset_db()

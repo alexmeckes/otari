@@ -6,6 +6,7 @@ network access for trafilatura's per-URL fetches.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ from gateway.services.web_search_backend import (
     WEB_SEARCH_TOOL_NAME,
     WebSearchBackend,
     WebSearchNotReachableError,
+    _format_results_for_model,
 )
 
 
@@ -94,6 +96,15 @@ async def test_purpose_hint_is_emitted() -> None:
     assert hints[0][0] == WEB_SEARCH_TOOL_NAME
 
 
+def test_default_request_bounds_are_applied() -> None:
+    backend = WebSearchBackend(base_url="http://searxng:8080")
+
+    assert backend._max_results == 5  # noqa: SLF001 - constructor invariant under test
+    assert backend._extract_timeout_s == 5.0  # noqa: SLF001
+    assert backend._extract_concurrency == 5  # noqa: SLF001
+    assert backend._search_timeout_s == 15.0  # noqa: SLF001
+
+
 @pytest.mark.asyncio
 async def test_call_tool_returns_formatted_results_without_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
     _patched_async_client(
@@ -112,7 +123,28 @@ async def test_call_tool_returns_formatted_results_without_extraction(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_call_tool_trims_query_before_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = _patched_async_client(
+        {("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY)},
+        monkeypatch,
+    )
+
+    async with WebSearchBackend(base_url="http://searxng:8080", extract_content=False) as backend:
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": " claude code "})
+
+    assert "[1] Post A" in result
+    search_request = next(r for r in transport.captured if r.url.path == "/search")
+    assert search_request.url.params["q"] == "claude code"
+
+
+@pytest.mark.asyncio
 async def test_call_tool_extracts_content_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gateway.services import url_safety
+
+    async def resolve_public_host(_host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        return [ipaddress.ip_address("93.184.216.34")]
+
+    monkeypatch.setattr(url_safety, "_resolve_all_async", resolve_public_host)
     _patched_async_client(
         {
             ("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY),
@@ -137,6 +169,44 @@ async def test_call_tool_extracts_content_when_enabled(monkeypatch: pytest.Monke
     # Original snippets should NOT be present since extracted content wins.
     assert "snippet about A" not in result
     assert "snippet about B" not in result
+
+
+def test_format_results_for_model_normalizes_result_fields_and_preserves_falsey_defaults() -> None:
+    result = _format_results_for_model(
+        "query",
+        [
+            {
+                "url": " https://example.com/a ",
+                "title": " Result A ",
+                "content": " snippet ",
+                "extracted_content": " extracted ",
+            },
+            {
+                "url": " https://example.com/b ",
+                "title": 0,
+                "content": False,
+                "extracted_content": " ",
+            },
+        ],
+    )
+
+    assert result == "[1] Result A\nhttps://example.com/a\nextracted\n\n[2] (untitled)\nhttps://example.com/b"
+
+
+def test_format_results_for_model_truncates_long_body() -> None:
+    result = _format_results_for_model(
+        "query",
+        [
+            {
+                "url": "https://example.com/long",
+                "title": "Long",
+                "content": "x" * 1600,
+            },
+        ],
+    )
+
+    body = result.rsplit("\n", maxsplit=1)[-1]
+    assert body == ("x" * 1500) + "…"
 
 
 @pytest.mark.asyncio
@@ -195,6 +265,35 @@ async def test_blocked_domains_filter_in_gateway(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+async def test_domain_filters_match_subdomains_without_crossing_host_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = {
+        "results": [
+            {"url": "https://docs.example.com/a", "title": "Allowed subdomain", "content": "a"},
+            {"url": "https://notexample.com/b", "title": "Boundary mismatch", "content": "b"},
+            {"url": "https://api.blocked.example.com/c", "title": "Blocked subdomain", "content": "c"},
+        ]
+    }
+    _patched_async_client(
+        {("searxng", "/search"): httpx.Response(200, json=body)},
+        monkeypatch,
+    )
+
+    async with WebSearchBackend(
+        base_url="http://searxng:8080",
+        extract_content=False,
+        allowed_domains=("example.com",),
+        blocked_domains=("blocked.example.com",),
+    ) as backend:
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "domain filters"})
+
+    assert "Allowed subdomain" in result
+    assert "Boundary mismatch" not in result
+    assert "Blocked subdomain" not in result
+
+
+@pytest.mark.asyncio
 async def test_max_results_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
     body = {
         "results": [
@@ -227,8 +326,9 @@ async def test_backend_unreachable_raises(monkeypatch: pytest.MonkeyPatch) -> No
             await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "x"})
 
 
+@pytest.mark.parametrize("query_value", ["   ", "", None, 0, False])
 @pytest.mark.asyncio
-async def test_empty_query_returns_error_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_empty_query_returns_error_message(query_value: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     # No HTTP call should be made for an empty query — backend short-circuits.
     transport = _patched_async_client(
         {("searxng", "/search"): httpx.Response(200, json=SEARXNG_OK_BODY)},
@@ -236,7 +336,7 @@ async def test_empty_query_returns_error_message(monkeypatch: pytest.MonkeyPatch
     )
 
     async with WebSearchBackend(base_url="http://searxng:8080") as backend:
-        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": "   "})
+        result = await backend.call_tool(WEB_SEARCH_TOOL_NAME, {"query": query_value})
 
     assert "[tool error]" in result
     # Should not have hit /search.
@@ -442,8 +542,13 @@ async def test_fetch_capped_buffer_never_exceeds_max_bytes(monkeypatch: pytest.M
     at ~2x while ``b"".join(...)`` materialised the final bytestring.
     Now the overshooting chunk is truncated to the remaining budget.
     """
+    from gateway.services import url_safety
     from gateway.services import web_search_backend as wsb_module
 
+    async def resolve_public_host(_host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        return [ipaddress.ip_address("93.184.216.34")]
+
+    monkeypatch.setattr(url_safety, "_resolve_all_async", resolve_public_host)
     monkeypatch.setattr(wsb_module, "_FETCH_MAX_BYTES", 1024)
     payload = b"<html>" + b"A" * 4096 + b"</html>"
     _patched_async_client(

@@ -48,6 +48,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"gateway.admin" = ["*.html", "*.css", "*.js"]
+
 [tool.ruff]
 target-version = "py313"
 line-length = 120
@@ -60,6 +63,7 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/generate_openapi.py" = ["E402"]
+"scripts/apply_eval_scores.py" = ["E402"]
 "tests/integration/conftest.py" = ["E402"]
 
 [tool.mypy]
@@ -74,4 +78,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["trafilatura.*"]
 ignore_missing_imports = true
-

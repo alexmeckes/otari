@@ -1,4 +1,5 @@
-from typing import Annotated, Any
+from dataclasses import dataclass
+from typing import Annotated, Any, NoReturn
 
 from any_llm import AnyLLM, amessages
 from any_llm.types.completion import CompletionUsage
@@ -10,40 +11,29 @@ from any_llm.types.messages import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
+from gateway.api.routes._budget_checks import validate_user_request_budget
+from gateway.api.routes._completion_usage import completion_usage_from_token_counts
 from gateway.api.routes._helpers import resolve_user_id
-from gateway.api.routes.chat import get_provider_kwargs, log_usage, rate_limit_headers
+from gateway.api.routes._message_models import MessagesRequest
+from gateway.api.routes._stream_events import format_typed_stream_event
+from gateway.api.routes._usage import (
+    apply_rate_limit_headers,
+    log_usage,
+    optional_rate_limit_headers,
+    provider_model_label,
+)
 from gateway.core.config import GatewayConfig
 from gateway.log_config import logger
 from gateway.models.entities import APIKey
-from gateway.rate_limit import check_rate_limit
-from gateway.services.budget_service import validate_user_budget
+from gateway.rate_limit import RateLimitInfo, check_rate_limit
 from gateway.services.log_writer import LogWriter
+from gateway.services.provider_kwargs import get_provider_kwargs
 from gateway.streaming import ANTHROPIC_STREAM_FORMAT, streaming_generator
 
 router = APIRouter(prefix="/v1", tags=["messages"])
-
-
-class MessagesRequest(BaseModel):
-    """Anthropic Messages API-compatible request."""
-
-    model: str
-    messages: list[dict[str, Any]] = Field(min_length=1)
-    max_tokens: int
-    system: str | list[dict[str, Any]] | None = None
-    temperature: float | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    stream: bool = False
-    stop_sequences: list[str] | None = None
-    tools: list[dict[str, Any]] | None = None
-    tool_choice: dict[str, Any] | None = None
-    metadata: dict[str, Any] | None = None
-    thinking: dict[str, Any] | None = None
-    cache_control: dict[str, Any] | None = None
 
 
 def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPException:
@@ -54,12 +44,246 @@ def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPExc
     )
 
 
-_ERR_INVALID_REQUEST = "invalid_request_error"
-_ERR_API = "api_error"
-_MASTER_KEY_USER_REQUIRED = "When using master key, 'metadata.user_id' is required in request body"
-_API_KEY_VALIDATION_FAILED = "API key validation failed"
-_API_KEY_NO_USER = "API key has no associated user"
-_PROVIDER_ERROR = "The request could not be completed by the provider"
+@dataclass(frozen=True)
+class MessageRequestContext:
+    api_key_id: str | None
+    user_id: str
+
+
+@dataclass(frozen=True)
+class MessageProviderCallContext:
+    provider: Any
+    model: str
+    call_kwargs: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class MessageExecutionContext:
+    message_context: MessageRequestContext
+    rate_limit_info: RateLimitInfo | None
+    provider_call_context: MessageProviderCallContext
+
+    @property
+    def provider_label(self) -> str:
+        return provider_model_label(self.provider_call_context.provider, self.provider_call_context.model)
+
+    def rate_limit_headers(self) -> dict[str, str]:
+        return optional_rate_limit_headers(self.rate_limit_info)
+
+    def apply_rate_limit_headers(self, response: Response) -> None:
+        apply_rate_limit_headers(response, self.rate_limit_info)
+
+    async def log_usage(
+        self,
+        *,
+        db: AsyncSession,
+        log_writer: LogWriter,
+        usage_data: CompletionUsage | None = None,
+        error: str | None = None,
+    ) -> None:
+        await log_usage(
+            db=db,
+            log_writer=log_writer,
+            api_key_id=self.message_context.api_key_id,
+            model=self.provider_call_context.model,
+            provider=self.provider_call_context.provider,
+            endpoint="/v1/messages",
+            user_id=self.message_context.user_id,
+            usage_override=usage_data,
+            error=error,
+        )
+
+
+def _resolve_message_request_context(
+    request: MessagesRequest,
+    auth_result: tuple[APIKey | None, bool],
+) -> MessageRequestContext:
+    api_key, is_master_key = auth_result
+    user_from_metadata = request.metadata.get("user_id") if request.metadata else None
+    user_id = resolve_user_id(
+        user_id_from_request=str(user_from_metadata) if user_from_metadata else None,
+        api_key=api_key,
+        is_master_key=is_master_key,
+        master_key_error=_anthropic_error(
+            "invalid_request_error",
+            "When using master key, 'metadata.user_id' is required in request body",
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        no_api_key_error=_anthropic_error(
+            "api_error",
+            "API key validation failed",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ),
+        no_user_error=_anthropic_error(
+            "api_error",
+            "API key has no associated user",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ),
+    )
+    return MessageRequestContext(
+        api_key_id=api_key.id if api_key else None,
+        user_id=user_id,
+    )
+
+
+def _message_provider_call_context(request: MessagesRequest, config: GatewayConfig) -> MessageProviderCallContext:
+    provider, model = AnyLLM.split_model_provider(request.model)
+    provider_kwargs = get_provider_kwargs(config, provider)
+    request_fields = request.model_dump(exclude_unset=True)
+    return MessageProviderCallContext(
+        provider=provider,
+        model=model,
+        call_kwargs={**provider_kwargs, **request_fields},
+    )
+
+
+async def _message_execution_context(
+    *,
+    raw_request: Request,
+    request: MessagesRequest,
+    auth_result: tuple[APIKey | None, bool],
+    db: AsyncSession,
+    config: GatewayConfig,
+) -> MessageExecutionContext:
+    message_context = _resolve_message_request_context(request, auth_result)
+    rate_limit_info = check_rate_limit(raw_request, message_context.user_id)
+
+    await validate_user_request_budget(db, message_context.user_id, request.model, strategy=config.budget_strategy)
+
+    return MessageExecutionContext(
+        message_context=message_context,
+        rate_limit_info=rate_limit_info,
+        provider_call_context=_message_provider_call_context(request, config),
+    )
+
+
+def _message_streaming_response(
+    *,
+    stream_result: Any,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    execution_context: MessageExecutionContext,
+) -> StreamingResponse:
+    def _extract_usage(event: MessageStreamEvent) -> CompletionUsage | None:
+        if isinstance(event, MessageDeltaEvent):
+            return completion_usage_from_token_counts(
+                input_tokens=event.usage.input_tokens,
+                output_tokens=event.usage.output_tokens,
+            )
+        if isinstance(event, MessageStartEvent):
+            input_tokens = event.message.usage.input_tokens or 0
+            if input_tokens:
+                return completion_usage_from_token_counts(input_tokens=input_tokens, output_tokens=0)
+        return None
+
+    async def _on_complete(usage_data: CompletionUsage) -> None:
+        await execution_context.log_usage(
+            db=db,
+            log_writer=log_writer,
+            usage_data=usage_data,
+        )
+
+    async def _on_error(error: str) -> None:
+        await execution_context.log_usage(
+            db=db,
+            log_writer=log_writer,
+            error=error,
+        )
+
+    return StreamingResponse(
+        streaming_generator(
+            stream=stream_result,
+            format_chunk=format_typed_stream_event,
+            extract_usage=_extract_usage,
+            fmt=ANTHROPIC_STREAM_FORMAT,
+            on_complete=_on_complete,
+            on_error=_on_error,
+            label=execution_context.provider_label,
+        ),
+        media_type="text/event-stream",
+        headers=execution_context.rate_limit_headers(),
+    )
+
+
+async def _message_response_payload(
+    *,
+    result: MessageResponse,
+    response: Response,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    execution_context: MessageExecutionContext,
+) -> dict[str, Any]:
+    usage_data = None
+    if result.usage:
+        usage_data = completion_usage_from_token_counts(
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+        )
+    if usage_data:
+        await execution_context.log_usage(
+            db=db,
+            log_writer=log_writer,
+            usage_data=usage_data,
+        )
+
+    execution_context.apply_rate_limit_headers(response)
+    return result.model_dump(exclude_none=True)
+
+
+async def _log_and_raise_message_provider_error(
+    *,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    execution_context: MessageExecutionContext,
+    error: BaseException,
+) -> NoReturn:
+    await execution_context.log_usage(
+        db=db,
+        log_writer=log_writer,
+        error=str(error),
+    )
+    logger.error(
+        "Provider call failed for %s: %s",
+        execution_context.provider_label,
+        error,
+    )
+    raise _anthropic_error(
+        "api_error",
+        "The request could not be completed by the provider",
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ) from error
+
+
+async def _message_provider_response(
+    *,
+    request: MessagesRequest,
+    response: Response,
+    db: AsyncSession,
+    log_writer: LogWriter,
+    execution_context: MessageExecutionContext,
+) -> dict[str, Any] | StreamingResponse:
+    provider_call_context = execution_context.provider_call_context
+    call_kwargs = dict(provider_call_context.call_kwargs)
+    if request.stream:
+        call_kwargs["stream"] = True
+
+    if request.stream:
+        msg_stream = await amessages(**call_kwargs)
+        return _message_streaming_response(
+            stream_result=msg_stream,
+            db=db,
+            log_writer=log_writer,
+            execution_context=execution_context,
+        )
+
+    result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
+    return await _message_response_payload(
+        result=result,
+        response=response,
+        db=db,
+        log_writer=log_writer,
+        execution_context=execution_context,
+    )
 
 
 @router.post("/messages", response_model=None)
@@ -73,151 +297,29 @@ async def create_message(
     log_writer: Annotated[LogWriter, Depends(get_log_writer)],
 ) -> dict[str, Any] | StreamingResponse:
     """Anthropic Messages API-compatible endpoint."""
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-    user_from_metadata = request.metadata.get("user_id") if request.metadata else None
-    user_id = resolve_user_id(
-        user_id_from_request=str(user_from_metadata) if user_from_metadata else None,
-        api_key=api_key,
-        is_master_key=is_master_key,
-        master_key_error=_anthropic_error(
-            _ERR_INVALID_REQUEST,
-            _MASTER_KEY_USER_REQUIRED,
-            status.HTTP_400_BAD_REQUEST,
-        ),
-        no_api_key_error=_anthropic_error(
-            _ERR_API,
-            _API_KEY_VALIDATION_FAILED,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ),
-        no_user_error=_anthropic_error(
-            _ERR_API,
-            _API_KEY_NO_USER,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ),
+    execution_context = await _message_execution_context(
+        raw_request=raw_request,
+        request=request,
+        auth_result=auth_result,
+        db=db,
+        config=config,
     )
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
-
-    provider, model = AnyLLM.split_model_provider(request.model)
-
-    provider_kwargs = get_provider_kwargs(config, provider)
-
-    # Request fields take precedence over provider config defaults
-    request_fields = request.model_dump(exclude_unset=True)
-    call_kwargs: dict[str, Any] = {**provider_kwargs, **request_fields}
-
     try:
-        if request.stream:
-            call_kwargs["stream"] = True
-
-            def _format_chunk(event: MessageStreamEvent) -> str:
-                return f"event: {event.type}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
-
-            def _extract_usage(event: MessageStreamEvent) -> CompletionUsage | None:
-                if isinstance(event, MessageDeltaEvent):
-                    input_tokens = event.usage.input_tokens or 0
-                    output_tokens = event.usage.output_tokens or 0
-                    return CompletionUsage(
-                        prompt_tokens=input_tokens,
-                        completion_tokens=output_tokens,
-                        total_tokens=input_tokens + output_tokens,
-                    )
-                if isinstance(event, MessageStartEvent):
-                    input_tokens = event.message.usage.input_tokens or 0
-                    if input_tokens:
-                        return CompletionUsage(
-                            prompt_tokens=input_tokens,
-                            completion_tokens=0,
-                            total_tokens=input_tokens,
-                        )
-                return None
-
-            async def _on_complete(usage_data: CompletionUsage) -> None:
-                await log_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    api_key_id=api_key_id,
-                    model=model,
-                    provider=provider,
-                    endpoint="/v1/messages",
-                    user_id=user_id,
-                    usage_override=usage_data,
-                )
-
-            async def _on_error(error: str) -> None:
-                await log_usage(
-                    db=db,
-                    log_writer=log_writer,
-                    api_key_id=api_key_id,
-                    model=model,
-                    provider=provider,
-                    endpoint="/v1/messages",
-                    user_id=user_id,
-                    error=error,
-                )
-
-            msg_stream = await amessages(**call_kwargs)
-            rl_headers = rate_limit_headers(rate_limit_info) if rate_limit_info else {}
-            return StreamingResponse(
-                streaming_generator(
-                    stream=msg_stream,  # type: ignore[arg-type]
-                    format_chunk=_format_chunk,
-                    extract_usage=_extract_usage,
-                    fmt=ANTHROPIC_STREAM_FORMAT,
-                    on_complete=_on_complete,
-                    on_error=_on_error,
-                    label=f"{provider}:{model}",
-                ),
-                media_type="text/event-stream",
-                headers=rl_headers,
-            )
-
-        result: MessageResponse = await amessages(**call_kwargs)  # type: ignore[assignment]
-
-        if result.usage:
-            usage_data = CompletionUsage(
-                prompt_tokens=result.usage.input_tokens,
-                completion_tokens=result.usage.output_tokens,
-                total_tokens=result.usage.input_tokens + result.usage.output_tokens,
-            )
-            await log_usage(
-                db=db,
-                log_writer=log_writer,
-                api_key_id=api_key_id,
-                model=model,
-                provider=provider,
-                endpoint="/v1/messages",
-                user_id=user_id,
-                usage_override=usage_data,
-            )
+        return await _message_provider_response(
+            request=request,
+            response=response,
+            db=db,
+            log_writer=log_writer,
+            execution_context=execution_context,
+        )
 
     except HTTPException:
         raise
     except Exception as e:
-        await log_usage(
+        await _log_and_raise_message_provider_error(
             db=db,
             log_writer=log_writer,
-            api_key_id=api_key_id,
-            model=model,
-            provider=provider,
-            endpoint="/v1/messages",
-            user_id=user_id,
-            error=str(e),
+            execution_context=execution_context,
+            error=e,
         )
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
-        raise _anthropic_error(
-            _ERR_API,
-            _PROVIDER_ERROR,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        ) from e
-
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
-
-    return result.model_dump(exclude_none=True)

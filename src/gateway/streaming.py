@@ -36,9 +36,6 @@ class StreamFormat:
 
 
 _OPENAI_ERROR = json.dumps({"error": {"message": "An error occurred during streaming", "type": "server_error"}})
-_ANTHROPIC_ERROR = json.dumps(
-    {"type": "error", "error": {"type": "api_error", "message": "An error occurred during streaming"}}
-)
 
 OPENAI_STREAM_FORMAT = StreamFormat(
     done_marker="data: [DONE]\n\n",
@@ -54,13 +51,16 @@ RESPONSES_STREAM_FORMAT = StreamFormat(
 
 ANTHROPIC_STREAM_FORMAT = StreamFormat(
     done_marker="event: done\ndata: {}\n\n",
-    error_payload=f"event: error\ndata: {_ANTHROPIC_ERROR}\n\n",
+    error_payload=(
+        'event: error\ndata: {"type": "error", "error": {"type": "api_error", '
+        '"message": "An error occurred during streaming"}}\n\n'
+    ),
     yield_done_on_error=False,
 )
 
 
-def _merge_usage(current: CompletionUsage, update: CompletionUsage) -> CompletionUsage:
-    """Merge usage data, keeping the last non-zero value for each field."""
+def _combine_usage(current: CompletionUsage, update: CompletionUsage) -> CompletionUsage:
+    """Combine usage data, keeping the last non-zero value for each field."""
     return CompletionUsage(
         prompt_tokens=update.prompt_tokens or current.prompt_tokens,
         completion_tokens=update.completion_tokens or current.completion_tokens,
@@ -96,7 +96,7 @@ async def streaming_generator(
         async for chunk in stream:
             chunk_usage = extract_usage(chunk)
             if chunk_usage:
-                usage = _merge_usage(usage, chunk_usage)
+                usage = _combine_usage(usage, chunk_usage)
                 has_usage = True
             yield format_chunk(chunk)
         yield fmt.done_marker

@@ -1,24 +1,70 @@
-# otari gateway
+# LLM Routing Gateway
 
-[![Tests](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-tests.yml/badge.svg)](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-tests.yml)
-[![Lint](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-lint.yml/badge.svg)](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-lint.yml)
-[![Typecheck](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-typecheck.yml/badge.svg)](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-typecheck.yml)
-[![Docker](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-docker.yml/badge.svg)](https://github.com/mozilla-ai/gateway/actions/workflows/gateway-docker.yml)
+[![Tests](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-tests.yml/badge.svg)](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-tests.yml)
+[![Lint](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-lint.yml/badge.svg)](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-lint.yml)
+[![Typecheck](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-typecheck.yml/badge.svg)](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-typecheck.yml)
+[![Docker](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-docker.yml/badge.svg)](https://github.com/alexmeckes/llm-routing-gateway/actions/workflows/gateway-docker.yml)
 ![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)
 
-OpenAI-compatible LLM gateway with API key management, budget enforcement, and usage tracking.
+Self-hosted LLM routing control plane built on top of Otari Gateway and AnyLLM.
+It keeps Otari's OpenAI-compatible provider gateway foundation, then adds
+database-backed routing policies, project/tag attribution, route traces,
+operator controls, and governance workflows.
 
 </div>
+
+## Relationship to Otari core
+
+Otari core is the gateway foundation: OpenAI-compatible endpoints, AnyLLM
+provider dispatch, direct `provider:model` calls, local keys/users/budgets,
+usage and pricing records, platform mode, and built-in tools.
+
+This project preserves that foundation and adds a self-hosted control plane for
+operator-managed routing:
+
+| Area | Otari core | This project |
+|------|------------|--------------|
+| Model selection | Caller chooses a concrete `provider:model` | Caller can use `default_routing`; the gateway resolves the provider/model from policy |
+| Policy management | Static provider config and direct request parameters | Database-backed routing policies with lifecycle, revisions, rollback, and canary rollout |
+| Tenant control | Users, keys, and budgets | Projects, tags, project/tag budgets, and policy selection by project or tag conditions |
+| Routing signals | Direct dispatch through AnyLLM | Cost, latency, quality/eval scores, passive provider health, region constraints, fallback chains |
+| Observability | Usage logs and pricing records | Route traces, dry-run routing, endpoint-aware summaries, served model/vendor metadata |
+| Governance | Request auth and budget checks | Policy guardrails, redaction, prompt-injection checks, context trimming/summarization |
+| Operations | API docs and core gateway endpoints | Packaged `/admin` operator frontend plus routing demos and capability docs |
+
+In short: Otari core is the multi-provider gateway runtime; this project turns
+that runtime into a policy-driven routing gateway operators can manage without a
+hosted control plane.
 
 ## Why gateway?
 
 `gateway` sits between your applications and LLM providers so you can control access, cost, and observability in one place.
 
-- OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/embeddings`, `/v1/models`)
+- OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/models`)
 - Virtual API key management (`/v1/keys`) for safe client access
 - User and budget controls (`/v1/users`, `/v1/budgets`)
+- Project-scoped routing and budget controls (`/v1/projects`)
+- Tag-scoped team/customer-tier budget groups from request `tags`
+- Budget alert thresholds, durable alert events, optional webhooks, and background delivery retries before hard caps
 - Usage and pricing tracking (`/v1/messages`, `/v1/pricing`)
-- Health and metrics endpoints (`/health`, optional `/metrics`)
+- Database-backed routing policies with `model: "default_routing"`, passive provider health, and weighted custom scoring
+- Eval/benchmark score imports and local generated-eval pipelines for tuning weighted routing candidates
+- Omitted/null/case-insensitive `default_routing` request handling
+- Immutable routing policy revision history for auditability
+- Draft/active/archived routing policy states plus clone-to-draft rollout flow
+- Audited rollback by applying previous routing policy revisions
+- Tag-condition routing and deterministic canary rollout with percentage buckets
+- Region-aware model constraints driven by request tags and candidate metadata
+- Policy guardrails for routed request DLP, redaction, credential-leak, and prompt-injection checks, including managed presets and external classifier hooks
+- Policy context trimming and summarization for long routed conversations before provider dispatch
+- `default_strategy` policy definitions for fallback, intelligent, and weighted-score routing
+- Responses include the canonical served model and execution vendor
+- Dry-run route resolution (`/v1/routing/resolve`) and endpoint-aware route traces for inspecting policy decisions
+- Project/tag-attributed usage logs and summary rollups for billing and analytics exports
+- Packaged operator frontend at `/admin` for policies, projects, dry-run routing, traces, usage, budgets, alerts, and revision rollback
+- Local routing gateway walkthrough in [`demo/routing-gateway`](demo/routing-gateway)
+- Routing gateway capability map in [`docs/routing-gateway-capabilities.md`](docs/routing-gateway-capabilities.md)
+- Health and metrics endpoints (`/health`, optional `/metrics`) including request, token, cost, budget, alert webhook, retry, and dead-letter counters
 - Built-in tools dispatched server-side — `code_execution` (sandboxed Python REPL) and `web_search`. See [Built-in tools](#built-in-tools).
 
 ## Quickstart
@@ -201,13 +247,21 @@ alongside `GATEWAY_WEB_SEARCH_URL`.
 ## API surface
 
 - `GET /health`
+- `GET /admin`
 - `POST /v1/chat/completions`
+- `POST /v1/responses`
 - `POST /v1/embeddings`
 - `POST /v1/moderations`
 - `GET /v1/models`
+- `GET /v1/vendors`
 - `POST/GET /v1/keys`
 - `POST/GET /v1/users`
 - `POST/GET /v1/budgets`
+- `GET /v1/budgets/alerts`
+- `POST /v1/routing/resolve`
+- `POST/GET /v1/routing-policies`
+- `POST/GET /v1/projects`
+- `GET /v1/route-traces`
 - `GET /v1/messages`
 - `GET /v1/pricing`
 

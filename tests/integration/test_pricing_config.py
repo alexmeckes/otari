@@ -8,11 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from gateway.api.routes.chat import log_usage
+from gateway.api.routes._usage import log_usage
 from gateway.core.config import GatewayConfig, PricingConfig
 from gateway.db import ModelPricing, get_db
 from gateway.main import create_app
 from gateway.models.entities import UsageLog
+from gateway.services.pricing_service import normalize_effective_at
 
 from .conftest import build_async_session_override
 
@@ -85,7 +86,7 @@ def test_pricing_loaded_with_explicit_effective_at(postgres_url: str, test_db: S
         with TestClient(app):
             pricing = test_db.query(ModelPricing).filter(ModelPricing.model_key == "openai:gpt-4").first()
             assert pricing is not None
-            assert pricing.effective_at == effective_at
+            assert normalize_effective_at(pricing.effective_at) == effective_at
     finally:
         dispose_override()
 

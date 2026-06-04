@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from fastapi import HTTPException, status
+
 if TYPE_CHECKING:
-    from fastapi import HTTPException
-
     from gateway.db import APIKey
-
 
 def resolve_user_id(
     user_id_from_request: str | None,
@@ -49,3 +48,28 @@ def resolve_user_id(
     if not api_key.user_id:
         raise no_user_error
     return str(api_key.user_id)
+
+
+def resolve_openai_user_id(
+    *,
+    user_id_from_request: str | None,
+    api_key: APIKey | None,
+    is_master_key: bool,
+) -> str:
+    return resolve_user_id(
+        user_id_from_request=user_id_from_request,
+        api_key=api_key,
+        is_master_key=is_master_key,
+        master_key_error=HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="When using master key, 'user' field is required in request body",
+        ),
+        no_api_key_error=HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API key validation failed",
+        ),
+        no_user_error=HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API key has no associated user",
+        ),
+    )

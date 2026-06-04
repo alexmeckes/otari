@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM Routing Gateway Admin</title>
+    <link rel="stylesheet" href="/admin/assets/styles.css" />
+    <script type="module" src="/admin/assets/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Self-hosted control plane</p>
+        <h1>LLM Routing Gateway Admin</h1>
+      </div>
+      <form class="authbar" id="auth-form">
+        <label class="sr-only" for="master-key">Master key</label>
+        <input id="master-key" type="password" autocomplete="off" placeholder="Master key" />
+        <button class="primary" type="submit">Connect</button>
+        <button id="refresh-all" type="button">Refresh</button>
+      </form>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="connection-panel">
+          <span class="label">Connection</span>
+          <strong id="connection-state">Disconnected</strong>
+          <span id="last-updated">Not loaded</span>
+        </div>
+        <nav class="tabs" id="tabs" aria-label="Admin sections">
+          <button class="tab active" type="button" data-view="overview">Overview</button>
+          <button class="tab" type="button" data-view="policies">Policies</button>
+          <button class="tab" type="button" data-view="projects">Projects</button>
+          <button class="tab" type="button" data-view="resolver">Resolver</button>
+          <button class="tab" type="button" data-view="traces">Traces</button>
+          <button class="tab" type="button" data-view="usage">Usage</button>
+          <button class="tab" type="button" data-view="budgets">Budgets</button>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <section class="view active" id="view-overview">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Live posture</p>
+              <h2>Overview</h2>
+            </div>
+          </div>
+          <div class="metric-grid" id="overview-metrics"></div>
+          <div class="split-grid">
+            <section class="panel">
+              <div class="panel-head"><h3>Default routing policy</h3></div>
+              <div class="panel-body" id="default-policy"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h3>Routing mix</h3></div>
+              <div class="panel-body" id="routing-mix"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-policies">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Control plane</p>
+              <h2>Routing policies</h2>
+            </div>
+            <div class="toolbar">
+              <select id="policy-status-filter" aria-label="Policy status">
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
+              </select>
+              <button type="button" data-action="create-policy">Create policy</button>
+            </div>
+          </div>
+          <div class="table-panel" id="policies-table"></div>
+        </section>
+
+        <section class="view" id="view-projects">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Tenants and apps</p>
+              <h2>Projects</h2>
+            </div>
+            <button type="button" data-action="create-project">Create project</button>
+          </div>
+          <div class="table-panel" id="projects-table"></div>
+        </section>
+
+        <section class="view" id="view-resolver">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Dry run</p>
+              <h2>Route resolver</h2>
+            </div>
+            <button class="primary" type="button" id="run-resolver">Resolve route</button>
+          </div>
+          <div class="editor-grid">
+            <section class="panel">
+              <div class="panel-head"><h3>Request</h3></div>
+              <textarea id="resolver-payload" spellcheck="false"></textarea>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h3>Decision</h3></div>
+              <div class="panel-body" id="resolver-result"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-traces">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Decision log</p>
+              <h2>Route traces</h2>
+            </div>
+            <div class="toolbar">
+              <select id="trace-project-filter" aria-label="Trace project"></select>
+              <select id="trace-policy-filter" aria-label="Trace policy"></select>
+              <select id="trace-status-filter" aria-label="Trace status">
+                <option value="">All statuses</option>
+                <option value="success">Success</option>
+                <option value="error">Error</option>
+              </select>
+              <button type="button" id="reload-traces">Reload</button>
+            </div>
+          </div>
+          <div class="table-panel" id="traces-table"></div>
+        </section>
+
+        <section class="view" id="view-usage">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Billing and analytics</p>
+              <h2>Usage</h2>
+            </div>
+            <div class="toolbar">
+              <select id="usage-project-filter" aria-label="Usage project"></select>
+              <button type="button" id="reload-usage">Reload</button>
+            </div>
+          </div>
+          <div class="metric-grid compact" id="usage-metrics"></div>
+          <div class="split-grid">
+            <section class="panel">
+              <div class="panel-head"><h3>Breakdown</h3></div>
+              <div class="panel-body" id="usage-breakdown"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h3>Recent requests</h3></div>
+              <div id="usage-table"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-budgets">
+          <div class="view-head">
+            <div>
+              <p class="eyebrow">Spend controls</p>
+              <h2>Budgets and alerts</h2>
+            </div>
+            <button type="button" data-action="create-budget">Create budget</button>
+          </div>
+          <div class="split-grid">
+            <section class="panel">
+              <div class="panel-head"><h3>Budgets</h3></div>
+              <div id="budgets-table"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h3>Budget alerts</h3></div>
+              <div id="alerts-table"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">Details</h2>
+        <button type="button" id="modal-close">Close</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

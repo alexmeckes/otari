@@ -1,0 +1,114 @@
+"""Shared config value parsers for gateway services."""
+
+from collections.abc import Mapping
+from typing import Any
+
+
+def dict_or_empty(value: Any, *, copy_value: bool = False) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    if copy_value:
+        return dict(value)
+    return value
+
+
+def nested_dict_or_empty(config: Mapping[str, Any], primary_key: str, fallback_key: str) -> dict[str, Any]:
+    primary = config.get(primary_key)
+    if isinstance(primary, dict):
+        return primary
+    return dict_or_empty(config.get(fallback_key))
+
+
+def string_or_none(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def lower_string_or_none(value: Any) -> str | None:
+    parsed = string_or_none(value)
+    return parsed.lower() if parsed is not None else None
+
+
+def coerced_lower_string(value: Any) -> str:
+    return str(value).strip().lower()
+
+
+def coerced_string_or_none(value: Any) -> str | None:
+    parsed = str(value).strip()
+    return parsed or None
+
+
+def string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [item for value_item in value if (item := coerced_string_or_none(value_item)) is not None]
+    return [parsed] if (parsed := string_or_none(value)) is not None else []
+
+
+def comma_separated_string_list(value: Any) -> list[str]:
+    parsed = string_or_none(value)
+    if parsed is None:
+        return []
+    return [item for part in parsed.split(",") if (item := string_or_none(part)) is not None]
+
+
+def int_config(value: Any, default: int) -> int:
+    if isinstance(value, int) and value > 0:
+        return value
+    return default
+
+
+def non_negative_int_config(value: Any, default: int) -> int:
+    if isinstance(value, int) and value >= 0:
+        return value
+    return default
+
+
+def bool_config(value: Any, default: bool, *, coerce_strings: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if coerce_strings:
+        lowered = lower_string_or_none(value)
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
+def float_or_none(value: Any, *, coerce_strings: bool = False, allow_percent: bool = False) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if coerce_strings and isinstance(value, str):
+        normalized = string_or_none(value)
+        if normalized is None:
+            return None
+        if allow_percent and normalized.endswith("%"):
+            normalized = string_or_none(normalized[:-1])
+            if normalized is None:
+                return None
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
+    return None
+
+
+def non_negative_float_or_none(value: Any) -> float | None:
+    parsed = float_or_none(value)
+    if parsed is None or parsed < 0:
+        return None
+    return parsed
+
+
+def score_or_none(value: Any) -> float | None:
+    parsed = non_negative_float_or_none(value)
+    if parsed is None:
+        return None
+    if parsed <= 1.0:
+        return parsed
+    if parsed <= 100.0:
+        return parsed / 100.0
+    return None

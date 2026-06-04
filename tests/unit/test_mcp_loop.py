@@ -27,10 +27,10 @@ from gateway.services import mcp_loop as mcp_loop_module
 from gateway.services.mcp_loop import (
     MaxToolIterationsExceeded,
     _accumulate_tool_call_deltas,
-    _finalize_tool_calls,
     inject_purpose_hints,
     mcp_tool_loop,
     mcp_tool_loop_stream,
+    tool_loop_completion_kwargs,
 )
 
 _FinishReason = Literal["stop", "length", "tool_calls", "content_filter", "function_call"]
@@ -156,7 +156,20 @@ def test_inject_purpose_hints_extends_existing_system() -> None:
     assert "cal" in out[0]["content"]
 
 
-def test_finalize_tool_calls_orders_by_index() -> None:
+def test_tool_loop_completion_kwargs_injects_purpose_hints_without_mutating_original() -> None:
+    original = {"model": "fake", "messages": [{"role": "user", "content": "hi"}]}
+    pool = _FakePool(tool_names=["calendar"], purpose_hints=[("calendar", "for scheduling")])
+
+    out = tool_loop_completion_kwargs(original, pool, header="Use tools carefully:")
+
+    assert out["model"] == "fake"
+    assert out["messages"][0]["role"] == "system"
+    assert "Use tools carefully:" in out["messages"][0]["content"]
+    assert "calendar" in out["messages"][0]["content"]
+    assert original["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_accumulate_tool_call_deltas_keeps_slots_by_index() -> None:
     slots: dict[int, dict[str, Any]] = {}
     _accumulate_tool_call_deltas(
         slots,
@@ -165,8 +178,8 @@ def test_finalize_tool_calls_orders_by_index() -> None:
             ChoiceDeltaToolCall(index=0, id="a", type="function", function=DeltaFn(name="t1", arguments="{}")),
         ],
     )
-    out = _finalize_tool_calls(slots)
-    assert [c["id"] for c in out] == ["a", "b"]
+    assert slots[0]["id"] == "a"
+    assert slots[1]["id"] == "b"
 
 
 def test_accumulate_concatenates_argument_chunks() -> None:
@@ -179,8 +192,7 @@ def test_accumulate_concatenates_argument_chunks() -> None:
         slots,
         [ChoiceDeltaToolCall(index=0, id=None, type=None, function=DeltaFn(name=None, arguments=' "y"}'))],
     )
-    out = _finalize_tool_calls(slots)
-    assert json.loads(out[0]["function"]["arguments"]) == {"x": "y"}
+    assert json.loads(slots[0]["function"]["arguments"]) == {"x": "y"}
 
 
 # ---------- non-streaming loop ----------
@@ -427,6 +439,38 @@ async def test_stream_loop_runs_mcp_tool_and_continues(monkeypatch: pytest.Monke
     # `tool_calls` terminal is suppressed.
     assert finishes == ["stop"]
     assert pool.calls == [("fetch_url", {})]
+
+
+@pytest.mark.asyncio
+async def test_stream_loop_executes_accumulated_tool_calls_by_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    iter_streams = iter(
+        [
+            _async_iter(
+                _chunk(
+                    tool_calls=[
+                        (1, "call_2", "second_tool", "{}"),
+                        (0, "call_1", "first_tool", "{}"),
+                    ],
+                ),
+                _chunk(finish="tool_calls"),
+            ),
+            _async_iter(_chunk(content="done", finish="stop")),
+        ]
+    )
+
+    async def fake_acompletion(**kwargs: Any) -> AsyncIterator[ChatCompletionChunk]:
+        return next(iter_streams)
+
+    monkeypatch.setattr(mcp_loop_module, "acompletion", fake_acompletion)
+
+    pool = _FakePool(tool_names=["first_tool", "second_tool"])
+    async for _chunk_out in mcp_tool_loop_stream(
+        completion_kwargs={"model": "fake", "messages": [{"role": "user", "content": "go"}]},
+        pool=pool,  # type: ignore[arg-type]
+        max_iterations=5,
+    ):
+        pass
+    assert pool.calls == [("first_tool", {}), ("second_tool", {})]
 
 
 @pytest.mark.asyncio

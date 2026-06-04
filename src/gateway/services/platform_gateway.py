@@ -1,0 +1,296 @@
+"""Platform-mode gateway calls for credentials, MCP servers, and usage reports."""
+
+import asyncio
+import uuid
+from collections.abc import Mapping
+from contextlib import suppress
+from typing import Any, NoReturn
+
+import httpx
+from any_llm.types.completion import CompletionUsage
+from fastapi import HTTPException, Request, status
+from pydantic import BaseModel
+
+from gateway.core.config import GatewayConfig
+from gateway.models.mcp import McpServerConfig
+from gateway.services.platform_config import (
+    platform_base_url,
+    platform_int_setting,
+    platform_timeout_seconds,
+    platform_url,
+)
+from gateway.services.pricing_service import pricing_model_ref
+from gateway.services.routing_config_values import string_or_none
+from gateway.services.routing_policy_shape import split_model_selector
+
+
+class ResolvedAttempt(BaseModel):
+    """A single resolution attempt returned by the platform."""
+
+    attempt_id: str
+    position: int
+    provider: str
+    model: str
+    api_base: str | None = None
+    api_key: str
+    managed: bool
+
+    @property
+    def model_selector(self) -> str:
+        return pricing_model_ref(self.provider, self.model)
+
+    @property
+    def provider_kwargs(self) -> dict[str, str]:
+        kwargs = {"api_key": self.api_key}
+        if self.api_base:
+            kwargs["api_base"] = self.api_base
+        return kwargs
+
+
+class ResolvedRoute(BaseModel):
+    """The full resolution plan returned by the platform."""
+
+    request_id: str
+    fallback_enabled: bool
+    attempts: list[ResolvedAttempt]
+
+
+def extract_platform_user_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+        )
+    token = string_or_none(auth_header[7:])
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+        )
+    return token
+
+
+def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
+    if response.status_code in {401, 402, 403, 404, 429}:
+        detail = passthrough_fallback
+        with suppress(ValueError):
+            payload = response.json()
+            platform_detail = payload.get("detail") if isinstance(payload, dict) else None
+            if isinstance(platform_detail, str):
+                detail = platform_detail
+        headers: dict[str, str] | None = None
+        if response.status_code == 429 and response.headers.get("Retry-After"):
+            headers = {"Retry-After": response.headers["Retry-After"]}
+        raise HTTPException(status_code=response.status_code, detail=detail, headers=headers)
+
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Authorization service unavailable",
+    )
+
+
+async def _post_platform(
+    url: str,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    timeout_seconds: float,
+) -> httpx.Response:
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        return await client.post(url, headers=headers, json=body)
+
+
+async def _post_platform_resolution(
+    config: GatewayConfig,
+    user_token: str,
+    path: str,
+    body: dict[str, Any],
+) -> httpx.Response:
+    base_url = platform_base_url(config)
+    if not base_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Platform mode is misconfigured",
+        )
+    resolve_url = platform_url(base_url, path)
+    headers = {
+        "X-Gateway-Token": config.platform_token or "",
+        "X-User-Token": user_token,
+    }
+    try:
+        return await _post_platform(
+            url=resolve_url,
+            headers=headers,
+            body=body,
+            timeout_seconds=platform_timeout_seconds(config, "resolve_timeout_ms"),
+        )
+    except (httpx.TimeoutException, httpx.NetworkError):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Authorization service unavailable",
+        ) from None
+
+
+async def resolve_platform_credentials(
+    config: GatewayConfig,
+    user_token: str,
+    model_selector: str,
+) -> ResolvedRoute:
+    provider, model_name = split_model_selector(model_selector)
+    resolve_body: dict[str, Any] = {"model": model_name}
+    if provider:
+        resolve_body["provider"] = provider
+
+    response = await _post_platform_resolution(
+        config,
+        user_token,
+        "/gateway/provider-keys/resolve",
+        resolve_body,
+    )
+
+    if response.status_code == 200:
+        payload = response.json()
+        return parse_resolve_payload(payload)
+
+    _raise_platform_resolution_error(response, "Authorization request rejected")
+
+
+def parse_resolve_payload(payload: dict[str, Any]) -> ResolvedRoute:
+    """Build a ResolvedRoute from the current or legacy platform payload shape."""
+    attempts_payload = payload.get("attempts")
+    if attempts_payload is not None:
+        attempts = [_resolved_attempt_from_payload(att) for att in attempts_payload]
+        return ResolvedRoute(
+            request_id=str(payload["request_id"]),
+            fallback_enabled=bool(payload.get("fallback_enabled", False)),
+            attempts=attempts,
+        )
+
+    correlation_id = str(payload["correlation_id"])
+    return ResolvedRoute(
+        request_id=correlation_id,
+        fallback_enabled=False,
+        attempts=[_resolved_attempt_from_payload(payload, attempt_id=correlation_id, position=0)],
+    )
+
+
+def _resolved_attempt_from_payload(
+    payload: Mapping[str, Any],
+    *,
+    attempt_id: str | None = None,
+    position: int | None = None,
+) -> ResolvedAttempt:
+    return ResolvedAttempt(
+        attempt_id=str(payload["attempt_id"] if attempt_id is None else attempt_id),
+        position=int(payload["position"] if position is None else position),
+        provider=str(payload["provider"]),
+        model=str(payload["model"]),
+        api_base=payload.get("api_base"),
+        api_key=str(payload["api_key"]),
+        managed=bool(payload.get("managed", False)),
+    )
+
+
+def classify_upstream_error(exc: BaseException) -> tuple[bool, str]:
+    """Return whether an upstream provider error can fall back, plus its class."""
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError, httpx.TimeoutException)):
+        return True, "timeout"
+    if isinstance(exc, httpx.NetworkError):
+        return True, "conn_err"
+
+    status_code = getattr(exc, "status_code", None)
+    if not isinstance(status_code, int):
+        response = getattr(exc, "response", None)
+        response_status = getattr(response, "status_code", None) if response is not None else None
+        if not isinstance(response_status, int):
+            return False, "unknown"
+        status_code = response_status
+
+    error_class = f"http_{status_code}"
+    if status_code in {400, 422}:
+        return False, error_class
+    # 401/403 are retryable because multi-attempt routing policies can handle
+    # credential outages by falling back to another configured provider.
+    if status_code in {401, 403, 408, 429} or 500 <= status_code <= 599:
+        return True, error_class
+    return False, error_class
+
+
+async def resolve_platform_mcp_servers(
+    config: GatewayConfig,
+    user_token: str,
+    mcp_server_ids: list[uuid.UUID],
+) -> list[McpServerConfig]:
+    """Swap workspace-scoped MCP server ids for inline configs by calling the platform."""
+    body: dict[str, Any] = {"mcp_server_ids": [str(uid) for uid in mcp_server_ids]}
+    response = await _post_platform_resolution(
+        config,
+        user_token,
+        "/gateway/mcp-servers/resolve",
+        body,
+    )
+
+    if response.status_code == 200:
+        payload = response.json()
+        return [
+            McpServerConfig(
+                name=server["name"],
+                url=server["url"],
+                authorization_token=server.get("authorization_token"),
+                purpose_hint=server.get("purpose_hint"),
+                allowed_tools=server.get("allowed_tools"),
+            )
+            for server in payload.get("servers", [])
+        ]
+
+    _raise_platform_resolution_error(response, "MCP server resolution failed")
+
+
+async def report_platform_usage(
+    config: GatewayConfig,
+    correlation_id: str,
+    outcome: str,
+    usage: CompletionUsage | None,
+    error_class: str | None = None,
+) -> None:
+    base_url = platform_base_url(config)
+    if not base_url:
+        return
+    usage_url = platform_url(base_url, "/gateway/usage")
+    headers = {"X-Gateway-Token": config.platform_token or ""}
+    timeout_seconds = platform_timeout_seconds(config, "usage_timeout_ms")
+    max_retries = platform_int_setting(config, "usage_max_retries", 3)
+
+    payload: dict[str, Any] = {"correlation_id": correlation_id, "status": outcome}
+    if outcome == "success":
+        token_usage = usage or CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+        payload["usage"] = {
+            "prompt_tokens": token_usage.prompt_tokens,
+            "completion_tokens": token_usage.completion_tokens,
+            "total_tokens": token_usage.total_tokens,
+        }
+    elif error_class is not None:
+        payload["error_class"] = error_class
+
+    delay_seconds = 0.25
+    for attempt in range(1, max_retries + 1):
+        should_retry = False
+        try:
+            response = await _post_platform(
+                url=usage_url,
+                headers=headers,
+                body=payload,
+                timeout_seconds=timeout_seconds,
+            )
+            if response.status_code == 204 or response.status_code in {401, 404, 409, 422}:
+                should_retry = False
+            else:
+                should_retry = response.status_code >= 500
+        except (httpx.TimeoutException, httpx.NetworkError):
+            should_retry = True
+
+        if not should_retry or attempt == max_retries:
+            return
+
+        await asyncio.sleep(delay_seconds)
+        delay_seconds *= 2

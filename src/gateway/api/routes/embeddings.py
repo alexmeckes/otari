@@ -1,37 +1,20 @@
 """OpenAI-compatible embeddings endpoint."""
 
-import uuid
-from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated
 
-from any_llm import AnyLLM, aembedding
+from any_llm import aembedding
 from any_llm.types.completion import CreateEmbeddingResponse
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_config, get_db, get_log_writer, verify_api_key_or_master_key
-from gateway.api.routes._helpers import resolve_user_id
-from gateway.api.routes.chat import get_provider_kwargs, rate_limit_headers
+from gateway.api.routes._embedding_models import EmbeddingRequest
+from gateway.api.routes._provider_context import resolve_openai_provider_request_context
 from gateway.core.config import GatewayConfig
-from gateway.log_config import logger
-from gateway.models.entities import APIKey, UsageLog
-from gateway.rate_limit import check_rate_limit
-from gateway.services.budget_service import validate_user_budget
+from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
-from gateway.services.pricing_service import find_model_pricing
 
 router = APIRouter(prefix="/v1", tags=["embeddings"])
-
-
-class EmbeddingRequest(BaseModel):
-    """OpenAI-compatible embedding request."""
-
-    model: str
-    input: str | list[str] = Field(description="Input text to embed")
-    user: str | None = None
-    encoding_format: str | None = None
-    dimensions: int | None = None
 
 
 @router.post("/embeddings", response_model=None)
@@ -51,100 +34,46 @@ async def create_embedding(
     - API key + user field: Use specified user (must exist)
     - API key without user field: Use virtual user created with API key
     """
-    api_key, is_master_key = auth_result
-    api_key_id = api_key.id if api_key else None
-
-    user_id = resolve_user_id(
-        user_id_from_request=request.user,
-        api_key=api_key,
-        is_master_key=is_master_key,
-        master_key_error=HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="When using master key, 'user' field is required in request body",
-        ),
-        no_api_key_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key validation failed",
-        ),
-        no_user_error=HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key has no associated user",
-        ),
+    context = await resolve_openai_provider_request_context(
+        raw_request=raw_request,
+        auth_result=auth_result,
+        user=request.user,
+        db=db,
+        config=config,
+        model=request.model,
     )
 
-    rate_limit_info = check_rate_limit(raw_request, user_id)
-
-    _ = await validate_user_budget(db, user_id, request.model, strategy=config.budget_strategy)
-    if config.budget_strategy == "for_update":
-        await db.rollback()
-
-    provider, model = AnyLLM.split_model_provider(request.model)
-
-    provider_kwargs = get_provider_kwargs(config, provider)
-
-    embedding_kwargs: dict[str, Any] = {
-        "model": model,
-        "inputs": request.input,
-        "provider": provider,
-        **provider_kwargs,
-    }
-    if request.encoding_format is not None:
-        embedding_kwargs["encoding_format"] = request.encoding_format
-    if request.dimensions is not None:
-        embedding_kwargs["dimensions"] = request.dimensions
+    embedding_kwargs = context.call_kwargs(
+        inputs=request.input,
+        optional={
+            "encoding_format": request.encoding_format,
+            "dimensions": request.dimensions,
+        },
+    )
 
     try:
         result = await aembedding(**embedding_kwargs)
+        usage = result.usage
 
-        usage_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
-            model=model,
-            provider=provider,
+        await context.log_input_metered_usage(
+            db,
+            log_writer,
             endpoint="/v1/embeddings",
-            status="success",
-            prompt_tokens=result.usage.prompt_tokens if result.usage else None,
-            completion_tokens=0,
-            total_tokens=result.usage.total_tokens if result.usage else None,
+            prompt_tokens=usage.prompt_tokens if usage else None,
+            total_tokens=usage.total_tokens if usage else None,
+            cost_units=usage.prompt_tokens if usage else None,
+            apply_cost=usage is not None,
         )
-
-        if result.usage:
-            pricing = await find_model_pricing(db, provider, model, as_of=usage_log.timestamp)
-            if pricing:
-                cost = (result.usage.prompt_tokens / 1_000_000) * pricing.input_price_per_million
-                usage_log.cost = cost
-            else:
-                model_ref = f"{provider}:{model}" if provider else model
-                logger.warning(f"No pricing configured for '{model_ref}'. Usage will be tracked without cost.")
-
-        await log_writer.put(usage_log)
 
     except HTTPException:
         raise
     except Exception as e:
-        error_log = UsageLog(
-            id=str(uuid.uuid4()),
-            api_key_id=api_key_id,
-            user_id=user_id,
-            timestamp=datetime.now(UTC),
-            model=model,
-            provider=provider,
+        await context.log_and_raise_provider_error(
+            log_writer,
             endpoint="/v1/embeddings",
-            status="error",
-            error_message=str(e),
+            error=e,
         )
-        await log_writer.put(error_log)
 
-        logger.error("Provider call failed for %s:%s: %s", provider, model, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="The request could not be completed by the provider",
-        ) from e
-
-    if rate_limit_info:
-        for key, value in rate_limit_headers(rate_limit_info).items():
-            response.headers[key] = value
+    context.apply_rate_limit_headers(response)
 
     return result

@@ -1,52 +1,24 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
-from gateway.models.entities import Budget
+from gateway.api.routes._budget_models import (
+    BudgetAlertResponse,
+    BudgetResponse,
+    CreateBudgetRequest,
+    UpdateBudgetRequest,
+    validate_tag_budget_shape,
+)
+from gateway.api.routes._database import commit_or_database_error, get_budget_or_404
+from gateway.models.entities import Budget, BudgetAlert
+from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhook
+from gateway.services.budget_periods import budget_period_window
+from gateway.services.budget_tags import TAG_BUDGET_SCOPE
 
 router = APIRouter(prefix="/v1/budgets", tags=["budgets"])
-
-
-class CreateBudgetRequest(BaseModel):
-    """Request model for creating a new budget."""
-
-    max_budget: float | None = Field(default=None, ge=0, description="Maximum spending limit")
-    budget_duration_sec: int | None = Field(
-        default=None, gt=0, description="Budget duration in seconds (e.g., 86400 for daily, 604800 for weekly)"
-    )
-
-
-class BudgetResponse(BaseModel):
-    """Response model for budget information."""
-
-    budget_id: str
-    max_budget: float | None
-    budget_duration_sec: int | None
-    created_at: str
-    updated_at: str
-
-    @classmethod
-    def from_model(cls, budget: "Budget") -> "BudgetResponse":
-        """Create a BudgetResponse from a Budget ORM model."""
-        return cls(
-            budget_id=budget.budget_id,
-            max_budget=budget.max_budget,
-            budget_duration_sec=budget.budget_duration_sec,
-            created_at=budget.created_at.isoformat(),
-            updated_at=budget.updated_at.isoformat(),
-        )
-
-
-class UpdateBudgetRequest(BaseModel):
-    """Request model for updating a budget."""
-
-    max_budget: float | None = Field(default=None, ge=0)
-    budget_duration_sec: int | None = Field(default=None, gt=0)
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -55,20 +27,28 @@ async def create_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Create a new budget."""
+    validate_tag_budget_shape(request.scope_type, request.match_tags)
+    budget_started_at = None
+    next_budget_reset_at = None
+    if request.scope_type == TAG_BUDGET_SCOPE:
+        budget_started_at, next_budget_reset_at = budget_period_window(request.budget_duration_sec)
+
     budget = Budget(
         max_budget=request.max_budget,
         budget_duration_sec=request.budget_duration_sec,
+        scope_type=request.scope_type,
+        match_tags=dict(request.match_tags or {}),
+        alert_thresholds=request.alert_thresholds,
+        alert_webhook_url=request.alert_webhook_url,
+        spend=0.0,
+        budget_started_at=budget_started_at,
+        next_budget_reset_at=next_budget_reset_at,
+        blocked=request.blocked,
+        is_active=request.is_active,
     )
 
     db.add(budget)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -87,21 +67,77 @@ async def list_budgets(
     return [BudgetResponse.from_model(budget) for budget in budgets]
 
 
+@router.get("/alerts", dependencies=[Depends(verify_master_key)])
+async def list_budget_alerts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    budget_id: Annotated[str | None, Query()] = None,
+    scope_type: Annotated[str | None, Query()] = None,
+    scope_id: Annotated[str | None, Query()] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+) -> list[BudgetAlertResponse]:
+    """List budget alert events."""
+    stmt = select(BudgetAlert)
+    if budget_id is not None:
+        stmt = stmt.where(BudgetAlert.budget_id == budget_id)
+    if scope_type is not None:
+        stmt = stmt.where(BudgetAlert.scope_type == scope_type)
+    if scope_id is not None:
+        stmt = stmt.where(BudgetAlert.scope_id == scope_id)
+    stmt = stmt.order_by(BudgetAlert.created_at.desc(), BudgetAlert.id.desc()).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return [BudgetAlertResponse.from_model(alert) for alert in result.scalars().all()]
+
+
+@router.post("/alerts/{alert_id}/deliver", dependencies=[Depends(verify_master_key)])
+async def deliver_budget_alert(
+    alert_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BudgetAlertResponse:
+    """Retry webhook delivery for a budget alert event."""
+    result = await db.execute(select(BudgetAlert.id).where(BudgetAlert.id == alert_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Budget alert with id '{alert_id}' not found",
+        )
+    await dispatch_budget_alert_webhook(alert_id)
+    refreshed = await db.get(BudgetAlert, alert_id)
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Budget alert with id '{alert_id}' not found",
+        )
+    return BudgetAlertResponse.from_model(refreshed)
+
+
+@router.get("/{budget_id}/alerts", dependencies=[Depends(verify_master_key)])
+async def list_alerts_for_budget(
+    budget_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+) -> list[BudgetAlertResponse]:
+    """List alert events for a specific budget."""
+    await get_budget_or_404(db, budget_id)
+    stmt = (
+        select(BudgetAlert)
+        .where(BudgetAlert.budget_id == budget_id)
+        .order_by(BudgetAlert.created_at.desc(), BudgetAlert.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    alerts = await db.execute(stmt)
+    return [BudgetAlertResponse.from_model(alert) for alert in alerts.scalars().all()]
+
+
 @router.get("/{budget_id}", dependencies=[Depends(verify_master_key)])
 async def get_budget(
     budget_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Get details of a specific budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
-
+    budget = await get_budget_or_404(db, budget_id)
     return BudgetResponse.from_model(budget)
 
 
@@ -112,28 +148,31 @@ async def update_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BudgetResponse:
     """Update a budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
+    budget = await get_budget_or_404(db, budget_id)
 
     if request.max_budget is not None:
         budget.max_budget = request.max_budget
     if request.budget_duration_sec is not None:
         budget.budget_duration_sec = request.budget_duration_sec
+    if request.scope_type is not None:
+        budget.scope_type = request.scope_type
+    if request.match_tags is not None:
+        budget.match_tags = dict(request.match_tags)
+    if "alert_thresholds" in request.model_fields_set:
+        budget.alert_thresholds = request.alert_thresholds
+    if "alert_webhook_url" in request.model_fields_set:
+        budget.alert_webhook_url = request.alert_webhook_url
+    validate_tag_budget_shape(budget.scope_type, budget.match_tags)
+    if request.spend is not None:
+        budget.spend = request.spend
+    if request.blocked is not None:
+        budget.blocked = request.blocked
+    if request.is_active is not None:
+        budget.is_active = request.is_active
+    if budget.scope_type == TAG_BUDGET_SCOPE and budget.budget_started_at is None:
+        budget.budget_started_at, budget.next_budget_reset_at = budget_period_window(budget.budget_duration_sec)
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(budget)
 
     return BudgetResponse.from_model(budget)
@@ -145,21 +184,7 @@ async def delete_budget(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a budget."""
-    result = await db.execute(select(Budget).where(Budget.budget_id == budget_id))
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Budget with id '{budget_id}' not found",
-        )
+    budget = await get_budget_or_404(db, budget_id)
 
     await db.delete(budget)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)

@@ -1,75 +1,18 @@
 import uuid
-from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.api.deps import get_db, verify_master_key
+from gateway.api.routes._database import commit_or_database_error, get_api_key_or_404
+from gateway.api.routes._key_models import CreateKeyRequest, CreateKeyResponse, KeyInfo, UpdateKeyRequest
 from gateway.auth.models import generate_api_key, hash_key
 from gateway.models.entities import APIKey, User
+from gateway.repositories.users_repository import get_user_by_id
 
 router = APIRouter(prefix="/v1/keys", tags=["keys"])
-
-
-class CreateKeyRequest(BaseModel):
-    """Request model for creating a new API key."""
-
-    key_name: str | None = Field(default=None, description="Optional name for the key")
-    user_id: str | None = Field(default=None, description="Optional user ID to associate with this key")
-    expires_at: datetime | None = Field(default=None, description="Optional expiration timestamp")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Optional metadata")
-
-
-class CreateKeyResponse(BaseModel):
-    """Response model for creating a new API key."""
-
-    id: str
-    key: str
-    key_name: str | None
-    user_id: str | None
-    created_at: str
-    expires_at: str | None
-    is_active: bool
-    metadata: dict[str, Any]
-
-
-class KeyInfo(BaseModel):
-    """Response model for key information."""
-
-    id: str
-    key_name: str | None
-    user_id: str | None
-    created_at: str
-    last_used_at: str | None
-    expires_at: str | None
-    is_active: bool
-    metadata: dict[str, Any]
-
-    @classmethod
-    def from_model(cls, key: APIKey) -> "KeyInfo":
-        return cls(
-            id=str(key.id),
-            key_name=str(key.key_name) if key.key_name else None,
-            user_id=str(key.user_id) if key.user_id else None,
-            created_at=key.created_at.isoformat(),
-            last_used_at=key.last_used_at.isoformat() if key.last_used_at else None,
-            expires_at=key.expires_at.isoformat() if key.expires_at else None,
-            is_active=bool(key.is_active),
-            metadata=dict(key.metadata_) if key.metadata_ else {},
-        )
-
-
-class UpdateKeyRequest(BaseModel):
-    """Request model for updating a key."""
-
-    key_name: str | None = None
-    is_active: bool | None = None
-    expires_at: datetime | None = None
-    metadata: dict[str, Any] | None = None
 
 
 @router.post("", dependencies=[Depends(verify_master_key)])
@@ -89,8 +32,7 @@ async def create_key(
     key_id = uuid.uuid4()
 
     if request.user_id:
-        result = await db.execute(select(User).where(User.user_id == request.user_id))
-        user = result.scalar_one_or_none()
+        user = await get_user_by_id(db, request.user_id)
         if not user:
             user = User(
                 user_id=request.user_id,
@@ -121,14 +63,7 @@ async def create_key(
     )
 
     db.add(db_key)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(db_key)
 
     key_info = KeyInfo.from_model(db_key)
@@ -163,15 +98,7 @@ async def get_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     return KeyInfo.from_model(key)
 
 
@@ -185,15 +112,7 @@ async def update_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     if request.key_name is not None:
         key.key_name = request.key_name
     if request.is_active is not None:
@@ -203,14 +122,7 @@ async def update_key(
     if request.metadata is not None:
         key.metadata_ = request.metadata
 
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)
     await db.refresh(key)
 
     return KeyInfo.from_model(key)
@@ -225,21 +137,6 @@ async def delete_key(
 
     Requires master key authentication.
     """
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key with id '{key_id}' not found",
-        )
-
+    key = await get_api_key_or_404(db, key_id)
     await db.delete(key)
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from None
+    await commit_or_database_error(db)

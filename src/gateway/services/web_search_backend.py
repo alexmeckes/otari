@@ -37,6 +37,7 @@ from urllib.parse import urlparse
 import httpx
 import trafilatura
 
+from gateway.services.routing_config_values import coerced_string_or_none
 from gateway.services.url_safety import UnsafeURLError, validate_outbound_fetch_url
 
 if TYPE_CHECKING:
@@ -46,11 +47,7 @@ logger = logging.getLogger(__name__)
 
 WEB_SEARCH_TOOL_NAME = "web_search"
 
-_DEFAULT_SEARCH_TIMEOUT_S = 15.0
-_DEFAULT_FETCH_TIMEOUT_S = 5.0
-_DEFAULT_MAX_RESULTS = 5
 _MAX_RESULTS_CAP = 20
-_DEFAULT_EXTRACT_CONCURRENCY = 5
 # Hard cap on bytes we'll read from a single fetched page before passing to
 # trafilatura. A huge response (compromised host, content-bomb, or just a
 # legitimately massive page) would otherwise blow memory across N parallel
@@ -71,7 +68,6 @@ _FETCH_MAX_REDIRECTS = 5
 # pointing GATEWAY_WEB_SEARCH_URL at any service exposing the same
 # /search?format=json shape.
 _DEFAULT_ENGINES = ("duckduckgo", "mojeek", "qwant", "wikipedia")
-_CONTENT_TRUNCATE_CHARS = 1500
 
 _DEFAULT_PURPOSE_HINT = (
     "Prefer `web_search` for current information, news, recent events, "
@@ -101,13 +97,13 @@ class WebSearchBackend:
         *,
         base_url: str,
         engines: tuple[str, ...] = _DEFAULT_ENGINES,
-        max_results: int = _DEFAULT_MAX_RESULTS,
+        max_results: int = 5,
         allowed_domains: tuple[str, ...] = (),
         blocked_domains: tuple[str, ...] = (),
         extract_content: bool = True,
-        extract_timeout_s: float = _DEFAULT_FETCH_TIMEOUT_S,
-        extract_concurrency: int = _DEFAULT_EXTRACT_CONCURRENCY,
-        search_timeout_s: float = _DEFAULT_SEARCH_TIMEOUT_S,
+        extract_timeout_s: float = 5.0,
+        extract_concurrency: int = 5,
+        search_timeout_s: float = 15.0,
         purpose_hint: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -183,7 +179,7 @@ class WebSearchBackend:
         if self._client is None:
             raise RuntimeError("WebSearchBackend not entered as an async context manager")
 
-        query = (arguments.get("query") or "").strip()
+        query = _coerced_text(arguments.get("query"))
         if not query:
             return "[tool error] empty query"
 
@@ -225,9 +221,11 @@ class WebSearchBackend:
         kept: list[dict[str, Any]] = []
         for r in results:
             host = (urlparse(str(r.get("url"))).hostname or "").lower()
-            if self._blocked_domains and any(host == d or host.endswith("." + d) for d in self._blocked_domains):
+            if any(host == domain or host.endswith(f".{domain}") for domain in self._blocked_domains):
                 continue
-            if self._allowed_domains and not any(host == d or host.endswith("." + d) for d in self._allowed_domains):
+            if self._allowed_domains and not any(
+                host == domain or host.endswith(f".{domain}") for domain in self._allowed_domains
+            ):
                 continue
             kept.append(r)
         return kept
@@ -354,6 +352,12 @@ class WebSearchBackend:
         return None
 
 
+def _coerced_text(value: Any, *, default: str = "") -> str:
+    if not value:
+        return default
+    return coerced_string_or_none(value) or ""
+
+
 def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
     """Render results as compact Markdown for tool-message consumption.
 
@@ -365,13 +369,14 @@ def _format_results_for_model(query: str, results: list[dict[str, Any]]) -> str:
         return f"No results for query: {query!r}"
 
     parts: list[str] = []
+    content_truncate_chars = 1500
     for i, r in enumerate(results, start=1):
-        title = str(r.get("title") or "(untitled)").strip()
-        url = str(r.get("url") or "").strip()
-        snippet = str(r.get("content") or "").strip()
-        extracted = str(r.get("extracted_content") or "").strip()
+        title = _coerced_text(r.get("title"), default="(untitled)")
+        url = _coerced_text(r.get("url"))
+        snippet = _coerced_text(r.get("content"))
+        extracted = _coerced_text(r.get("extracted_content"))
         body = extracted or snippet
-        if len(body) > _CONTENT_TRUNCATE_CHARS:
-            body = body[:_CONTENT_TRUNCATE_CHARS].rstrip() + "…"
+        if len(body) > content_truncate_chars:
+            body = body[:content_truncate_chars].rstrip() + "…"
         parts.append(f"[{i}] {title}\n{url}\n{body}".rstrip())
     return "\n\n".join(parts)

@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from gateway.api.routes import chat as chat_module
-from gateway.api.routes.chat import _resolve_platform_mcp_servers
 from gateway.models.mcp import McpServerConfig
+from gateway.services import platform_gateway
+from gateway.services.platform_gateway import resolve_platform_mcp_servers
 
 
 def _config(*, base_url: str | None = "https://platform.local") -> Any:
@@ -26,7 +26,40 @@ def _ok_response(servers: list[dict[str, Any]]) -> httpx.Response:
 
 
 @pytest.mark.asyncio
+async def test_resolve_preserves_optional_payload_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "true")
+
+    async def fake_post(**kwargs: Any) -> httpx.Response:
+        return _ok_response(
+            [
+                {
+                    "name": "calendar",
+                    "url": "https://example.com/mcp",
+                    "authorization_token": "ya29.x",
+                    "purpose_hint": "scheduling",
+                    "allowed_tools": ["list_events"],
+                },
+            ]
+        )
+
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
+
+    configs = await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+
+    assert configs == [
+        McpServerConfig(
+            name="calendar",
+            url="https://example.com/mcp",
+            authorization_token="ya29.x",
+            purpose_hint="scheduling",
+            allowed_tools=["list_events"],
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_resolve_returns_configs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_MCP_ALLOW_PRIVATE_HOSTS", "true")
     captured: dict[str, Any] = {}
 
     async def fake_post(
@@ -48,10 +81,10 @@ async def test_resolve_returns_configs(monkeypatch: pytest.MonkeyPatch) -> None:
             ]
         )
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     ids = [uuid.UUID("11111111-1111-1111-1111-111111111111")]
-    out = await _resolve_platform_mcp_servers(_config(), "tk_user", ids)
+    out = await resolve_platform_mcp_servers(_config(), "tk_user", ids)
 
     assert isinstance(out[0], McpServerConfig)
     assert out[0].name == "calendar"
@@ -70,8 +103,8 @@ async def test_resolve_empty_servers_returns_empty(monkeypatch: pytest.MonkeyPat
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return _ok_response([])
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
-    out = await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
+    out = await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert out == []
 
 
@@ -80,14 +113,39 @@ async def test_resolve_404_passes_through(monkeypatch: pytest.MonkeyPatch) -> No
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(404, json={"detail": "MCPServer not found"})
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 404
     assert ei.value.detail == "MCPServer not found"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(403, text="forbidden"),
+        httpx.Response(403, json={"detail": ["not", "a", "string"]}),
+    ],
+)
+async def test_resolve_passthrough_uses_fallback_for_unusable_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    response: httpx.Response,
+) -> None:
+    async def fake_post(**kwargs: Any) -> httpx.Response:
+        return response
+
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as ei:
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+    assert ei.value.status_code == 403
+    assert ei.value.detail == "MCP server resolution failed"
 
 
 @pytest.mark.asyncio
@@ -95,12 +153,12 @@ async def test_resolve_5xx_maps_to_502(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(503, text="busy")
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 502
 
 
@@ -109,12 +167,12 @@ async def test_resolve_network_error_maps_to_502(monkeypatch: pytest.MonkeyPatch
     async def fake_post(**kwargs: Any) -> httpx.Response:
         raise httpx.NetworkError("connection refused")
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 502
 
 
@@ -123,24 +181,24 @@ async def test_resolve_misconfigured_platform_500() -> None:
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(base_url=None), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(base_url=None), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 500
 
 
 @pytest.mark.asyncio
 async def test_resolve_429_passthrough_with_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
     """A platform 429 should forward verbatim (status + Retry-After header)
-    so clients can back off correctly, matching `_resolve_platform_credentials`."""
+    so clients can back off correctly, matching `resolve_platform_credentials`."""
 
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(429, json={"detail": "slow down"}, headers={"Retry-After": "30"})
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 429
     assert ei.value.headers == {"Retry-After": "30"}
     assert ei.value.detail == "slow down"
@@ -149,17 +207,17 @@ async def test_resolve_429_passthrough_with_retry_after(monkeypatch: pytest.Monk
 @pytest.mark.asyncio
 async def test_resolve_402_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
     """402 (payment required / quota) should forward verbatim, matching
-    `_resolve_platform_credentials`'s behaviour for the same code."""
+    `resolve_platform_credentials`'s behaviour for the same code."""
 
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(402, json={"detail": "quota exhausted"})
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 402
     assert ei.value.detail == "quota exhausted"
 
@@ -168,15 +226,15 @@ async def test_resolve_402_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_resolve_422_collapses_to_502(monkeypatch: pytest.MonkeyPatch) -> None:
     """422 from the platform indicates a gateway↔platform schema mismatch,
     not something the caller can usefully act on — collapse to 502 like
-    `_resolve_platform_credentials` does."""
+    `resolve_platform_credentials` does."""
 
     async def fake_post(**kwargs: Any) -> httpx.Response:
         return httpx.Response(422, json={"detail": "schema mismatch"})
 
-    monkeypatch.setattr(chat_module, "_post_platform", fake_post)
+    monkeypatch.setattr(platform_gateway, "_post_platform", fake_post)
 
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as ei:
-        await _resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
+        await resolve_platform_mcp_servers(_config(), "tk", [uuid.uuid4()])
     assert ei.value.status_code == 502

@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from any_llm.types.completion import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -73,7 +74,7 @@ def test_delete_user_preserves_budget_reset_logs(
     )
 
     initial_time = datetime(2025, 10, 1, 12, 0, 0, tzinfo=UTC)
-    with patch("gateway.api.routes.users.datetime") as mock_dt:
+    with patch("gateway.services.budget_periods.datetime") as mock_dt:
         mock_dt.now.return_value = initial_time
         client.post(
             "/v1/users",
@@ -84,11 +85,11 @@ def test_delete_user_preserves_budget_reset_logs(
     time_after_reset = initial_time + timedelta(seconds=61)
     with (
         patch("gateway.services.budget_service.datetime") as mock_dt_budget,
-        patch("gateway.api.routes.chat.datetime") as mock_dt_chat,
+        patch("gateway.api.routes._usage.datetime") as mock_dt_usage,
         patch("gateway.api.routes.chat.acompletion") as mock_acompletion,
     ):
         mock_dt_budget.now.return_value = time_after_reset
-        mock_dt_chat.now.return_value = time_after_reset
+        mock_dt_usage.now.return_value = time_after_reset
         mock_response = ChatCompletion(
             id="chatcmpl-reset",
             object="chat.completion",
@@ -248,6 +249,10 @@ def test_cascade_delete_api_keys_on_hard_delete(
     db_session: Session,
 ) -> None:
     """Raw SQL DELETE on users should cascade to api_keys via ondelete='CASCADE'."""
+    bind = db_session.get_bind()
+    if bind.dialect.name == "sqlite":
+        pytest.skip("SQLite test schema does not preserve foreign-key cascade metadata for this raw-delete check")
+
     client.post("/v1/users", json={"user_id": "cascade-user"}, headers=master_key_header)
     key_resp = client.post(
         "/v1/keys",

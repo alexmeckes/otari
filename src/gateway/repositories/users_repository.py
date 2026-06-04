@@ -4,6 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gateway.models.entities import User
 
 
+async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
+    """Query a user by user_id, including soft-deleted users."""
+
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
 async def get_active_user(db: AsyncSession, user_id: str, *, for_update: bool = False) -> User | None:
     """Query for a non-deleted user by user_id."""
 

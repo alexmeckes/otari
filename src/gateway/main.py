@@ -14,11 +14,11 @@ from gateway.core.config import API_KEY_HEADER, LEGACY_API_KEY_HEADERS, GatewayC
 from gateway.core.database import create_session, init_db
 from gateway.rate_limit import RateLimiter
 from gateway.services.bootstrap_service import bootstrap_first_api_key
+from gateway.services.budget_alert_webhook_service import BudgetAlertWebhookRetryWorker
 from gateway.services.log_writer import LogWriter, NoopLogWriter, create_log_writer
+from gateway.services.platform_config import platform_base_url
 from gateway.services.pricing_init_service import initialize_pricing_from_config
 from gateway.version import __version__
-
-_PUBLIC_PREFIXES = ("/health",)
 
 _ROOT_TUTORIAL_HTML = """<!doctype html>
 <html lang="en">
@@ -134,7 +134,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if not request.url.path.startswith(_PUBLIC_PREFIXES):
+        if not request.url.path.startswith(("/health",)):
             response.headers["Cache-Control"] = "private, no-store, no-cache"
             vary_values = {part.strip() for part in response.headers.get("Vary", "").split(",") if part.strip()}
             vary_values.add("Authorization")
@@ -146,7 +146,7 @@ def _validate_platform_config(config: GatewayConfig) -> None:
     config.validate_mode_selection()
     if not config.is_platform_mode:
         return
-    if not config.platform.get("base_url"):
+    if not platform_base_url(config):
         msg = "platform.base_url is required when platform mode is active"
         raise ValueError(msg)
     if config.providers:
@@ -158,6 +158,7 @@ def _create_lifespan(config: GatewayConfig) -> Callable[[FastAPI], Any]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log_writer: LogWriter
+        retry_worker: BudgetAlertWebhookRetryWorker | None = None
         if config.is_platform_mode:
             log_writer = NoopLogWriter()
         else:
@@ -166,13 +167,25 @@ def _create_lifespan(config: GatewayConfig) -> Callable[[FastAPI], Any]:
                 await bootstrap_first_api_key(config, session)
                 await initialize_pricing_from_config(config, session)
             log_writer = create_log_writer(config.log_writer_strategy)
+            retry_worker = BudgetAlertWebhookRetryWorker(
+                interval_seconds=config.budget_alert_webhook_retry_interval_seconds,
+                max_attempts=config.budget_alert_webhook_retry_max_attempts,
+                backoff_seconds=config.budget_alert_webhook_retry_backoff_seconds,
+                max_backoff_seconds=config.budget_alert_webhook_retry_max_backoff_seconds,
+                batch_size=config.budget_alert_webhook_retry_batch_size,
+            )
 
         await log_writer.start()
+        if retry_worker is not None:
+            await retry_worker.start()
         app.state.log_writer = log_writer
+        app.state.budget_alert_webhook_retry_worker = retry_worker
 
         try:
             yield
         finally:
+            if retry_worker is not None:
+                await retry_worker.stop()
             await log_writer.stop()
 
     return lifespan

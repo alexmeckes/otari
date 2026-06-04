@@ -5,14 +5,13 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from gateway.core.config import API_KEY_HEADER, GatewayConfig
 from gateway.db import get_db
 from gateway.main import create_app
 
-from .conftest import _run_alembic_migrations, _to_async_url
+from .conftest import _create_sync_engine, _drop_alembic_version_table, _run_alembic_migrations, _to_async_url
 
 
 class MockCompletionError(Exception):
@@ -44,12 +43,10 @@ def config_with_client_args(postgres_url: str) -> GatewayConfig:
 @pytest.fixture
 def client_with_client_args(config_with_client_args: GatewayConfig) -> Generator[TestClient]:
     """Create a test client with client_args configured."""
-    from sqlalchemy import text
-
     from gateway.db import Base
 
     _run_alembic_migrations(config_with_client_args.database_url)
-    engine = create_engine(config_with_client_args.database_url, pool_pre_ping=True)
+    engine = _create_sync_engine(config_with_client_args.database_url)
     async_engine = create_async_engine(_to_async_url(config_with_client_args.database_url), pool_pre_ping=True)
     async_session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
     app = create_app(config_with_client_args)
@@ -65,9 +62,7 @@ def client_with_client_args(config_with_client_args: GatewayConfig) -> Generator
             yield test_client
     finally:
         Base.metadata.drop_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
-            conn.commit()
+        _drop_alembic_version_table(engine)
         try:
             asyncio.run(async_engine.dispose())
         except RuntimeError:

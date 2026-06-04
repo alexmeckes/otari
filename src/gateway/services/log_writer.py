@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextlib import suppress
 from typing import Protocol
 
 from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.core.database import create_session
 from gateway.log_config import logger
@@ -16,8 +18,15 @@ from gateway.metrics import (
     log_writer_flush_duration,
     log_writer_queue_depth,
     log_writer_rows,
+    record_budget_alert_created,
 )
-from gateway.models.entities import UsageLog, User
+from gateway.models.entities import BudgetAlert, Project, UsageLog, User
+from gateway.services.budget_alert_webhook_service import dispatch_budget_alert_webhooks
+from gateway.services.budget_alerts import (
+    record_project_budget_alerts_after_spend,
+    record_user_budget_alerts_after_spend,
+)
+from gateway.services.budget_service import increment_matching_tag_budget_spend
 
 
 class LogWriter(Protocol):
@@ -28,25 +37,85 @@ class LogWriter(Protocol):
     async def stop(self) -> None: ...
 
 
+async def _record_and_dispatch_new_budget_alerts(alerts: list[BudgetAlert]) -> None:
+    for alert in alerts:
+        record_budget_alert_created(alert.scope_type, alert.delivery_status)
+
+    alert_ids = [alert.id for alert in alerts if alert.id is not None and alert.webhook_url]
+    if not alert_ids:
+        return
+    try:
+        await dispatch_budget_alert_webhooks(alert_ids)
+    except Exception as exc:  # pragma: no cover - post-commit defensive logging
+        logger.error("Budget alert webhook dispatch failed after usage commit: %s", exc)
+
+
+async def _add_log_and_record_budget_alerts(db: AsyncSession, log: UsageLog) -> list[BudgetAlert]:
+    db.add(log)
+    if not log.cost:
+        return []
+
+    created_alerts: list[BudgetAlert] = []
+    alert_metadata: dict[str, object] = {
+        "api_key_id": log.api_key_id,
+        "cost": log.cost,
+        "endpoint": log.endpoint,
+        "model": log.model,
+        "provider": log.provider,
+        "status": log.status,
+        "tags": log.tag_dict(),
+    }
+    if log.user_id:
+        await db.execute(
+            update(User)
+            .where(User.user_id == log.user_id, User.deleted_at.is_(None))
+            .values(spend=User.spend + log.cost)
+        )
+        user_alerts = await record_user_budget_alerts_after_spend(
+            db,
+            user_id=log.user_id,
+            metadata=alert_metadata,
+        )
+        created_alerts.extend(user_alerts)
+    if log.project_id:
+        await db.execute(
+            update(Project)
+            .where(Project.project_id == log.project_id)
+            .values(spend=Project.spend + log.cost)
+        )
+        project_alerts = await record_project_budget_alerts_after_spend(
+            db,
+            project_id=log.project_id,
+            metadata=alert_metadata,
+        )
+        created_alerts.extend(project_alerts)
+    tag_alerts = await increment_matching_tag_budget_spend(
+        db,
+        tags=log.tag_dict(),
+        cost=log.cost,
+        metadata=alert_metadata,
+    )
+    created_alerts.extend(tag_alerts)
+    return created_alerts
+
+
 class SingleLogWriter:
     """Write each usage log inline, one transaction per event."""
 
     async def put(self, log: UsageLog) -> None:
+        created_alerts: list[BudgetAlert] = []
         async with create_session() as db:
             try:
-                db.add(log)
-                if log.cost and log.user_id:
-                    await db.execute(
-                        update(User)
-                        .where(User.user_id == log.user_id, User.deleted_at.is_(None))
-                        .values(spend=User.spend + log.cost)
-                    )
+                created_alerts = await _add_log_and_record_budget_alerts(db, log)
                 await db.commit()
                 log_writer_rows.labels(writer="single", result="written").inc()
             except SQLAlchemyError as e:  # pragma: no cover - defensive logging
                 await db.rollback()
                 logger.error("SingleLogWriter failed: %s", e)
                 log_writer_rows.labels(writer="single", result="dropped").inc()
+                return
+
+        await _record_and_dispatch_new_budget_alerts(created_alerts)
 
     async def start(self) -> None:
         pass
@@ -74,10 +143,8 @@ class BatchLogWriter:
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         await self._flush_all()
 
     async def _run(self) -> None:
@@ -112,16 +179,12 @@ class BatchLogWriter:
     async def _flush(self, batch: list[UsageLog]) -> None:
         start = time.monotonic()
         log_writer_batch_size.labels(writer="batch").observe(len(batch))
+        created_alerts: list[BudgetAlert] = []
         try:
             async with create_session() as db:
                 for log in batch:
-                    db.add(log)
-                    if log.cost and log.user_id:
-                        await db.execute(
-                            update(User)
-                            .where(User.user_id == log.user_id, User.deleted_at.is_(None))
-                            .values(spend=User.spend + log.cost)
-                        )
+                    log_alerts = await _add_log_and_record_budget_alerts(db, log)
+                    created_alerts.extend(log_alerts)
                 await db.commit()
                 log_writer_rows.labels(writer="batch", result="written").inc(len(batch))
             log_writer_flush_duration.labels(writer="batch", result="ok").observe(time.monotonic() - start)
@@ -129,6 +192,9 @@ class BatchLogWriter:
             logger.error("BatchLogWriter flush failed, dropping %d rows: %s", len(batch), e)
             log_writer_rows.labels(writer="batch", result="dropped").inc(len(batch))
             log_writer_flush_duration.labels(writer="batch", result="error").observe(time.monotonic() - start)
+            return
+
+        await _record_and_dispatch_new_budget_alerts(created_alerts)
 
     async def _flush_all(self) -> None:
         batch: list[UsageLog] = []

@@ -12,6 +12,7 @@ from uvicorn.config import logger
 from gateway.core.config import load_config
 from gateway.log_config import setup_logger
 from gateway.main import create_app
+from gateway.services.platform_config import platform_base_url
 
 
 @click.group()
@@ -78,14 +79,14 @@ def serve(
     gateway_config.validate_mode_selection()
 
     if gateway_config.is_platform_mode:
-        platform_base_url = gateway_config.platform.get("base_url")
-        if not platform_base_url:
+        base_url = platform_base_url(gateway_config)
+        if not base_url:
             raise click.ClickException("platform.base_url is required when platform mode is active")
         if gateway_config.providers:
             raise click.ClickException(
                 "Local provider credentials are not supported in platform mode. Remove configured providers."
             )
-        logger.info("Platform mode active. Base URL: %s", platform_base_url)
+        logger.info("Platform mode active. Base URL: %s", base_url)
 
     if not gateway_config.master_key:
         logger.warning(

@@ -29,8 +29,7 @@ OTARI_ENV_ALIASES_TO_GATEWAY = {
 
 def _get_platform_token_from_env() -> str | None:
     for env_var in PLATFORM_TOKEN_ENV_VARS:
-        token = os.getenv(env_var, "").strip()
-        if token:
+        if token := os.getenv(env_var, "").strip():
             return token
     return None
 
@@ -121,6 +120,31 @@ class GatewayConfig(BaseSettings):
         default="for_update",
         description="Budget validation strategy: 'for_update' (default), 'cas' (lock-free), or 'disabled'.",
     )
+    budget_alert_webhook_retry_interval_seconds: float = Field(
+        default=0.0,
+        ge=0,
+        description="Seconds between background retries for failed/pending budget alert webhooks. 0 disables.",
+    )
+    budget_alert_webhook_retry_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum delivery attempts for background budget alert webhook retries.",
+    )
+    budget_alert_webhook_retry_backoff_seconds: float = Field(
+        default=60.0,
+        ge=0,
+        description="Base seconds for budget alert webhook retry backoff after a failed retry.",
+    )
+    budget_alert_webhook_retry_max_backoff_seconds: float = Field(
+        default=3600.0,
+        ge=0,
+        description="Maximum seconds between budget alert webhook retry attempts. 0 disables the cap.",
+    )
+    budget_alert_webhook_retry_batch_size: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum budget alert webhooks to retry per background worker pass.",
+    )
     model_discovery: bool = Field(
         default=True,
         description="Enable auto-discovery of models from configured providers via GET /v1/models",
@@ -139,9 +163,7 @@ class GatewayConfig(BaseSettings):
 
     @property
     def effective_mode(self) -> str:
-        if self.platform_token:
-            return "platform"
-        return "standalone"
+        return "platform" if self.platform_token else "standalone"
 
     @property
     def is_platform_mode(self) -> bool:
@@ -153,8 +175,7 @@ class GatewayConfig(BaseSettings):
             msg = "Invalid GATEWAY_MODE value. Expected 'standalone' or 'platform'."
             raise ValueError(msg)
 
-        token_present = self.platform_token is not None
-        if configured_mode == "platform" and not token_present:
+        if configured_mode == "platform" and self.platform_token is None:
             msg = (
                 "GATEWAY_MODE=platform requires OTARI_AI_TOKEN to be set "
                 "(legacy aliases: OTARI_PLATFORM_TOKEN, ANY_LLM_PLATFORM_TOKEN)."
@@ -169,7 +190,7 @@ def load_config(config_path: str | None = None) -> GatewayConfig:
         config_path: Optional path to YAML config file
 
     Returns:
-        GatewayConfig instance with merged configuration
+        GatewayConfig instance with combined configuration
 
     """
     _load_dotenv(config_path)

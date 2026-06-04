@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gateway.api.routes.chat import log_usage
+from gateway.api.routes._usage import log_usage
 from gateway.models.entities import UsageLog
 
 

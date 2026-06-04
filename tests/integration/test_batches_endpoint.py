@@ -1,5 +1,6 @@
 """Tests for the /v1/batches batch API endpoints."""
 
+import json
 import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -105,6 +106,43 @@ def test_create_batch_with_master_key(
 
     assert resp.status_code == 200
     assert resp.json()["id"] == "batch_abc123"
+
+
+def test_create_batch_writes_jsonl_input_file(
+    client: TestClient,
+    api_key_header: dict[str, str],
+) -> None:
+    """POST /v1/batches writes provider-stripped chat requests into the temp JSONL file."""
+    captured_lines: list[dict[str, Any]] = []
+    mock_batch = _mock_batch()
+
+    class _SupportsBatch:
+        SUPPORTS_BATCH = True
+
+    async def capture_input_file(**kwargs: Any) -> Batch:
+        with open(kwargs["input_file_path"], encoding="utf-8") as input_file:
+            captured_lines.extend(json.loads(line) for line in input_file)
+        return mock_batch
+
+    with (
+        patch("gateway.api.routes.batches.acreate_batch", side_effect=capture_input_file),
+        patch("gateway.api.routes.batches.AnyLLM.get_provider_class", return_value=_SupportsBatch),
+    ):
+        resp = client.post("/v1/batches", json=_create_batch_body(), headers=api_key_header)
+
+    assert resp.status_code == 200
+    assert captured_lines == [
+        {
+            "custom_id": "req-1",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "model": "gpt-4o-mini",
+            },
+        }
+    ]
 
 
 def test_create_batch_unsupported_provider(
@@ -268,6 +306,16 @@ def test_retrieve_batch_missing_provider(
     """GET /v1/batches/{batch_id} without provider returns 422."""
     resp = client.get("/v1/batches/batch_abc123", headers=api_key_header)
     assert resp.status_code == 422
+
+
+def test_retrieve_batch_invalid_provider(
+    client: TestClient,
+    api_key_header: dict[str, str],
+) -> None:
+    """GET /v1/batches/{batch_id} returns 400 for unknown providers."""
+    resp = client.get("/v1/batches/batch_abc123?provider=not-a-provider", headers=api_key_header)
+    assert resp.status_code == 400
+    assert "not-a-provider" in resp.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
