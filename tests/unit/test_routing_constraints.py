@@ -5,6 +5,7 @@ import pytest
 from gateway.services.routing_constraints import (
     _candidate_regions,
     _estimated_cost_constraint_failure,
+    _model_constraint_set,
     _normalize_model_key_for_constraint,
     _provider_model_constraint_failure,
     _region_constraint_failure,
@@ -24,6 +25,18 @@ def test_normalize_model_key_for_constraint_normalizes_legacy_slash_selector() -
 
 def test_normalize_model_key_for_constraint_preserves_invalid_selector() -> None:
     assert _normalize_model_key_for_constraint("gpt-4o") == "gpt-4o"
+
+
+def test_model_constraint_set_normalizes_model_values() -> None:
+    with pytest.warns(DeprecationWarning, match="provider/model"):
+        assert _model_constraint_set(
+            ["openai/gpt-4o", " anthropic:claude-3-5-haiku-latest ", "gpt-4o", " "]
+        ) == {
+            "anthropic:claude-3-5-haiku-latest",
+            "gpt-4o",
+            "openai:gpt-4o",
+        }
+    assert _model_constraint_set(None) == set()
 
 
 def test_apply_constraints_normalizes_provider_model_and_region_constraint_values() -> None:

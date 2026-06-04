@@ -19,6 +19,10 @@ def _normalize_model_key_for_constraint(value: str) -> str:
     return normalized
 
 
+def _model_constraint_set(value: Any) -> set[str]:
+    return {_normalize_model_key_for_constraint(item) for item in string_list(value)}
+
+
 def _provider_model_constraint_failure(
     *,
     provider: str,
@@ -107,12 +111,8 @@ def apply_constraints(
 
     allowed_providers = set(string_list(constraints.get("allowed_providers")))
     blocked_providers = set(string_list(constraints.get("blocked_providers")))
-    allowed_models = {
-        _normalize_model_key_for_constraint(item) for item in string_list(constraints.get("allowed_models"))
-    }
-    blocked_models = {
-        _normalize_model_key_for_constraint(item) for item in string_list(constraints.get("blocked_models"))
-    }
+    allowed_models = _model_constraint_set(constraints.get("allowed_models"))
+    blocked_models = _model_constraint_set(constraints.get("blocked_models"))
     allowed_regions = {item.lower() for item in string_list(constraints.get("allowed_regions"))}
     blocked_regions = {item.lower() for item in string_list(constraints.get("blocked_regions"))}
     requested_region = _requested_region(constraints, tags)
