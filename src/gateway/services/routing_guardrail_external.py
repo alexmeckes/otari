@@ -16,6 +16,7 @@ from gateway.services.routing_guardrail_helpers import guardrail_violation
 
 ExternalClassifierPostResult = tuple[int | None, dict[str, Any] | None, str | None]
 ExternalClassifierPost = Callable[..., Awaitable[ExternalClassifierPostResult]]
+ExternalClassifierEvaluation = tuple[list[dict[str, str]], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -140,12 +141,30 @@ def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _Class
     )
 
 
+def _classifier_error_evaluation(
+    settings: _ClassifierSettings,
+    *,
+    status_code: int | None,
+    error: str,
+) -> ExternalClassifierEvaluation:
+    return (
+        [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
+        {
+            "name": settings.name,
+            "status": "error",
+            "status_code": status_code,
+            "error": error[:200],
+            "fail_closed": settings.fail_closed,
+        },
+    )
+
+
 async def _evaluate_classifier_from_settings(
     settings: _ClassifierSettings,
     *,
     request_text: str,
     post_classifier: ExternalClassifierPost,
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+) -> ExternalClassifierEvaluation:
     if settings.url is None:
         return [], {"name": settings.name, "status": "skipped", "reason": "missing_url"}
 
@@ -156,16 +175,7 @@ async def _evaluate_classifier_from_settings(
         headers=settings.headers,
     )
     if error is not None:
-        return (
-            [guardrail_violation("external_classifier_error", settings.name)] if settings.fail_closed else [],
-            {
-                "name": settings.name,
-                "status": "error",
-                "status_code": status_code,
-                "error": error[:200],
-                "fail_closed": settings.fail_closed,
-            },
-        )
+        return _classifier_error_evaluation(settings, status_code=status_code, error=error)
 
     assert payload is not None
     violations, score = _classifier_violations(settings, payload)
