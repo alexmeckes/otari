@@ -20,7 +20,6 @@ from gateway.services.log_writer import LogWriter
 from gateway.streaming import RESPONSES_STREAM_FORMAT, streaming_generator
 
 RESPONSES_ENDPOINT = "/v1/responses"
-_GATEWAY_ONLY_RESPONSE_FIELDS = ("model", "user", "project_id", "tags")
 
 
 def native_response_call_kwargs(
@@ -30,7 +29,7 @@ def native_response_call_kwargs(
     request_fields = request_body.model_dump(exclude_none=True)
     input_payload = request_fields.pop("input")
     stream = bool(request_fields.pop("stream", False))
-    for field in _GATEWAY_ONLY_RESPONSE_FIELDS:
+    for field in ("model", "user", "project_id", "tags"):
         request_fields.pop(field, None)
     request_fields["user"] = context.user_id
 
