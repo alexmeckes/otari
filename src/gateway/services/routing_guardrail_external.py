@@ -125,11 +125,6 @@ def _classifier_violations(
     ], score
 
 
-def _classifier_result_label(payload: Mapping[str, Any]) -> str | None:
-    label = payload.get("label")
-    return label if isinstance(label, str) else None
-
-
 def _classifier_settings(classifier: Mapping[str, Any], *, index: int) -> _ClassifierSettings:
     return _ClassifierSettings(
         name=string_or_none(classifier.get("name")) or f"classifier_{index}",
@@ -170,13 +165,14 @@ def _classifier_success_evaluation(
     payload: Mapping[str, Any],
 ) -> ExternalClassifierEvaluation:
     violations, score = _classifier_violations(settings, payload)
+    label = payload.get("label")
     return violations, {
         "name": settings.name,
         "status": "flagged" if violations else "passed",
         "status_code": status_code,
         "score": score,
         "threshold": settings.threshold,
-        "label": _classifier_result_label(payload),
+        "label": label if isinstance(label, str) else None,
         "violations": violations,
     }
 
