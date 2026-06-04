@@ -216,35 +216,19 @@ def default_strategy_from_internal(strategy: str, config: Mapping[str, Any]) -> 
     if not providers:
         return None
     fallback_enabled = False if strategy == "single" else bool(config.get("fallback_enabled", True))
-    if strategy in {"single", "priority"}:
-        return {
-            "type": "fallback",
-            "providers": providers,
-            "fallback_enabled": fallback_enabled,
-        }
-    if strategy == "intelligent":
-        axis = config.get("axis")
-        return {
-            "type": "intelligent",
-            "axis": axis if isinstance(axis, str) else "performance",
-            "providers": providers,
-            "fallback_enabled": fallback_enabled,
-        }
-    if strategy == "weighted_score":
-        response: dict[str, Any] = {
-            "type": "weighted_score",
-            "providers": providers,
-            "fallback_enabled": fallback_enabled,
-        }
-        scoring = config.get("scoring")
-        if isinstance(scoring, dict):
-            response["scoring"] = dict_or_empty(scoring, copy_value=True)
-        return response
-    return {
-        "type": strategy,
+    response: dict[str, Any] = {
+        "type": "fallback" if strategy in {"single", "priority"} else strategy,
         "providers": providers,
         "fallback_enabled": fallback_enabled,
     }
+    if strategy == "intelligent":
+        axis = config.get("axis")
+        response["axis"] = axis if isinstance(axis, str) else "performance"
+    elif strategy == "weighted_score":
+        scoring = config.get("scoring")
+        if isinstance(scoring, dict):
+            response["scoring"] = dict_or_empty(scoring, copy_value=True)
+    return response
 
 
 def create_policy_shape(
