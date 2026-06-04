@@ -4,8 +4,6 @@ from typing import cast
 
 from gateway.core.config import GatewayConfig
 
-_DEFAULT_PLATFORM_HEALTH_PATH = "/utils/health-check/"
-
 
 def platform_base_url(config: GatewayConfig) -> str | None:
     value = config.platform.get("base_url")
@@ -13,7 +11,7 @@ def platform_base_url(config: GatewayConfig) -> str | None:
 
 
 def platform_health_path(config: GatewayConfig) -> str:
-    return cast(str, config.platform.get("health_path", _DEFAULT_PLATFORM_HEALTH_PATH))
+    return cast(str, config.platform.get("health_path", "/utils/health-check/"))
 
 
 def platform_url(base_url: str, path: str) -> str:
