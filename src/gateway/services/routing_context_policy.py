@@ -47,15 +47,18 @@ def _context_kept_message_indexes(
     preserve_system_messages: bool,
     preserve_last_messages: int,
 ) -> set[int]:
-    kept_indexes: set[int] = set()
-    if preserve_system_messages:
-        for index, message in enumerate(messages):
-            if _message_role(message) in _SYSTEM_MESSAGE_ROLES:
-                kept_indexes.add(index)
+    kept_indexes = (
+        {
+            index
+            for index, message in enumerate(messages)
+            if _message_role(message) in _SYSTEM_MESSAGE_ROLES
+        }
+        if preserve_system_messages
+        else set()
+    )
 
     if preserve_last_messages:
-        for index in range(max(0, len(messages) - preserve_last_messages), len(messages)):
-            kept_indexes.add(index)
+        kept_indexes.update(range(max(0, len(messages) - preserve_last_messages), len(messages)))
     return kept_indexes
 
 
