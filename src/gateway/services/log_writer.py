@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextlib import suppress
 from typing import Protocol
 
 from sqlalchemy import update
@@ -142,10 +143,8 @@ class BatchLogWriter:
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         await self._flush_all()
 
     async def _run(self) -> None:
