@@ -98,15 +98,24 @@ def _classifier_headers(value: Any) -> dict[str, str] | None:
     } or None
 
 
+def _classifier_explicit_violations(
+    settings: _ClassifierSettings,
+    payload: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    raw_violations = payload.get("violations")
+    if not isinstance(raw_violations, list):
+        return []
+    return [
+        guardrail_violation("external_classifier", _classifier_rule(item, fallback=settings.name))
+        for item in raw_violations
+    ]
+
+
 def _classifier_violations(
     settings: _ClassifierSettings,
     payload: Mapping[str, Any],
 ) -> tuple[list[dict[str, str]], float | None]:
-    raw_violations = payload.get("violations")
-    violations = [
-        guardrail_violation("external_classifier", _classifier_rule(item, fallback=settings.name))
-        for item in raw_violations
-    ] if isinstance(raw_violations, list) else []
+    violations = _classifier_explicit_violations(settings, payload)
     score = non_negative_float_or_none(payload.get("score"))
     if violations or not _classifier_payload_flagged(settings, payload, score):
         return violations, score
