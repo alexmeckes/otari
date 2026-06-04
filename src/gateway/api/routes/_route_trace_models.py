@@ -111,16 +111,13 @@ def _add_trace_to_bucket(bucket: dict[str, Any], trace: RouteTrace, latency_ms: 
 
 def _bucket_response(bucket: dict[str, Any]) -> RouteTraceSummaryBucket:
     latency_count = int(bucket["latency_count"])
-    average_latency_ms = None
-    if latency_count:
-        average_latency_ms = float(bucket["latency_total_ms"]) / latency_count
     return RouteTraceSummaryBucket(
         key=str(bucket["key"]),
         count=int(bucket["count"]),
         success_count=int(bucket["success_count"]),
         error_count=int(bucket["error_count"]),
         estimated_cost=float(bucket["estimated_cost"]),
-        average_latency_ms=average_latency_ms,
+        average_latency_ms=float(bucket["latency_total_ms"]) / latency_count if latency_count else None,
     )
 
 
