@@ -6,6 +6,7 @@ from gateway.services.routing_constraints import (
     _candidate_regions,
     _constraint_failure,
     _constraint_rejection,
+    _constraint_rejection_for_candidate,
     _estimated_cost_constraint_failure,
     _lower_string_set,
     _model_constraint_set,
@@ -154,6 +155,41 @@ def test_constraint_rejection_preserves_candidate_fields_and_sorted_regions() ->
         "reason": "region_not_allowed",
         "estimated_cost": 0.01,
         "regions": ["eu", "us"],
+    }
+
+
+def test_constraint_rejection_for_candidate_returns_payload_or_none() -> None:
+    constraints = _PreparedConstraints(
+        allowed_providers=set(),
+        blocked_providers=set(),
+        allowed_models=set(),
+        blocked_models=set(),
+        allowed_regions={"eu"},
+        blocked_regions=set(),
+        requested_region=None,
+        max_estimated_cost=None,
+        allow_unknown_cost=False,
+    )
+    allowed_candidate = SimpleNamespace(
+        model="openai:gpt-4o",
+        provider="openai",
+        estimated_cost=None,
+        metadata={"region": " EU "},
+    )
+    rejected_candidate = SimpleNamespace(
+        model="openai:gpt-4o-mini",
+        provider="openai",
+        estimated_cost=0.02,
+        metadata={"region": " US "},
+    )
+
+    assert _constraint_rejection_for_candidate(allowed_candidate, constraints=constraints) is None
+    assert _constraint_rejection_for_candidate(rejected_candidate, constraints=constraints) == {
+        "model": "openai:gpt-4o-mini",
+        "provider": "openai",
+        "reason": "region_not_allowed",
+        "estimated_cost": 0.02,
+        "regions": ["us"],
     }
 
 

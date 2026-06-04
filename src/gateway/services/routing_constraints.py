@@ -180,6 +180,19 @@ def _constraint_failure(
     )
 
 
+def _constraint_rejection_for_candidate(candidate: Any, *, constraints: _PreparedConstraints) -> dict[str, Any] | None:
+    metadata = dict_or_empty(candidate.metadata)
+    candidate_regions = _candidate_regions(metadata)
+    reason = _constraint_failure(
+        candidate,
+        candidate_regions=candidate_regions,
+        constraints=constraints,
+    )
+    if reason is None:
+        return None
+    return _constraint_rejection(candidate, reason=reason, candidate_regions=candidate_regions)
+
+
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -194,15 +207,9 @@ def apply_constraints(
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        metadata = dict_or_empty(candidate.metadata)
-        candidate_regions = _candidate_regions(metadata)
-        reason = _constraint_failure(
-            candidate,
-            candidate_regions=candidate_regions,
-            constraints=prepared,
-        )
-        if reason is None:
+        rejection = _constraint_rejection_for_candidate(candidate, constraints=prepared)
+        if rejection is None:
             allowed.append(candidate)
             continue
-        rejected.append(_constraint_rejection(candidate, reason=reason, candidate_regions=candidate_regions))
+        rejected.append(rejection)
     return allowed, rejected
