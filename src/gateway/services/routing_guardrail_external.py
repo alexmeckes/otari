@@ -165,28 +165,27 @@ async def _evaluate_classifier_from_settings(
     }
 
 
-def _external_classifier_configs(guardrails: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    external_classifiers = guardrails.get("external_classifiers")
-    if isinstance(external_classifiers, list):
-        return [classifier for classifier in external_classifiers if isinstance(classifier, dict)]
-    if isinstance(external_classifiers, dict):
-        return [external_classifiers]
-    return []
-
-
 async def evaluate_external_classifiers(
     *,
     guardrails: Mapping[str, Any],
     request_text: str,
     post_classifier: ExternalClassifierPost,
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    external_classifiers = guardrails.get("external_classifiers")
+    classifier_configs: list[Mapping[str, Any]]
+    if isinstance(external_classifiers, list):
+        classifier_configs = [classifier for classifier in external_classifiers if isinstance(classifier, dict)]
+    elif isinstance(external_classifiers, dict):
+        classifier_configs = [external_classifiers]
+    else:
+        classifier_configs = []
     evaluations = [
         await _evaluate_classifier_from_settings(
             _classifier_settings(classifier, index=index),
             request_text=request_text,
             post_classifier=post_classifier,
         )
-        for index, classifier in enumerate(_external_classifier_configs(guardrails), start=1)
+        for index, classifier in enumerate(classifier_configs, start=1)
     ]
     return (
         [violation for classifier_violations, _ in evaluations for violation in classifier_violations],
