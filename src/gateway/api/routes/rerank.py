@@ -15,8 +15,6 @@ from gateway.services.log_writer import LogWriter
 
 router = APIRouter(prefix="/v1", tags=["rerank"])
 
-_RERANK_ENDPOINT = "/v1/rerank"
-
 
 @router.post("/rerank", response_model=None)
 async def create_rerank(
@@ -61,7 +59,7 @@ async def create_rerank(
         await context.log_input_metered_usage(
             db,
             log_writer,
-            endpoint=_RERANK_ENDPOINT,
+            endpoint="/v1/rerank",
             prompt_tokens=total_tokens,
             total_tokens=total_tokens,
             cost_units=total_tokens,
@@ -74,7 +72,7 @@ async def create_rerank(
     except Exception as e:
         await context.log_and_raise_provider_error(
             log_writer,
-            endpoint=_RERANK_ENDPOINT,
+            endpoint="/v1/rerank",
             error=e,
         )
 
