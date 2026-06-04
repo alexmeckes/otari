@@ -29,8 +29,7 @@ OTARI_ENV_ALIASES_TO_GATEWAY = {
 
 def _get_platform_token_from_env() -> str | None:
     for env_var in PLATFORM_TOKEN_ENV_VARS:
-        token = os.getenv(env_var, "").strip()
-        if token:
+        if token := os.getenv(env_var, "").strip():
             return token
     return None
 
