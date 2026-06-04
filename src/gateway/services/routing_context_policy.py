@@ -92,6 +92,13 @@ def _build_context_summary(
     return _trim_summary_to_chars("\n".join(lines), max_chars)
 
 
+def _summary_message_role(context_config: Mapping[str, Any]) -> str:
+    summary_role = (string_or_none(context_config.get("summary_role")) or "system").lower()
+    if summary_role in _SYSTEM_MESSAGE_ROLES or summary_role == "user":
+        return summary_role
+    return "system"
+
+
 def _messages_with_summary(
     messages: Sequence[Any],
     kept_indexes: set[int],
@@ -205,9 +212,7 @@ def apply_context_policy(
             prefix=str(context_config.get("summary_prefix") or "Earlier conversation summary:"),
             max_message_chars=int_config(context_config.get("summary_message_max_chars"), 240),
         )
-        summary_role = (string_or_none(context_config.get("summary_role")) or "system").lower()
-        if summary_role not in {*_SYSTEM_MESSAGE_ROLES, "user"}:
-            summary_role = "system"
+        summary_role = _summary_message_role(context_config)
         summary_message = {"role": summary_role, "content": summary_text} if summary_text else None
         body["messages"] = _messages_with_summary(messages, kept_indexes, summary_message=summary_message)
         final_prompt_tokens = estimate_prompt_tokens(body)

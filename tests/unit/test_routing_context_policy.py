@@ -1,4 +1,4 @@
-from gateway.services.routing_context_policy import apply_context_policy
+from gateway.services.routing_context_policy import _summary_message_role, apply_context_policy
 
 
 class _UnserializableToolMarker:
@@ -127,6 +127,13 @@ def test_context_policy_invalid_summary_role_uses_system() -> None:
     assert trace is not None
     assert trace["summary_message_role"] == "system"
     assert body["messages"][0]["role"] == "system"
+
+
+def test_summary_message_role_accepts_system_developer_and_user_only() -> None:
+    assert _summary_message_role({}) == "system"
+    assert _summary_message_role({"summary_role": " Developer "}) == "developer"
+    assert _summary_message_role({"summary_role": " user "}) == "user"
+    assert _summary_message_role({"summary_role": "assistant"}) == "system"
 
 
 def test_context_policy_uses_context_policy_fallback_when_context_is_not_dict() -> None:
