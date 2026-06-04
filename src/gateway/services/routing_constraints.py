@@ -42,6 +42,21 @@ def _region_constraint_failure(
     return None
 
 
+def _estimated_cost_constraint_failure(
+    estimated_cost: float | None,
+    *,
+    max_estimated_cost: float | None,
+    allow_unknown_cost: bool,
+) -> str | None:
+    if max_estimated_cost is None:
+        return None
+    if estimated_cost is None:
+        return None if allow_unknown_cost else "estimated_cost_unknown"
+    if estimated_cost > max_estimated_cost:
+        return "estimated_cost_exceeds_max"
+    return None
+
+
 def apply_constraints(
     candidates: Sequence[Any],
     *,
@@ -98,11 +113,12 @@ def apply_constraints(
                 blocked_regions=blocked_regions,
                 requested_region=requested_region,
             )
-        if reason is None and max_estimated_cost is not None:
-            if candidate.estimated_cost is None and not allow_unknown_cost:
-                reason = "estimated_cost_unknown"
-            elif candidate.estimated_cost is not None and candidate.estimated_cost > max_estimated_cost:
-                reason = "estimated_cost_exceeds_max"
+        if reason is None:
+            reason = _estimated_cost_constraint_failure(
+                candidate.estimated_cost,
+                max_estimated_cost=max_estimated_cost,
+                allow_unknown_cost=allow_unknown_cost,
+            )
         if reason is None:
             allowed.append(candidate)
             continue

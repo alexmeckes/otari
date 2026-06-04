@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from gateway.services.routing_constraints import (
+    _estimated_cost_constraint_failure,
     _normalize_model_key_for_constraint,
     _region_constraint_failure,
     apply_constraints,
@@ -294,6 +295,49 @@ def test_apply_constraints_ignores_blank_request_region_inputs() -> None:
 
         assert allowed == [candidate]
         assert rejected == []
+
+
+def test_estimated_cost_constraint_failure_preserves_unknown_and_limit_behavior() -> None:
+    assert (
+        _estimated_cost_constraint_failure(
+            None,
+            max_estimated_cost=0.01,
+            allow_unknown_cost=False,
+        )
+        == "estimated_cost_unknown"
+    )
+    assert (
+        _estimated_cost_constraint_failure(
+            None,
+            max_estimated_cost=0.01,
+            allow_unknown_cost=True,
+        )
+        is None
+    )
+    assert (
+        _estimated_cost_constraint_failure(
+            0.02,
+            max_estimated_cost=0.01,
+            allow_unknown_cost=True,
+        )
+        == "estimated_cost_exceeds_max"
+    )
+    assert (
+        _estimated_cost_constraint_failure(
+            0.01,
+            max_estimated_cost=0.01,
+            allow_unknown_cost=False,
+        )
+        is None
+    )
+    assert (
+        _estimated_cost_constraint_failure(
+            None,
+            max_estimated_cost=None,
+            allow_unknown_cost=False,
+        )
+        is None
+    )
 
 
 def test_apply_constraints_preserves_estimated_cost_behavior() -> None:
