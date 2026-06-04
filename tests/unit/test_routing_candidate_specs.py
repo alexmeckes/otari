@@ -115,6 +115,30 @@ def test_configured_candidate_specs_reads_quality_score_aliases_from_metadata() 
     assert specs[0].quality_score == 0.72
 
 
+def test_configured_candidate_specs_merges_top_level_region_metadata_defaults() -> None:
+    metadata = {"region": "metadata-region", "source": "catalog"}
+
+    specs = configured_candidate_specs(
+        {
+            "candidates": [
+                {
+                    "model": "openai:gpt-4o-mini",
+                    "metadata": metadata,
+                    "region": "top-level-region",
+                    "regions": ["eu", "us"],
+                }
+            ]
+        }
+    )
+
+    assert specs[0].metadata == {
+        "region": "metadata-region",
+        "regions": ["eu", "us"],
+        "source": "catalog",
+    }
+    assert metadata == {"region": "metadata-region", "source": "catalog"}
+
+
 def test_configured_candidate_specs_prefers_top_level_quality_score_aliases() -> None:
     specs = configured_candidate_specs(
         {

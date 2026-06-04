@@ -49,8 +49,8 @@ def _candidate_spec_from_item(item: Any, *, tier: str | None) -> CandidateSpec |
 
     metadata = dict_or_empty(item.get("metadata"), copy_value=True)
     for key in ("region", "regions"):
-        if key in item and key not in metadata:
-            metadata[key] = item[key]
+        if key in item:
+            metadata.setdefault(key, item[key])
     quality_score = candidate_quality_score(item, metadata=metadata)
     return CandidateSpec(
         model=model_value,
