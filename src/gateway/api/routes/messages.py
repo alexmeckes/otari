@@ -44,9 +44,6 @@ def _anthropic_error(error_type: str, message: str, status_code: int) -> HTTPExc
     )
 
 
-_ERR_API = "api_error"
-
-
 @dataclass(frozen=True)
 class MessageRequestContext:
     api_key_id: str | None
@@ -113,12 +110,12 @@ def _resolve_message_request_context(
             status.HTTP_400_BAD_REQUEST,
         ),
         no_api_key_error=_anthropic_error(
-            _ERR_API,
+            "api_error",
             "API key validation failed",
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         ),
         no_user_error=_anthropic_error(
-            _ERR_API,
+            "api_error",
             "API key has no associated user",
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         ),
@@ -251,7 +248,7 @@ async def _log_and_raise_message_provider_error(
         error,
     )
     raise _anthropic_error(
-        _ERR_API,
+        "api_error",
         "The request could not be completed by the provider",
         status.HTTP_500_INTERNAL_SERVER_ERROR,
     ) from error
