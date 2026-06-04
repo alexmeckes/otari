@@ -35,18 +35,14 @@ class UnsafeURLError(ValueError):
     """Raised when an MCP server URL is rejected by the safety checks."""
 
 
-_ENV_TRUE_VALUES = {"1", "true", "yes"}
-_ENV_FALSE_VALUES = {"0", "false", "no"}
-
-
 def _env_flag(name: str, *, default: bool) -> bool:
     value = os.environ.get(name)
     if value is None:
         return default
     normalized = value.lower()
-    if normalized in _ENV_TRUE_VALUES:
+    if normalized in {"1", "true", "yes"}:
         return True
-    if normalized in _ENV_FALSE_VALUES:
+    if normalized in {"0", "false", "no"}:
         return False
     return default
 
