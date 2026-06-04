@@ -38,12 +38,19 @@ def policy_match_bucket_key(config: Mapping[str, Any], request_tags: Mapping[str
     return "__empty__"
 
 
+def _policy_match_bucket_value(*, salt_value: str, policy_id: str, bucket_key: str) -> float:
+    digest = sha256(f"{salt_value}:{policy_id}:{bucket_key}".encode()).hexdigest()
+    return (int(digest[:8], 16) % 10_000) / 100
+
+
 def policy_match_bucket(config: Mapping[str, Any], policy_id: str, request_tags: Mapping[str, str]) -> float:
     salt = policy_match_config(config).get("salt")
     salt_value = salt if isinstance(salt, str) else policy_id
-    bucket_key = policy_match_bucket_key(config, request_tags)
-    digest = sha256(f"{salt_value}:{policy_id}:{bucket_key}".encode()).hexdigest()
-    return (int(digest[:8], 16) % 10_000) / 100
+    return _policy_match_bucket_value(
+        salt_value=salt_value,
+        policy_id=policy_id,
+        bucket_key=policy_match_bucket_key(config, request_tags),
+    )
 
 
 def policy_rollout_info(
@@ -57,7 +64,9 @@ def policy_rollout_info(
         return None
     percentage = policy_match_rollout_percentage(config)
     bucket_key = policy_match_bucket_key(config, request_tags)
-    bucket = policy_match_bucket(config, policy_id, request_tags)
+    salt = match_config.get("salt")
+    salt_value = salt if isinstance(salt, str) else policy_id
+    bucket = _policy_match_bucket_value(salt_value=salt_value, policy_id=policy_id, bucket_key=bucket_key)
     return {
         "percentage": percentage,
         "bucket": bucket,

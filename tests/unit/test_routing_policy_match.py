@@ -27,7 +27,12 @@ def test_policy_match_helpers_read_shared_match_config_values() -> None:
     assert policy_match_rollout_percentage(config) == 100.0
     assert policy_match_bucket_key(config, request_tags) == "tenant:vip"
     assert policy_match_bucket(config, "policy-a", request_tags) == 47.52
-    assert policy_rollout_info(policy_id="policy-a", config=config, request_tags=request_tags)["matched"] is True
+    assert policy_rollout_info(policy_id="policy-a", config=config, request_tags=request_tags) == {
+        "percentage": 100.0,
+        "bucket": 47.52,
+        "bucket_key": "tenant:vip",
+        "matched": True,
+    }
 
 
 def test_policy_match_rollout_alias_and_defaults_are_preserved() -> None:
