@@ -230,10 +230,9 @@ def filter_catalog_records(
 ) -> list[CatalogRecord]:
     """Filter catalog records using provider/vendor/model parameters."""
     selected = records
-    if provider:
-        selected = [record for record in selected if record.provider == provider]
-    if vendor:
-        selected = [record for record in selected if record.provider == vendor]
+    for provider_filter in (provider, vendor):
+        if provider_filter:
+            selected = [record for record in selected if record.provider == provider_filter]
     if model:
         stored_model_key = _stored_model_key(model)
         selected = [record for record in selected if record.model_key == stored_model_key]
