@@ -22,8 +22,6 @@ from gateway.services.pricing_service import pricing_model_ref
 from gateway.services.routing_config_values import string_or_none
 from gateway.services.routing_policy_shape import split_model_selector
 
-_PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES = {401, 402, 403, 404, 429}
-
 # Status codes that cause the gateway to move on to the next attempt in a
 # multi-attempt route. 401/403 are included because users configure multi-attempt
 # routing policies on the platform precisely to handle credential outages.
@@ -78,7 +76,7 @@ def extract_platform_user_token(request: Request) -> str:
 
 
 def _raise_platform_resolution_error(response: httpx.Response, passthrough_fallback: str) -> NoReturn:
-    if response.status_code in _PLATFORM_RESOLUTION_PASSTHROUGH_STATUS_CODES:
+    if response.status_code in {401, 402, 403, 404, 429}:
         detail = passthrough_fallback
         try:
             payload = response.json()
