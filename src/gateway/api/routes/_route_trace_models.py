@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from gateway.api.routes._response_datetime import datetime_isoformat
 from gateway.api.routes._summary_buckets import add_status_counts, new_status_bucket, summary_bucket
 from gateway.models.entities import RouteTrace
-from gateway.services.routing_trace_attempts import attempt_duration_ms
+from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_outcome
 
 
 class RouteTraceResponse(BaseModel):
@@ -127,7 +127,7 @@ def _bucket_responses(buckets: dict[str, dict[str, Any]]) -> list[RouteTraceSumm
 
 def _first_success_latency_ms(trace: RouteTrace) -> float | None:
     for attempt in trace.attempt_list():
-        if not isinstance(attempt, dict) or attempt.get("status") != "success":
+        if not isinstance(attempt, dict) or attempt_outcome(attempt) != "success":
             continue
         duration = attempt_duration_ms(attempt)
         if duration is not None:

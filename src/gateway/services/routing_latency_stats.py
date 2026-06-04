@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gateway.models.entities import RouteTrace
 from gateway.services.routing_config_values import int_config
-from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_model_key
+from gateway.services.routing_trace_attempts import attempt_duration_ms, attempt_model_key, attempt_outcome
 
 
 async def attach_latency_stats(
@@ -32,7 +32,7 @@ async def attach_latency_stats(
     durations_by_model: dict[str, list[float]] = {model: [] for model in candidate_models}
     for trace in result.scalars().all():
         for attempt in trace.attempt_list():
-            if not isinstance(attempt, dict) or attempt.get("status") != "success":
+            if not isinstance(attempt, dict) or attempt_outcome(attempt) != "success":
                 continue
             model_key = attempt_model_key(attempt)
             duration_ms = attempt_duration_ms(attempt)
