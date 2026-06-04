@@ -96,6 +96,15 @@ async def test_purpose_hint_is_emitted() -> None:
     assert hints[0][0] == WEB_SEARCH_TOOL_NAME
 
 
+def test_default_request_bounds_are_applied() -> None:
+    backend = WebSearchBackend(base_url="http://searxng:8080")
+
+    assert backend._max_results == 5  # noqa: SLF001 - constructor invariant under test
+    assert backend._extract_timeout_s == 5.0  # noqa: SLF001
+    assert backend._extract_concurrency == 5  # noqa: SLF001
+    assert backend._search_timeout_s == 15.0  # noqa: SLF001
+
+
 @pytest.mark.asyncio
 async def test_call_tool_returns_formatted_results_without_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
     _patched_async_client(

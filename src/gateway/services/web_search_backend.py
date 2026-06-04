@@ -47,11 +47,7 @@ logger = logging.getLogger(__name__)
 
 WEB_SEARCH_TOOL_NAME = "web_search"
 
-_DEFAULT_SEARCH_TIMEOUT_S = 15.0
-_DEFAULT_FETCH_TIMEOUT_S = 5.0
-_DEFAULT_MAX_RESULTS = 5
 _MAX_RESULTS_CAP = 20
-_DEFAULT_EXTRACT_CONCURRENCY = 5
 # Hard cap on bytes we'll read from a single fetched page before passing to
 # trafilatura. A huge response (compromised host, content-bomb, or just a
 # legitimately massive page) would otherwise blow memory across N parallel
@@ -102,13 +98,13 @@ class WebSearchBackend:
         *,
         base_url: str,
         engines: tuple[str, ...] = _DEFAULT_ENGINES,
-        max_results: int = _DEFAULT_MAX_RESULTS,
+        max_results: int = 5,
         allowed_domains: tuple[str, ...] = (),
         blocked_domains: tuple[str, ...] = (),
         extract_content: bool = True,
-        extract_timeout_s: float = _DEFAULT_FETCH_TIMEOUT_S,
-        extract_concurrency: int = _DEFAULT_EXTRACT_CONCURRENCY,
-        search_timeout_s: float = _DEFAULT_SEARCH_TIMEOUT_S,
+        extract_timeout_s: float = 5.0,
+        extract_concurrency: int = 5,
+        search_timeout_s: float = 15.0,
         purpose_hint: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
