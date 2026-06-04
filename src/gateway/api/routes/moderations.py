@@ -15,9 +15,6 @@ from gateway.models.entities import APIKey
 from gateway.services.log_writer import LogWriter
 from gateway.types.moderation import ModerationResponse
 
-# Locked phrasing — cross-SDK error contract. Do not reword.
-UNSUPPORTED_MODERATION_SUBSTRING = "does not support moderation"
-
 router = APIRouter(prefix="/v1", tags=["moderations"])
 
 _MODERATIONS_ENDPOINT = "/v1/moderations"
@@ -76,7 +73,8 @@ async def create_moderation(
             endpoint=_MODERATIONS_ENDPOINT,
             error=e,
         )
-        if UNSUPPORTED_MODERATION_SUBSTRING in str(e):
+        # Locked phrasing — cross-SDK error contract. Do not reword.
+        if "does not support moderation" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
