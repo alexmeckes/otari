@@ -11,7 +11,7 @@ from gateway.services.routing_constraints import (
     _lower_string_set,
     _model_constraint_set,
     _normalize_model_key_for_constraint,
-    _prepared_constraints,
+    _prepare_constraints,
     _PreparedConstraints,
     _provider_model_constraint_failure,
     _region_constraint_failure,
@@ -481,9 +481,9 @@ def test_requested_region_respects_match_gate_tag_and_blank_inputs() -> None:
     )
 
 
-def test_prepared_constraints_normalizes_config_values() -> None:
+def test_prepare_constraints_normalizes_config_values() -> None:
     with pytest.warns(DeprecationWarning, match="provider/model"):
-        prepared = _prepared_constraints(
+        prepared = _prepare_constraints(
             {
                 "allowed_providers": [" openai "],
                 "blocked_providers": [" anthropic "],

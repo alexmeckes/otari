@@ -101,7 +101,7 @@ def _requested_region(constraint_config: Mapping[str, Any], tags: Mapping[str, s
     return region.lower() if region is not None else None
 
 
-def _prepared_constraints(constraint_config: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
+def _prepare_constraints(constraint_config: Mapping[str, Any], tags: Mapping[str, str]) -> _PreparedConstraints:
     return _PreparedConstraints(
         allowed_providers=_string_set(constraint_config.get("allowed_providers")),
         blocked_providers=_string_set(constraint_config.get("blocked_providers")),
@@ -191,11 +191,11 @@ def apply_constraints(
     if not constraint_config:
         return list(candidates), []
 
-    prepared = _prepared_constraints(constraint_config, tags)
+    constraints = _prepare_constraints(constraint_config, tags)
     allowed: list[Any] = []
     rejected: list[dict[str, Any]] = []
     for candidate in candidates:
-        rejection = _constraint_rejection_for_candidate(candidate, constraints=prepared)
+        rejection = _constraint_rejection_for_candidate(candidate, constraints=constraints)
         if rejection is None:
             allowed.append(candidate)
             continue
