@@ -89,6 +89,7 @@ def test_matches_tag_condition_expands_membership_expected_values() -> None:
     assert matches_tag_condition({"tag": "account", "operator": "in", "value": {"standard", "vip"}}, request_tags)
     assert matches_tag_condition({"tag": "region", "operator": "not_in", "value": ["us", "apac"]}, request_tags)
     assert matches_tag_condition({"tag": "tier", "operator": "nin", "value": "dev"}, request_tags)
+    assert not matches_tag_condition({"tag": "tier", "operator": "not_in", "value": "prod"}, request_tags)
     assert not matches_tag_condition({"tag": "team", "operator": "not_in", "value": ("platform", "ops")}, request_tags)
 
 
