@@ -122,11 +122,11 @@ def config_from_default_strategy(
         strategy = "single" if len(provider_items) == 1 else "priority"
         return strategy, config
 
+    config["candidates"] = [
+        _candidate_from_default_strategy_provider(provider_item)
+        for provider_item in provider_items
+    ]
     if strategy_type == "weighted_score":
-        config["candidates"] = [
-            _candidate_from_default_strategy_provider(provider_item)
-            for provider_item in provider_items
-        ]
         scoring_config = dict_or_empty(default_strategy.get("scoring"), copy_value=True)
         for key in (
             "weights",
@@ -152,10 +152,6 @@ def config_from_default_strategy(
     if axis not in INTELLIGENT_AXES:
         supported = ", ".join(sorted(INTELLIGENT_AXES))
         raise RoutingPolicyShapeError(f"Unsupported default_strategy.axis '{axis_raw}'. Supported axes: {supported}")
-    config["candidates"] = [
-        _candidate_from_default_strategy_provider(provider_item)
-        for provider_item in provider_items
-    ]
     config["axis"] = axis
     config.setdefault("fallback_enabled", True)
     config.setdefault("tier_thresholds", AXIS_TIER_THRESHOLDS[axis])
