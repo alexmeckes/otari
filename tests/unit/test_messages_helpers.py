@@ -112,6 +112,20 @@ def test_resolve_message_request_context_preserves_master_key_error_shape() -> N
     }
 
 
+def test_resolve_message_request_context_preserves_missing_api_key_error_shape() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        messages._resolve_message_request_context(_messages_request(), (None, False))
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == {
+        "type": "error",
+        "error": {
+            "type": "api_error",
+            "message": "API key validation failed",
+        },
+    }
+
+
 def test_message_provider_call_context_preserves_request_field_precedence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
