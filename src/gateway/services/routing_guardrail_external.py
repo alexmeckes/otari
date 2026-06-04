@@ -28,6 +28,12 @@ class _ClassifierSettings:
     fail_closed: bool
 
 
+def _classifier_http_error_text(response: httpx.Response, payload: Mapping[str, Any] | None) -> str:
+    if payload is None:
+        return response.text
+    return string_or_none(payload.get("detail")) or string_or_none(payload.get("error")) or response.text
+
+
 async def post_external_guardrail_classifier(
     *,
     url: str,
@@ -48,11 +54,7 @@ async def post_external_guardrail_classifier(
     else:
         payload = parsed if isinstance(parsed, dict) else None
     if not response.is_success:
-        error = response.text
-        if payload is not None:
-            detail = string_or_none(payload.get("detail")) or string_or_none(payload.get("error"))
-            if detail is not None:
-                error = detail
+        error = _classifier_http_error_text(response, payload)
         return response.status_code, payload, f"HTTP {response.status_code}: {error}"
     if payload is None:
         return response.status_code, None, "classifier returned non-object JSON"
