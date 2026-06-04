@@ -50,7 +50,6 @@ _MASTER_KEY_USER_REQUIRED = "When using master key, 'metadata.user_id' is requir
 _API_KEY_VALIDATION_FAILED = "API key validation failed"
 _API_KEY_NO_USER = "API key has no associated user"
 _PROVIDER_ERROR = "The request could not be completed by the provider"
-_MESSAGES_ENDPOINT = "/v1/messages"
 
 
 @dataclass(frozen=True)
@@ -96,7 +95,7 @@ class MessageExecutionContext:
             api_key_id=self.message_context.api_key_id,
             model=self.provider_call_context.model,
             provider=self.provider_call_context.provider,
-            endpoint=_MESSAGES_ENDPOINT,
+            endpoint="/v1/messages",
             user_id=self.message_context.user_id,
             usage_override=usage_data,
             error=error,
