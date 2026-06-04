@@ -5,6 +5,7 @@ import pytest
 from gateway.services.routing_constraints import (
     _candidate_regions,
     _estimated_cost_constraint_failure,
+    _lower_string_set,
     _model_constraint_set,
     _normalize_model_key_for_constraint,
     _provider_model_constraint_failure,
@@ -37,6 +38,12 @@ def test_model_constraint_set_normalizes_model_values() -> None:
             "openai:gpt-4o",
         }
     assert _model_constraint_set(None) == set()
+
+
+def test_lower_string_set_normalizes_string_values() -> None:
+    assert _lower_string_set([" EU ", "us", None, " "]) == {"eu", "none", "us"}
+    assert _lower_string_set(" Apac ") == {"apac"}
+    assert _lower_string_set(None) == set()
 
 
 def test_apply_constraints_normalizes_provider_model_and_region_constraint_values() -> None:

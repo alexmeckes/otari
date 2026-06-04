@@ -23,6 +23,10 @@ def _model_constraint_set(value: Any) -> set[str]:
     return {_normalize_model_key_for_constraint(item) for item in string_list(value)}
 
 
+def _lower_string_set(value: Any) -> set[str]:
+    return {item.lower() for item in string_list(value)}
+
+
 def _provider_model_constraint_failure(
     *,
     provider: str,
@@ -44,7 +48,7 @@ def _provider_model_constraint_failure(
 
 
 def _candidate_regions(metadata: Mapping[str, Any]) -> set[str]:
-    regions = {item.lower() for item in string_list(metadata.get("regions"))}
+    regions = _lower_string_set(metadata.get("regions"))
     region = string_or_none(metadata.get("region"))
     if region is not None:
         regions.add(region.lower())
@@ -113,8 +117,8 @@ def apply_constraints(
     blocked_providers = set(string_list(constraints.get("blocked_providers")))
     allowed_models = _model_constraint_set(constraints.get("allowed_models"))
     blocked_models = _model_constraint_set(constraints.get("blocked_models"))
-    allowed_regions = {item.lower() for item in string_list(constraints.get("allowed_regions"))}
-    blocked_regions = {item.lower() for item in string_list(constraints.get("blocked_regions"))}
+    allowed_regions = _lower_string_set(constraints.get("allowed_regions"))
+    blocked_regions = _lower_string_set(constraints.get("blocked_regions"))
     requested_region = _requested_region(constraints, tags)
     max_estimated_cost = non_negative_float_or_none(constraints.get("max_estimated_cost"))
     allow_unknown_cost = bool_config(
