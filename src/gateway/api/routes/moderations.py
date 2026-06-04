@@ -17,8 +17,6 @@ from gateway.types.moderation import ModerationResponse
 
 router = APIRouter(prefix="/v1", tags=["moderations"])
 
-_MODERATIONS_ENDPOINT = "/v1/moderations"
-
 
 @router.post("/moderations", response_model=ModerationResponse)
 async def create_moderation(
@@ -56,7 +54,7 @@ async def create_moderation(
         await context.log_input_metered_usage(
             db,
             log_writer,
-            endpoint=_MODERATIONS_ENDPOINT,
+            endpoint="/v1/moderations",
             prompt_tokens=None,
             total_tokens=None,
             cost_units=1,
@@ -70,7 +68,7 @@ async def create_moderation(
     except NotImplementedError as e:
         await context.log_usage_error(
             log_writer,
-            endpoint=_MODERATIONS_ENDPOINT,
+            endpoint="/v1/moderations",
             error=e,
         )
         # Locked phrasing — cross-SDK error contract. Do not reword.
@@ -87,7 +85,7 @@ async def create_moderation(
     except Exception as e:
         await context.log_and_raise_provider_error(
             log_writer,
-            endpoint=_MODERATIONS_ENDPOINT,
+            endpoint="/v1/moderations",
             error=e,
         )
 
