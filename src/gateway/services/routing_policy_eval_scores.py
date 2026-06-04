@@ -57,12 +57,7 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
 
     for item in items:
         model_key = routing_policy_shape.normalized_model_selector(item.provider, item.model)
-        score = None
-        for value in (item.quality_score, item.score, item.benchmark_score):
-            parsed_score = score_or_none(value)
-            if parsed_score is not None:
-                score = parsed_score
-                break
+        score = _eval_score_value(item)
         if score is None:
             raise RoutingPolicyEvalScoreError("Each eval score must include score, quality_score, or benchmark_score")
         sample_count = item.sample_count or 1
@@ -84,6 +79,13 @@ def aggregate_eval_scores(items: Iterable[EvalScoreInput]) -> dict[str, EvalScor
         )
         for model_key in totals
     }
+
+
+def _eval_score_value(item: EvalScoreInput) -> float | None:
+    for value in (item.quality_score, item.score, item.benchmark_score):
+        if (score := score_or_none(value)) is not None:
+            return score
+    return None
 
 
 def _candidate_model_key(candidate: Any) -> str | None:
