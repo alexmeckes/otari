@@ -77,6 +77,16 @@ def _health_mode(health_config: Mapping[str, Any]) -> str:
     return mode if isinstance(mode, str) and mode in {"observe", "downrank", "skip_unhealthy"} else "downrank"
 
 
+def _record_provider_outcome(
+    counts_by_provider: dict[str, dict[str, int]],
+    *,
+    provider: str | None,
+    outcome: str | None,
+) -> None:
+    if provider is not None and outcome in {"success", "error"} and provider in counts_by_provider:
+        counts_by_provider[provider][outcome] += 1
+
+
 async def attach_provider_health(
     db: AsyncSession,
     candidates: Sequence[Any],
@@ -103,16 +113,18 @@ async def attach_provider_health(
             for attempt in attempts:
                 if not isinstance(attempt, dict):
                     continue
-                provider = attempt_provider(attempt)
-                outcome = attempt_outcome(attempt)
-                if provider is not None and outcome is not None and provider in counts_by_provider:
-                    counts_by_provider[provider][outcome] += 1
+                _record_provider_outcome(
+                    counts_by_provider,
+                    provider=attempt_provider(attempt),
+                    outcome=attempt_outcome(attempt),
+                )
             continue
 
-        provider = trace.selected_provider
-        outcome = trace.status
-        if provider is not None and outcome in {"success", "error"} and provider in counts_by_provider:
-            counts_by_provider[provider][outcome] += 1
+        _record_provider_outcome(
+            counts_by_provider,
+            provider=trace.selected_provider,
+            outcome=trace.status,
+        )
 
     health_by_provider = {
         provider: _provider_health_from_counts(
