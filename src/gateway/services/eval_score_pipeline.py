@@ -31,14 +31,6 @@ class EvalScorePipelineError(ValueError):
     """Raised when an eval artifact cannot be converted into score rows."""
 
 
-def _first_float(row: Mapping[str, Any], keys: Iterable[str]) -> float | None:
-    for key in keys:
-        parsed = float_or_none(row.get(key), coerce_strings=True, allow_percent=True)
-        if parsed is not None:
-            return parsed
-    return None
-
-
 def _first_string(row: Mapping[str, Any], keys: Iterable[str]) -> str | None:
     for key in keys:
         value = row.get(key)
@@ -87,7 +79,12 @@ def normalize_eval_score_row(
 
     quality_score = float_or_none(row.get("quality_score"), coerce_strings=True, allow_percent=True)
     benchmark_score = float_or_none(row.get("benchmark_score"), coerce_strings=True, allow_percent=True)
-    score = _first_float(row, _SCORE_KEYS)
+    score = None
+    for key in _SCORE_KEYS:
+        parsed_score = float_or_none(row.get(key), coerce_strings=True, allow_percent=True)
+        if parsed_score is not None:
+            score = parsed_score
+            break
     if quality_score is None and benchmark_score is None and score is None:
         raise EvalScorePipelineError(
             f"Eval score row {row_number} must include score, quality_score, benchmark_score, "
