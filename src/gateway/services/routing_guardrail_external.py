@@ -71,6 +71,18 @@ def _classifier_rule(value: Any, *, fallback: str) -> str:
     return fallback
 
 
+def _classifier_payload_flagged(
+    settings: _ClassifierSettings,
+    payload: Mapping[str, Any],
+    score: float | None,
+) -> bool:
+    return (
+        payload.get("blocked") is True
+        or payload.get("flagged") is True
+        or (settings.threshold is not None and score is not None and score >= settings.threshold)
+    )
+
+
 def _classifier_violations(
     settings: _ClassifierSettings,
     payload: Mapping[str, Any],
@@ -81,11 +93,7 @@ def _classifier_violations(
         for item in raw_violations
     ] if isinstance(raw_violations, list) else []
     score = non_negative_float_or_none(payload.get("score"))
-    if violations or not (
-        payload.get("blocked") is True
-        or payload.get("flagged") is True
-        or (settings.threshold is not None and score is not None and score >= settings.threshold)
-    ):
+    if violations or not _classifier_payload_flagged(settings, payload, score):
         return violations, score
     return [
         guardrail_violation("external_classifier", _classifier_rule(payload.get("label"), fallback=settings.name))
