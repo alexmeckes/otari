@@ -13,23 +13,10 @@ from gateway.core.database import get_db
 from gateway.metrics import record_auth_failure
 from gateway.models.entities import APIKey
 from gateway.repositories.api_keys_repository import get_api_key_by_hash
+from gateway.services.budget_periods import as_utc as _as_utc
 from gateway.services.log_writer import LogWriter
 
 _config: GatewayConfig | None = None
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Return ``value`` as a timezone-aware datetime in UTC.
-
-    SQLite stores ``DateTime(timezone=True)`` columns as naive strings and
-    returns them naive on read. PostgreSQL returns them as aware. Normalising
-    here keeps the subtraction/comparison call sites identical across both
-    backends — a naive value is *assumed* to be UTC, which matches how the
-    gateway writes them (always ``datetime.now(UTC)``).
-    """
-    if value is None or value.tzinfo is not None:
-        return value
-    return value.replace(tzinfo=UTC)
 
 
 def set_config(config: GatewayConfig) -> None:
@@ -236,6 +223,7 @@ def get_log_writer(request: Request) -> LogWriter:
 
 
 __all__ = [
+    "_as_utc",
     "get_config",
     "get_db",
     "reset_config",
